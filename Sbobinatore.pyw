@@ -18,9 +18,9 @@ from moviepy.editor import AudioFileClip
 ctk.set_appearance_mode("Dark")  # Supporta "Dark", "Light", "System"
 ctk.set_default_color_theme("blue")
 
-# Usa il percorso assoluto della cartella dello script per evitare errori di permessi
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
+# Usa il profilo utente per salvare la configurazione in modo persistente anche quando è un .exe creato con PyInstaller
+USER_HOME = os.path.expanduser("~")
+CONFIG_FILE = os.path.join(USER_HOME, ".sbobinatore_config.json")
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
