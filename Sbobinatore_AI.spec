@@ -2,7 +2,7 @@
 from PyInstaller.utils.hooks import collect_all
 from PyInstaller.utils.hooks import copy_metadata
 
-datas = [('app_icon.ico', '.')]
+datas = []
 binaries = []
 hiddenimports = []
 datas += copy_metadata('imageio')
@@ -44,5 +44,4 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['app_icon.ico'],
 )
