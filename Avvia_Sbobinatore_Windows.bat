@@ -1,6 +1,9 @@
 @echo off
 title Avvio Sbobinatore AI
 
+:: Spostati forzatamente nella cartella esatta di questo script
+cd /d "%~dp0"
+
 echo ===================================================
 echo   SBOBINATORE AI - Avvio e Installazione
 echo ===================================================
@@ -19,7 +22,7 @@ if %ERRORLEVEL% neq 0 (
     del "%TEMP%\python_installer.exe"
     
     :: Aggiorno i percorsi cosi' il sistema lo vede immediatamente senza dover riavviare
-    set PATH=%USERPROFILE%\AppData\Local\Programs\Python\Python311\Scripts\;%USERPROFILE%\AppData\Local\Programs\Python\Python311\;%PATH%
+    set "PATH=%USERPROFILE%\AppData\Local\Programs\Python\Python311\Scripts\;%USERPROFILE%\AppData\Local\Programs\Python\Python311\;%PATH%"
     echo [*] Python installato con successo!
     echo.
 )
