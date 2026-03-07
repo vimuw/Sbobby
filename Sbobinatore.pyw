@@ -321,7 +321,6 @@ class SbobinatoreModernApp(ctk.CTk):
         title_inner = ctk.CTkFrame(self.title_frame, fg_color="transparent")
         title_inner.grid(row=0, column=0)
         ctk.CTkLabel(title_inner, text="🎓 Sbobinatore AI", font=("Segoe UI", 26, "bold"), text_color="#CDD6F4").pack()
-        ctk.CTkLabel(title_inner, text="Trasforma le lezioni in manuali di studio", font=("Segoe UI", 13), text_color=self.TEXT_DIM).pack(pady=(2, 0))
 
         # API KEY CARD
         self.api_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
