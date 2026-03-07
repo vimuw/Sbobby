@@ -261,7 +261,7 @@ REGOLE INVIOLABILI:
 
         with open(nome_file_output, "w", encoding="utf-8") as f:
             f.write("<!DOCTYPE html>\n<html>\n<head>\n<meta charset='utf-8'>\n")
-            f.write("<style>body{font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height:1.6; padding: 30px; max-width: 900px; margin: auto; background-color: #fcfcfc;} h2, h3{color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px;}</style>\n")
+            f.write("<style>body{font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height:1.6; padding: 30px; max-width: 900px; margin: auto; background-color: #fcfcfc;} h2, h3{color: #1a1a1a; margin-top: 1.5em; margin-bottom: 0.5em;}</style>\n")
             f.write("</head>\n<body>\n")
             f.write(markdown.markdown(testo_finale_revisionato))
             f.write("\n</body>\n</html>")
