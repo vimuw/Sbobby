@@ -9,9 +9,11 @@ L'intelligenza artificiale (basata sul modello gemini 2.5 flash) ascolterà la t
 ## 🚀 Come iniziare
 
 ### 1) Come Scaricare il programma
-1. Clicca sul grande pulsante verde **`<> Code`** in alto a destra in questa pagina.
-2. Clicca su **`Download ZIP`**.
-3. Estrai la cartella appena scaricata e spostala dove preferisci (es. sul Desktop o nei Documenti).
+1. Clicca sulla sezione **Releases** sulla destra di questa pagina GitHub (oppure scarica dai link forniti).
+2. Scarica il programma per il tuo sistema operativo:
+   - **Per Windows:** Scarica il file `Sbobinatore_AI.exe`
+   - **Per Mac:** Scarica il file `Sbobinatore_AI_Mac.zip`
+3. Salva il file dove preferisci (es. sul Desktop).
 
 ### 2) Creare la tua Chiave API di Gemini (Gratis)
 Essendo Google Gemini il cervello del programma, ti serve una password unica (API Key) per usarlo.
@@ -24,15 +26,14 @@ Essendo Google Gemini il cervello del programma, ti serve una password unica (AP
 
 ## ▶️ Come Avviare l'App!
 
-Apri la cartella dello Sbobinatore che hai estratto e fai **doppio clic** sul file corretto, in base al PC che possiedi:
+È un programma "plug & play", non devi installare nulla sul tuo PC.
 
 ### 💻 Se usi Windows:
-- Fai doppio clic su **`Avvia_Sbobinatore_Windows.bat`**.
-- La primissima volta, si aprirà una finestra nera per qualche secondo per scaricare gli strumenti necessari; lasciala lavorare in pace. Poi, scomparirà e comparirà la schermata dell'app e l'icona dell'app nel Desktop (Usa sempre questo file per lanciarla)!.
+- Fai semplicemente **doppio clic** sul file `Sbobinatore_AI.exe`.
 
 ### 🍎 Se usi Mac:
-- Fai doppio clic su **`Avvia_Sbobinatore_Mac.command`**.
-- *Nota: Se il Mac ti dice che per sicurezza il file non può essere aperto perché proviene da uno sviluppatore non identificato, fai **clic col tasto destro** (o Control+Clic) sul file, e scegli **Apri** dal menu.*
+- Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `Sbobinatore_AI.app` (puoi trascinarla nella cartella Applicazioni).
+- *Nota: Al primissimo avvio, se il Mac dovesse bloccarti dicendo "proveniente da uno sviluppatore non identificato", ti basta fare **clic col tasto destro** (o Control+Clic) sull'icona, e scegliere **Apri** dal menu.*
 
 ---
 
@@ -41,4 +42,11 @@ Apri la cartella dello Sbobinatore che hai estratto e fai **doppio clic** sul fi
 2. Clicca "**Sfoglia / Carica**" e seleziona la registrazione audio della tua lunga lezione.
 3. Clicca il pulsantone verde **AVVIA**.
 4. Niente panico se l'app sembra bloccarsi: nel terminale dentro al programma leggerai esattamente a che punto è! Se l'audio dura un'ora, farà **4 estrazioni** da 15 minuti l'una, e ci metterà all'incirca 3-5 minuti in base al traffico dei server Google.
-5. Quando ha finito, troverai il file `.html` (la Sbobina) pronto direttamente sul tuo **Desktop**.
+5. Quando ha finito, troverai il file `.html` (la Sbobina) pronto direttamente sul tuo **Desktop**, già formattato per il copia-incolla perfetto su Google Docs.
+
+---
+
+## 🛠️ Per gli Sviluppatori (Costruire l'App dai sorgenti)
+Se scarichi il codice sorgente completo e vuoi compilare tu stesso i file eseguibili nativi (`.exe` o `.app`), usa gli script di automazione inclusi:
+- **Windows:** Fai doppio clic su `Costruisci_EXE_Windows.bat`. Verrà creata la cartella `dist` contenente l'applicativo compilato con PyInstaller.
+- **Mac:** Dal terminale, avvia `Costruisci_APP_Mac.command` per generare l'app macOS nativa.
