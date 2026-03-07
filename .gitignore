@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local config
+config.json
+
+# Audio/Video processing temp
+pezzo_temp_*.mp3
+*_Sbobina.html
+Sbobina_Definitiva.html
+pdf_output.txt
+
+# Media files
+*.mp3
+*.mp4
+*.m4a
+*.wav
+*.avi
+*.mov
+*.mkv
+*.pdf
+
+# Virtual envs
+venv/
+env/
+.env
