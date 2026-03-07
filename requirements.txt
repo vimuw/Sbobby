@@ -1,4 +1,4 @@
 google-genai>=0.1.0
-moviepy>=1.0.3
+moviepy==1.0.3
 customtkinter>=5.2.2
 markdown>=3.5.2
