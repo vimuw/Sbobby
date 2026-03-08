@@ -56,8 +56,8 @@ Essendo Google Gemini il cervello del programma, ti serve una password unica (AP
 L'intelligenza artificiale di Google non è illimitata: funziona a **"gettoni" (token)**. I token sono l'unità di misura che Google usa per contare quanto lavoro fa l'AI — in pratica, ogni parola che l'AI ascolta o scrive "costa" dei token.
 
 ### Quanto consuma una sbobina?
-- Una lezione da **2 ore e mezza** (o più) consuma circa **10-15 token** su 20 disponibili al giorno.
-- Il piano gratuito di Gemini 2.5 Flash ti dà un massimo di **25 richieste al giorno**.
+- Una lezione da **2 ore e mezza** (o più) consuma circa **10-15 richieste** su 20 disponibili al giorno.
+- Il piano gratuito di Gemini 2.5 Flash ti dà un massimo di **20 richieste al giorno** per account.
 - Questo significa che con **una singola chiave API** potrai sbobinare in genere **1 lezione lunga al giorno**.
 
 ### Ho finito i token, cosa faccio?
