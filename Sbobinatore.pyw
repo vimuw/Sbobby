@@ -184,6 +184,7 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                 prompt_dinamico += f"\n\nATTENZIONE: Stai continuando una stesura. Questo è l'ultimo paragrafo che hai generato nel blocco precedente:\n\"...{memoria_precedente}\"\n\nRiprendi il discorso da qui IN MODO FLUIDO. Usa la stessa grandezza per i titoli e NON RIPETERE testualmente i concetti in sovrapposizione."
                 
             successo = False
+            rate_limit = False
             for tent in range(3):
                 try:
                     risposta = client.models.generate_content(
@@ -201,9 +202,23 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                     app_instance.aggiorna_progresso(0.7 * blocco_corrente_idx / blocchi_totali)
                     break
                 except Exception as e:
+                    errore = str(e).lower()
+                    if '429' in errore or 'resource_exhausted' in errore or 'quota' in errore:
+                        print("\n" + "="*50)
+                        print("⛔ LIMITE GIORNALIERO RAGGIUNTO!")
+                        print("="*50)
+                        print("Hai esaurito le richieste gratuite di oggi.")
+                        print("Cosa puoi fare:")
+                        print("  1. Aspetta domani mattina (~ore 9:00 italiane)")
+                        print("  2. Usa una API Key di un altro account Google")
+                        print("="*50)
+                        rate_limit = True
+                        break
                     print(f"      [Server occupati. Riprovo in 30 secondi...]")
                     time.sleep(30)
                     
+            if rate_limit:
+                break
             if not successo:
                 print("   [!] Errore critico sui server. Interrompo e passo alla Fase 2 con il lavoro fatto.")
                 break
@@ -259,9 +274,22 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                     successo_revisione = True
                     break
                 except Exception as e:
+                    errore = str(e).lower()
+                    if '429' in errore or 'resource_exhausted' in errore or 'quota' in errore:
+                        print("\n⛔ LIMITE GIORNALIERO RAGGIUNTO durante la revisione!")
+                        print("   Salvo tutto il lavoro fatto finora senza revisione.")
+                        # Salva tutti i blocchi rimanenti senza revisione
+                        testo_finale_revisionato += f"\n\n{blocco}\n\n"
+                        for j, b_rimanente in enumerate(macro_blocchi[i:], i+1):
+                            testo_finale_revisionato += f"\n\n{b_rimanente}\n\n"
+                        successo_revisione = True  # Evita il doppio salvataggio sotto
+                        break
                     print(f"      [Errore di coda. Riprovo in 20 secondi...]")
                     time.sleep(20)
                     
+            if '429' in str(locals().get('e', '')).lower() or 'resource_exhausted' in str(locals().get('e', '')).lower():
+                break  # Esci dal loop dei macro_blocchi
+                
             if not successo_revisione:
                 print(f"   [!] Errore prolungato nella revisione. Salvo il blocco {i} così com'è per evitare perdite di dati.")
                 testo_finale_revisionato += f"\n\n{blocco}\n\n"

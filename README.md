@@ -61,9 +61,9 @@ L'intelligenza artificiale di Google non è illimitata: funziona a **"gettoni" (
 - Questo significa che con **una singola chiave API** potrai sbobinare in genere **1 lezione lunga al giorno**.
 
 ### Ho finito i token, cosa faccio?
-Se durante l'elaborazione l'app ti dà errore di "limite raggiunto", hai due opzioni:
+Se durante l'elaborazione il terminale dell'app mostra il messaggio **"⛔ LIMITE GIORNALIERO RAGGIUNTO"**, hai due opzioni:
 
-1. **Aspettare il giorno dopo:** I limiti si resettano automaticamente ogni giorno intorno alle **ore 9:00 di mattina** (ora del Pacifico, circa le 18:00 in Italia).
+1. **Aspettare domani mattina:** I limiti si resettano ogni giorno a **mezzanotte ora del Pacifico**, che corrisponde circa alle **ore 9:00 di mattina in Italia**.
 2. **Usare un altro account Google:** Crea una nuova chiave API da un **account Google diverso** (es. una seconda email Gmail). Ogni account Google ha i propri limiti separati.
 
 > ⚡ **Nota:** Creare una seconda chiave API **dallo stesso account Google** non funziona — il limite è per account, non per chiave.
