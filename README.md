@@ -51,6 +51,23 @@ Essendo Google Gemini il cervello del programma, ti serve una password unica (AP
 
 ---
 
+## ⚠️ Limiti Giornalieri dell'API (Importante!)
+
+L'intelligenza artificiale di Google non è illimitata: funziona a **"gettoni" (token)**. I token sono l'unità di misura che Google usa per contare quanto lavoro fa l'AI — in pratica, ogni parola che l'AI ascolta o scrive "costa" dei token.
+
+### Quanto consuma una sbobina?
+- Una lezione da **2 ore e mezza** (o più) consuma circa **10-15 token** su 20 disponibili al giorno.
+- Il piano gratuito di Gemini 2.5 Flash ti dà un massimo di **25 richieste al giorno**.
+- Questo significa che con **una singola chiave API** potrai sbobinare in genere **1 lezione lunga al giorno**.
+
+### Ho finito i token, cosa faccio?
+Se durante l'elaborazione l'app ti dà errore di "limite raggiunto", hai due opzioni:
+
+1. **Aspettare il giorno dopo:** I limiti si resettano automaticamente ogni giorno intorno alle **ore 9:00 di mattina** (ora del Pacifico, circa le 18:00 in Italia).
+2. **Usare un altro account Google:** Crea una nuova chiave API da un **account Google diverso** (es. una seconda email Gmail). Ogni account Google ha i propri limiti separati.
+
+> ⚡ **Nota:** Creare una seconda chiave API **dallo stesso account Google** non funziona — il limite è per account, non per chiave.
+
 ## 🛠️ Per gli Sviluppatori (Costruire l'App dai sorgenti)
 Se scarichi il codice sorgente completo e vuoi compilare tu stesso i file eseguibili nativi (`.exe` o `.app`), usa gli script di automazione inclusi:
 - **Windows:** Fai doppio clic su `Costruisci_EXE_Windows.bat`. Verrà creata la cartella `dist` contenente l'applicativo compilato con PyInstaller.
