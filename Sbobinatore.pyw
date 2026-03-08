@@ -5,6 +5,7 @@ import threading
 import sys
 import time
 import platform
+import tempfile
 import markdown
 import os
 import json
@@ -120,7 +121,7 @@ class PrintRedirector:
 # ==========================================
 def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
     audio_completo = None
-    file_temporanei = []
+    app_instance.file_temporanei = []  # Condiviso con l'app per pulizia alla chiusura
     try:
         if not api_key_value or api_key_value.strip() == "":
             print("Errore: Formato API Key non valido o assente.")
@@ -158,10 +159,9 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
             print(f"\n======================================")
             print(f"-> LAVORAZIONE BLOCCO AUDIO {blocco_corrente_idx} DI {blocchi_totali} (Da {inizio_sec}s a {int(fine_sec)}s)")
             
-            # Salva i pezzi temporanei nella STESSA CARTELLA del file audio originale
-            cartella_audio = os.path.dirname(os.path.abspath(nome_file_video))
-            nome_chunk = os.path.join(cartella_audio, f"pezzo_temp_{inizio_sec}_{int(fine_sec)}.mp3")
-            file_temporanei.append(nome_chunk)
+            # Salva i pezzi temporanei nella cartella TEMP del sistema operativo
+            nome_chunk = os.path.join(tempfile.gettempdir(), f"sbobinatore_temp_{inizio_sec}_{int(fine_sec)}.mp3")
+            app_instance.file_temporanei.append(nome_chunk)
             
             # 1. Taglio
             # Spiegazione per l'utente loggata direttamente in app
@@ -299,10 +299,11 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
         if audio_completo:
             try: audio_completo.close()
             except: pass
-        for f in file_temporanei:
+        for f in app_instance.file_temporanei:
             try:
                 if os.path.exists(f): os.remove(f)
             except: pass
+        app_instance.file_temporanei = []
         app_instance.aggiorna_progresso(1.0)
         app_instance.processo_terminato()
 
@@ -343,6 +344,10 @@ class SbobinatoreModernApp(ctk.CTk):
 
         self.file_path = None
         self.is_running = False
+        self.file_temporanei = []  # Lista file temp condivisa col thread
+
+        # Intercetta la chiusura della finestra per pulire i file temporanei
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(4, weight=1)
@@ -466,6 +471,19 @@ class SbobinatoreModernApp(ctk.CTk):
     def aggiorna_progresso(self, valore):
         """Aggiorna la barra di progresso in modo thread-safe."""
         self.after(0, self.progress_bar.set, min(valore, 1.0))
+
+    def _on_close(self):
+        """Pulisce i file temporanei rimasti prima di chiudere l'applicazione."""
+        if self.is_running:
+            if not messagebox.askokcancel("Chiudi", "L'elaborazione è ancora in corso.\nSe chiudi ora, il lavoro fatto andrà perso.\n\nVuoi chiudere comunque?"):
+                return
+        # Pulizia sicura di tutti i file temporanei
+        for f in self.file_temporanei:
+            try:
+                if os.path.exists(f): os.remove(f)
+            except: pass
+        self.file_temporanei = []
+        self.destroy()
 
 if __name__ == "__main__":
     app = SbobinatoreModernApp()
