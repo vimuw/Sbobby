@@ -1,6 +1,6 @@
 # 🎓 Sbobinatore AI
 
-Un'applicazione gratuita e completamente open-source che trasforma le registrazioni audio delle tue lezioni universitarie in veri e proprie **sbobine** dettagliate.
+Un'applicazione gratuita e open-source che trasforma le registrazioni audio delle tue lezioni universitarie in vere e proprie **sbobine** dettagliate.
 
 L'intelligenza artificiale (basata sul modello gemini 2.5 flash) ascolterà la tua registrazione e scriverà una dispensa eliminando i difetti tipici del parlato (es. ripetizioni, retorica, esitazioni) e strutturando il discorso con paragrafi chiari, elenchi puntati a dizionario e definizioni in grassetto.
 
@@ -16,7 +16,7 @@ L'intelligenza artificiale (basata sul modello gemini 2.5 flash) ascolterà la t
 3. Salva il file dove preferisci (es. sul Desktop).
 
 ### 2) Creare la tua Chiave API di Gemini (Gratis)
-Essendo Google Gemini il cervello del programma, ti serve una password unica (API Key) per usarlo.
+Essendo Google Gemini il cervello del programma, ti serve una password unica (API Key) per usarlo. L'API key è completamente gratuita.
 1. Vai su: [Google AI Studio](https://aistudio.google.com/app/apikey) e accedi col tuo account Google.
 2. Clicca sul bottone azzurro `"Create API Key"`.
 3. Seleziona `"Create API key in a new project"`.
@@ -46,8 +46,8 @@ Essendo Google Gemini il cervello del programma, ti serve una password unica (AP
 1. Aperta la schermata del programma, l'unica cosa da fare la prima volta in alto è incollare la fantomatica **Chiave API** copiata prima. Il programma se la salverà così non devi rimetterla mai più.
 2. Clicca "**Sfoglia / Carica**" e seleziona la registrazione audio della tua lunga lezione.
 3. Clicca il pulsantone verde **AVVIA**.
-4. Niente panico se l'app sembra bloccarsi: nel terminale dentro al programma leggerai esattamente a che punto è! Se l'audio dura un'ora, farà **4 estrazioni** da 15 minuti l'una, e ci metterà all'incirca 3-5 minuti in base al traffico dei server Google.
-5. Quando ha finito, troverai il file `.html` (la Sbobina) pronto direttamente sul tuo **Desktop**, già formattato per il copia-incolla perfetto su Google Docs.
+4. Niente panico se l'app sembra bloccarsi: nel terminale dentro al programma leggerai esattamente a che punto è! Per es. se l'audio dura un'ora, farà **4 estrazioni** da 15 minuti l'una, e ci metterà all'incirca 3-5 minuti in base al traffico dei server Google.
+5. Quando ha finito, troverai il file `.html` (la Sbobina) pronto direttamente sul tuo **Desktop**, già formattato per il copia-incolla su Google Docs.
 
 ---
 
