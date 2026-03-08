@@ -44,11 +44,13 @@ class PrintRedirector:
         self.text_widget = text_widget
 
     def write(self, string):
-        # Evita le stringhe vuote o solo ritorni a capo per evitare glitch grafici con moviepy
         if string == '\r' or string == '\n': return
+        # Usa after() per garantire thread-safety con Tkinter
+        self.text_widget.after(0, self._append, string)
+
+    def _append(self, string):
         self.text_widget.insert(ctk.END, string + "\n")
         self.text_widget.see(ctk.END)
-        self.text_widget.update()
 
     def flush(self):
         pass
@@ -58,6 +60,8 @@ class PrintRedirector:
 # LOGICA PRINCIPALE DELLO SBOBINATORE
 # ==========================================
 def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
+    audio_completo = None
+    file_temporanei = []
     try:
         if not api_key_value or api_key_value.strip() == "":
             print("Errore: Formato API Key non valido o assente.")
@@ -126,6 +130,7 @@ Pulizia NON significa riassumere. Mantieni ogni spiegazione tecnica, esempio cli
             # Salva i pezzi temporanei nella STESSA CARTELLA del file audio originale
             cartella_audio = os.path.dirname(os.path.abspath(nome_file_video))
             nome_chunk = os.path.join(cartella_audio, f"pezzo_temp_{inizio_sec}_{int(fine_sec)}.mp3")
+            file_temporanei.append(nome_chunk)
             
             # 1. Taglio
             # Spiegazione per l'utente loggata direttamente in app
@@ -162,6 +167,7 @@ Pulizia NON significa riassumere. Mantieni ogni spiegazione tecnica, esempio cli
                     testo_completo_sbobina += f"\n\n{testo_generato}\n\n"
                     memoria_precedente = testo_generato[-1000:]
                     successo = True
+                    app_instance.aggiorna_progresso(0.7 * blocco_corrente_idx / blocchi_totali)
                     break
                 except Exception as e:
                     print(f"      [Server occupati. Riprovo in 30 secondi...]")
@@ -177,10 +183,8 @@ Pulizia NON significa riassumere. Mantieni ogni spiegazione tecnica, esempio cli
                 except: pass
             client.files.delete(name=audio_file.name)
             
-            # Piccola pausa tra chiamate
-            time.sleep(15)
-
-        audio_completo.close()
+            # Piccola pausa tra chiamate per evitare rate limit
+            time.sleep(5)
 
         # ==========================================
         # FASE 2: REVISIONE LOGICA E CUCITURA DOPPIONI
@@ -244,7 +248,8 @@ REGOLE INVIOLABILI:
             if not successo_revisione:
                 print(f"   [!] Errore prolungato nella revisione. Salvo il blocco {i} così com'è per evitare perdite di dati.")
                 testo_finale_revisionato += f"\n\n{blocco}\n\n"
-            time.sleep(15)
+            app_instance.aggiorna_progresso(0.7 + 0.3 * (i / len(macro_blocchi)))
+            time.sleep(5)
 
         # ==========================================
         # 3. SALVATAGGIO FINALE IN HTML
@@ -273,6 +278,14 @@ REGOLE INVIOLABILI:
     except Exception as e:
         print(f"\n[X] ERRORE IMPREVISTO DURANTE L'ESECUZIONE:\n{e}")
     finally:
+        if audio_completo:
+            try: audio_completo.close()
+            except: pass
+        for f in file_temporanei:
+            try:
+                if os.path.exists(f): os.remove(f)
+            except: pass
+        app_instance.aggiorna_progresso(1.0)
         app_instance.processo_terminato()
 
 
@@ -304,7 +317,7 @@ class SbobinatoreModernApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        self.title("Sbobinatore AI PRO")
+        self.title("Sbobinatore AI")
         self.geometry("850x700")
         self.configure(fg_color="#0F0F14")
         
@@ -362,10 +375,13 @@ class SbobinatoreModernApp(ctk.CTk):
         self.console_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
         self.console_card.grid(row=4, column=0, padx=30, pady=(0, 25), sticky="nsew")
         self.console_card.grid_columnconfigure(0, weight=1)
-        self.console_card.grid_rowconfigure(1, weight=1)
+        self.console_card.grid_rowconfigure(2, weight=1)
         ctk.CTkLabel(self.console_card, text="⚡ Output", font=("Segoe UI", 12, "bold"), text_color=self.TEXT_DIM).grid(row=0, column=0, sticky="w", padx=16, pady=(12, 4))
+        self.progress_bar = ctk.CTkProgressBar(self.console_card, height=6, corner_radius=3, fg_color=self.TERMINAL_BG, progress_color=self.ACCENT)
+        self.progress_bar.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 4))
+        self.progress_bar.set(0)
         self.console = ctk.CTkTextbox(self.console_card, font=("Cascadia Code", 12), fg_color=self.TERMINAL_BG, text_color=self.TERMINAL_FG, corner_radius=8, wrap="word", border_width=0)
-        self.console.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 12))
+        self.console.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 12))
 
         sys.stdout = PrintRedirector(self.console)
         sys.stderr = PrintRedirector(self.console)
@@ -395,8 +411,20 @@ class SbobinatoreModernApp(ctk.CTk):
             return
         if self.is_running:
             return
+        # Validazione rapida della API Key
+        try:
+            test_client = genai.Client(api_key=api_key)
+            test_client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents='test',
+                config=types.GenerateContentConfig(max_output_tokens=1)
+            )
+        except Exception as e:
+            messagebox.showerror("API Key non valida", f"La chiave API non funziona.\nControlla di averla copiata correttamente.\n\nErrore: {e}")
+            return
         save_config(api_key)
         self.is_running = True
+        self.progress_bar.set(0)
         self.btn_avvia.configure(state="disabled", fg_color=self.BORDER, text="⏳  Elaborazione in corso...")
         for w in [self.drop_zone, self.drop_icon, self.lbl_file, self.lbl_file_hint]:
             w.unbind("<Button-1>")
@@ -414,9 +442,14 @@ class SbobinatoreModernApp(ctk.CTk):
 
     def _ripristina_ui(self):
         self.btn_avvia.configure(state="normal", fg_color=self.SUCCESS, text="▶  AVVIA GENERAZIONE SBOBINA")
+        self.progress_bar.set(0)
         for w in [self.drop_zone, self.drop_icon, self.lbl_file, self.lbl_file_hint]:
             w.bind("<Button-1>", lambda e: self.scegli_file())
         self.entry_api.configure(state="normal")
+
+    def aggiorna_progresso(self, valore):
+        """Aggiorna la barra di progresso in modo thread-safe."""
+        self.after(0, self.progress_bar.set, min(valore, 1.0))
 
 if __name__ == "__main__":
     app = SbobinatoreModernApp()
