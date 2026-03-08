@@ -46,7 +46,7 @@ Essendo Google Gemini il cervello del programma, ti serve una password unica (AP
 1. Aperta la schermata del programma, l'unica cosa da fare la prima volta in alto è incollare la fantomatica **Chiave API** copiata prima. Il programma se la salverà così non devi rimetterla mai più.
 2. Clicca "**Sfoglia / Carica**" e seleziona la registrazione audio della tua lunga lezione.
 3. Clicca il pulsantone verde **AVVIA**.
-4. Niente panico se l'app sembra bloccarsi: nel terminale dentro al programma leggerai esattamente a che punto è! Per es. se l'audio dura un'ora, farà **4 estrazioni** da 15 minuti l'una, e ci metterà all'incirca 3-5 minuti in base al traffico dei server Google.
+4. Niente panico se l'app sembra bloccarsi: nel terminale dentro al programma leggerai esattamente a che punto è! Per es. se l'audio dura un'ora, farà **4 estrazioni** da 15 minuti l'una, e ci metterà all'incirca 3-5 minuti in base al traffico dei server Google e alla velocità della tua connessione.
 5. Quando ha finito, troverai il file `.html` (la Sbobina) pronto direttamente sul tuo **Desktop**, già formattato per il copia-incolla su Google Docs.
 
 ---
@@ -68,7 +68,7 @@ Se durante l'elaborazione il terminale dell'app mostra il messaggio **"⛔ LIMIT
 
 > ⚡ **Nota:** Creare una seconda chiave API **dallo stesso account Google** non funziona — il limite è per account, non per chiave.
 
-## 🛠️ Per gli Sviluppatori (Costruire l'App dai sorgenti)
+## 🛠️ Costruire l'App dai sorgenti
 Se scarichi il codice sorgente completo e vuoi compilare tu stesso i file eseguibili nativi (`.exe` o `.app`), usa gli script di automazione inclusi:
 - **Windows:** Fai doppio clic su `Costruisci_EXE_Windows.bat`. Verrà creata la cartella `dist` contenente l'applicativo compilato con PyInstaller.
 - **Mac:** Dal terminale, avvia `Costruisci_APP_Mac.command` per generare l'app macOS nativa.
