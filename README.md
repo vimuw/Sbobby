@@ -11,8 +11,8 @@ L'intelligenza artificiale (basata sul modello Gemini 2.5 Flash) ascolterà la t
 ### 1) Come Scaricare il programma
 1. Clicca sulla sezione **Releases** sulla destra di questa pagina GitHub (oppure scarica dai link forniti).
 2. Scarica il programma per il tuo sistema operativo:
-   - **Per Windows:** Scarica il file `Sbobinatore_AI.exe`
-   - **Per Mac:** Scarica il file `Sbobinatore_AI_Mac.zip`
+   - **Per Windows:** Scarica il file `Sbobinatore_AI.exe`
+   - **Per Mac:** Scarica il file `Sbobinatore_AI_Mac.zip`
 3. Salva il file dove preferisci (es. sul Desktop).
 
 ### 2) Creare la tua Chiave API di Gemini (Gratis)
@@ -48,7 +48,7 @@ Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `Sbobinatore_AI.ap
 ---
 
 ## 🎯 Cosa aspettarsi dai risultati (Disclaimer sull'AI)
-È importante ricordare che l'intelligenza artificiale **non è perfetta**. La sbobina generata potrebbe contenere qualche piccolo errore di trascrizione, parole tecniche interpretate male o, talvolta, piccolissime porzioni di testo sdoppiate (specialmente nel punto di giunzione tra una parte di audio e l'altra). 
+È importante ricordare che l'intelligenza artificiale **non è perfetta**. La sbobina generata potrebbe contenere qualche piccolo errore di trascrizione, parole tecniche interpretate male o, talvolta, piccolissime porzioni di testo sdoppiate (specialmente nel punto di giunzione tra una parte di audio e l'altra). 
 
 Stiamo parlando di una percentuale di imprecisione davvero minuscola rispetto al testo totale. Il vero vantaggio è che l'app **farà il 90% del lavoro sporco e noioso al posto tuo**. A te basterà dare una rapida rilettura per sistemare quelle due o tre imperfezioni, risparmiando comunque ore e ore di digitazione manuale!
 
@@ -92,8 +92,18 @@ Non sono uno sviluppatore professionista. Ho creato questa app partendo da zero,
 
 ---
 
+## ⚖️ Disclaimer Etico e Legale (Importante)
+Sbobinatore AI è esclusivamente uno **strumento software locale** che facilita l'interazione tra l'utente e le API pubbliche di Google Gemini. 
+
+Scaricando e utilizzando questa applicazione, accetti e comprendi che:
+* **Diritto d'autore e Uso Personale:** Le lezioni universitarie sono proprietà intellettuale dei rispettivi docenti. L'uso di questo strumento è inteso **esclusivamente per scopi di studio personale**. La diffusione pubblica, la pubblicazione online o la vendita a terzi delle sbobine generate senza il consenso esplicito del docente è una violazione del diritto d'autore. L'autore di questo software declina ogni responsabilità per l'uso improprio o illecito dei testi generati.
+* **Privacy e Gestione dei Dati:** Inserendo la tua chiave API personale (BYOK), stabilisci una connessione diretta tra il tuo computer e i server di Google, accettando i [Termini di Servizio di Google](https://policies.google.com/terms). Sbobinatore AI non ha server propri: non intercetta, non salva in cloud e non condivide con nessuno (nemmeno con il creatore dell'app) i tuoi file audio, le tue sbobine o la tua chiave API. Tutto avviene e rimane sul tuo dispositivo.
+* **Nessuna Garanzia:** Come specificato dalla Licenza MIT allegata al progetto, il software è fornito "così com'è", senza alcuna garanzia. L'autore non è responsabile per eventuali crash, perdita di dati, esami andati male o inesattezze nelle trascrizioni. 😉
+
+---
+
 ## ☕ Supporta il progetto!
-Sbobinatore AI è e sarà sempre **100% gratuito e open-source**. 
+Sbobinatore AI è e sarà sempre **100% gratuito e open-source**. 
 
 Tuttavia, se questa app ti ha svoltato la sessione d'esami, ti ha fatto risparmiare decine (o centinaia) di ore di noiosissima sbobinatura manuale e vuoi supportare il mio lavoro, puoi offrirmi un caffè!
 
@@ -103,17 +113,13 @@ Grazie e in bocca al lupo per gli esami! 🎉
 
 ---
 
+## 📝 Licenza
+Questo progetto è open-source e distribuito sotto la **Licenza MIT**. 
+Per tutti i dettagli, consulta il file `LICENSE` incluso in questa repository.
+
+---
+
 ## 🛠️ Costruire l'App dai sorgenti
 Se scarichi il codice sorgente completo e vuoi compilare tu stesso i file eseguibili nativi (`.exe` o `.app`), usa gli script di automazione inclusi:
 - **Windows:** Fai doppio clic su `Costruisci_EXE_Windows.bat`. Verrà creata la cartella `dist` contenente l'applicativo compilato con PyInstaller.
 - **Mac:** Dal terminale, avvia `Costruisci_APP_Mac.command` per generare l'app macOS nativa.
-
----
-
-## ⚖️ Disclaimer Etico e Legale (Importante)
-Sbobinatore AI è esclusivamente uno **strumento software locale** che facilita l'interazione tra l'utente e le API pubbliche di Google Gemini. 
-
-Scaricando e utilizzando questa applicazione, accetti e comprendi che:
-* **Diritto d'autore e Uso Personale:** Le lezioni universitarie sono proprietà intellettuale dei rispettivi docenti. L'uso di questo strumento è inteso **esclusivamente per scopi di studio personale**. La diffusione pubblica, la pubblicazione online o la vendita a terzi delle sbobine generate senza il consenso esplicito del docente è una violazione del diritto d'autore. L'autore di questo software declina ogni responsabilità per l'uso improprio o illecito dei testi generati.
-* **Privacy e Gestione dei Dati:** Inserendo la tua chiave API personale (BYOK), stabilisci una connessione diretta tra il tuo computer e i server di Google, accettando i [Termini di Servizio di Google](https://policies.google.com/terms). Sbobinatore AI non ha server propri: non intercetta, non salva in cloud e non condivide con nessuno (nemmeno con il creatore dell'app) i tuoi file audio, le tue sbobine o la tua chiave API. Tutto avviene e rimane sul tuo dispositivo.
-* **Nessuna Garanzia:** Come specificato dalla Licenza MIT allegata al progetto, il software è fornito "così com'è", senza alcuna garanzia. L'autore non è responsabile per eventuali crash, perdita di dati, esami andati male o inesattezze nelle trascrizioni. 😉
