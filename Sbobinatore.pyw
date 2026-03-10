@@ -239,8 +239,9 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                 except Exception as e:
                     errore = str(e).lower()
                     if '429' in errore or 'resource_exhausted' in errore or 'quota' in errore:
-                        if tent < 3:
-                            print(f"      [Limite richieste per minuto. Attesa di 65s per il reset quota...]")
+                        is_daily_limit = 'per day' in errore or 'quota_exceeded' in errore or 'daily' in errore
+                        if not is_daily_limit and tent < 3:
+                            print(f"      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]")
                             time.sleep(65)
                             tent += 1
                             continue
@@ -264,7 +265,7 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                             print("="*50)
                             rate_limit = True
                             break
-                    print(f"      [Server occupati. Riprovo in 30 secondi...]")
+                    print(f"      [Server occupati o errore. Riprovo in 30 secondi...]")
                     time.sleep(30)
                     tent += 1
                     
@@ -328,8 +329,9 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                 except Exception as e:
                     errore = str(e).lower()
                     if '429' in errore or 'resource_exhausted' in errore or 'quota' in errore:
-                        if tent < 3:
-                            print(f"      [Limite richieste per minuto. Attesa di 65s per il reset quota...]")
+                        is_daily_limit = 'per day' in errore or 'quota_exceeded' in errore or 'daily' in errore
+                        if not is_daily_limit and tent < 3:
+                            print(f"      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]")
                             time.sleep(65)
                             tent += 1
                             continue
@@ -354,7 +356,7 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                                 testo_finale_revisionato += f"\n\n{b_rimanente}\n\n"
                             successo_revisione = True  # Evita il doppio salvataggio sotto
                             break
-                    print(f"      [Errore di coda. Riprovo in 20 secondi...]")
+                    print(f"      [Server occupati o errore. Riprovo in 20 secondi...]")
                     time.sleep(20)
                     tent += 1
                     
