@@ -396,41 +396,17 @@ class SbobinatoreModernApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(4, weight=1)
+        self.grid_rowconfigure(3, weight=1)
 
-        # TITOLO (centrato)
-        self.title_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.title_frame.grid(row=0, column=0, padx=30, pady=(25, 5), sticky="ew")
-        self.title_frame.grid_columnconfigure(0, weight=1)
-        title_inner = ctk.CTkFrame(self.title_frame, fg_color="transparent")
-        title_inner.grid(row=0, column=0)
-        
-        ctk.CTkLabel(title_inner, text="🎓 Sbobby ", font=(FONT_UI, 26, "bold"), text_color="#CDD6F4").pack(side="left")
-
-        # Gestione Emoji Colorata su Windows (Tkinter usa font monocromatici di default)
-        try:
-            import urllib.request
-            from PIL import Image
-            emoji_url = "https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/1f916.png"
-            emoji_path = os.path.join(USER_HOME, ".sbobby_robot.png")
-            if not os.path.exists(emoji_path):
-                req = urllib.request.Request(emoji_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=3) as resp:
-                    with open(emoji_path, 'wb') as f:
-                        f.write(resp.read())
-            img = Image.open(emoji_path)
-            robot_img = ctk.CTkImage(light_image=img, dark_image=img, size=(30, 30))
-            ctk.CTkLabel(title_inner, text="", image=robot_img).pack(side="left", padx=(4, 0))
-        except Exception:
-            # Fallback se non c'è internet al primo avvio
-            ctk.CTkLabel(title_inner, text="🤖", font=(FONT_UI, 26), text_color="#CDD6F4").pack(side="left", padx=(4, 0))
+        # SPACING TOP
+        ctk.CTkFrame(self, fg_color="transparent", height=15).grid(row=0, column=0)
 
         # API KEY CARD
-        self.api_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
+        self.api_card = ctk.CTkFrame(self, fg_color=self.TERMINAL_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
         self.api_card.grid(row=1, column=0, padx=30, pady=(15, 0), sticky="ew")
         self.api_card.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(self.api_card, text="🔑  API Key Gemini", font=(FONT_UI, 13, "bold"), text_color=self.TEXT_BRIGHT).grid(row=0, column=0, sticky="w", padx=(18, 12), pady=14)
-        self.entry_api = ctk.CTkEntry(self.api_card, placeholder_text="Incolla la tua API Key qui...", show="*", font=(FONT_UI, 13), height=38, corner_radius=8, fg_color=self.TERMINAL_BG, border_color=self.BORDER, text_color=self.TEXT_BRIGHT)
+        ctk.CTkLabel(self.api_card, text="🔑 API Key Gemini", font=(FONT_UI, 14), text_color=self.TEXT_DIM).grid(row=0, column=0, sticky="w", padx=(18, 12), pady=14)
+        self.entry_api = ctk.CTkEntry(self.api_card, placeholder_text="Incolla la tua API Key qui...", show="*", font=(FONT_UI, 13), height=38, corner_radius=8, fg_color=self.CARD_BG, border_color=self.BORDER, text_color=self.TEXT_BRIGHT)
         self.entry_api.grid(row=0, column=1, sticky="ew", padx=(0, 18), pady=14)
         config_data = load_config()
         self.entry_api.insert(0, config_data.get("api_key", ""))
@@ -440,10 +416,10 @@ class SbobinatoreModernApp(ctk.CTk):
         self.drop_zone.grid(row=2, column=0, padx=30, pady=15, sticky="ew")
         self.drop_zone.grid_columnconfigure(0, weight=1)
 
-        self.drop_icon = ctk.CTkLabel(self.drop_zone, text="📁", font=(FONT_UI, 44), text_color=self.ACCENT)
+        self.drop_icon = ctk.CTkLabel(self.drop_zone, text="�", font=(FONT_UI, 44), text_color=self.TEXT_DIM)
         self.drop_icon.grid(row=0, column=0, pady=(35, 8))
 
-        self.lbl_file = ctk.CTkLabel(self.drop_zone, text="Trascina qui o clicca per caricare l'audio", font=(FONT_UI, 16, "bold"), text_color=self.TEXT_BRIGHT)
+        self.lbl_file = ctk.CTkLabel(self.drop_zone, text="Carica Lezione Audio/Video", font=(FONT_UI, 18, "bold"), text_color=self.TEXT_BRIGHT)
         self.lbl_file.grid(row=1, column=0, pady=(0, 4))
 
         self.lbl_file_hint = ctk.CTkLabel(self.drop_zone, text="Supporta MP3, M4A, WAV, MP4, MKV", font=(FONT_UI, 12), text_color=self.TEXT_DIM)
@@ -462,7 +438,7 @@ class SbobinatoreModernApp(ctk.CTk):
         self.console_card.grid(row=4, column=0, padx=30, pady=(0, 15), sticky="nsew")
         self.console_card.grid_columnconfigure(0, weight=1)
         self.console_card.grid_rowconfigure(2, weight=1)
-        ctk.CTkLabel(self.console_card, text="⚡ Output", font=(FONT_UI, 12, "bold"), text_color=self.TEXT_DIM).grid(row=0, column=0, sticky="w", padx=16, pady=(12, 4))
+        ctk.CTkLabel(self.console_card, text="⚡ Log Eventi", font=(FONT_UI, 12, "bold"), text_color=self.TEXT_DIM).grid(row=0, column=0, sticky="w", padx=16, pady=(12, 4))
         self.progress_bar = ctk.CTkProgressBar(self.console_card, height=6, corner_radius=3, fg_color=self.TERMINAL_BG, progress_color=self.ACCENT)
         self.progress_bar.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 4))
         self.progress_bar.set(0)
@@ -472,7 +448,7 @@ class SbobinatoreModernApp(ctk.CTk):
 
         sys.stdout = PrintRedirector(self.console)
         sys.stderr = PrintRedirector(self.console)
-        print("Sbobby 🤖 pronto all'uso.\n")
+        print("Sbobby pronto all'uso. 🎓\n")
         
         # CREDITS FOOTER
         self.footer_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -483,7 +459,7 @@ class SbobinatoreModernApp(ctk.CTk):
         lbl_center = ctk.CTkFrame(self.footer_frame, fg_color="transparent")
         lbl_center.pack(expand=True)
         
-        ctk.CTkLabel(lbl_center, text="Sbobby 🤖 — Progetto open-source | ", font=(FONT_UI, 11), text_color=self.TEXT_DIM).pack(side="left")
+        ctk.CTkLabel(lbl_center, text="Sbobby — Progetto open-source | ", font=(FONT_UI, 11), text_color=self.TEXT_DIM).pack(side="left")
         
         lk_gh = ctk.CTkLabel(lbl_center, text="GitHub", font=(FONT_UI, 11, "underline"), text_color=self.ACCENT, cursor="hand2")
         lk_gh.pack(side="left")
