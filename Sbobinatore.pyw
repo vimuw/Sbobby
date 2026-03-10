@@ -9,6 +9,7 @@ import tempfile
 import markdown
 import os
 import json
+import re
 from google import genai
 from google.genai import types
 import imageio_ffmpeg
@@ -143,15 +144,19 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
 
         print(f"[*] Analisi del file originale in corso:\n{os.path.basename(nome_file_video)}")
         try:
-            # Ricava durata audio con ffprobe leggero
+            # Ricava durata audio leggendo l'output di ffmpeg (ffprobe non è garantito in imageio_ffmpeg)
             ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-            comando_probe = [
-                ffmpeg_exe, "-v", "error", "-show_entries",
-                "format=duration", "-of", "default=noprint_wrappers=1:nokey=1",
-                nome_file_video
-            ]
-            risultato = subprocess.run(comando_probe, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=True)
-            durata_totale_secondi = float(risultato.stdout.strip())
+            comando_probe = [ffmpeg_exe, "-i", nome_file_video]
+            
+            # subprocess restituisce un errore intenzionale perché non forniamo un file di output a ffmpeg
+            risultato = subprocess.run(comando_probe, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            output = risultato.stderr
+            match = re.search(r"Duration:\s*(\d+):(\d+):(\d+\.\d+)", output)
+            if not match:
+                raise ValueError("Impossibile leggere la durata dal file usando FFmpeg.")
+            
+            ore, minuti, secondi = float(match.group(1)), float(match.group(2)), float(match.group(3))
+            durata_totale_secondi = ore * 3600 + minuti * 60 + secondi
         except Exception as e:
             print(f"Errore caricamento audio. File corrotto o formato non supportato.\n{e}")
             return
