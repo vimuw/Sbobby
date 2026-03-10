@@ -16,13 +16,13 @@ echo Attendi pazientemente, non chiudere la finestra...
 echo =======================================================
 echo.
 
-pyinstaller --noconfirm --onefile --windowed --collect-all customtkinter --copy-metadata imageio --name "Sbobinatore_AI" "Sbobinatore.pyw"
+pyinstaller --noconfirm --onefile --windowed --collect-all customtkinter --copy-metadata imageio --icon "assets/icon.ico" --add-data "assets;assets" --name "Sbobby" "Sbobinatore.pyw"
 
 echo.
 echo =======================================================
 echo COMPILAZIONE COMPLETATA CON SUCCESSO!
 echo =======================================================
-echo Troverai il tuo programma pronto all'uso "Sbobinatore_AI.exe" 
+echo Troverai il tuo programma pronto all'uso "Sbobby.exe" 
 echo all'interno della cartella "dist".
 echo Ora puoi prendere quel piccolo file .exe e condividerlo
 echo con chiunque, non servira' avere Python installato!

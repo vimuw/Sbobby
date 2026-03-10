@@ -375,10 +375,18 @@ class SbobinatoreModernApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        self.title("Sbobby 🤖")
-        self.geometry("850x700")
+        self.title("Sbobby")
+        self.geometry("850x720")
         self.configure(fg_color="#0F0F14")
-        self.minsize(750, 600)
+        self.minsize(750, 620)
+        
+        # Imposta l'icona dell'app nativa (barra applicazioni e finestra)
+        try:
+            icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.ico")
+            if os.path.exists(icon_path):
+                self.iconbitmap(icon_path)
+        except Exception:
+            pass
 
         self.file_path = None
         self.is_running = False
@@ -396,25 +404,18 @@ class SbobinatoreModernApp(ctk.CTk):
         self.title_frame.grid_columnconfigure(0, weight=1)
         title_inner = ctk.CTkFrame(self.title_frame, fg_color="transparent")
         title_inner.grid(row=0, column=0)
-        ctk.CTkLabel(title_inner, text="🎓 Sbobby ", font=(FONT_UI, 26, "bold"), text_color="#CDD6F4").pack(side="left")
-
-        # Gestione Emoji Colorata su Windows (Tkinter usa font monocromatici di default)
+        
+        # Caricamento della Mascot in alta risoluzione
         try:
-            import urllib.request
             from PIL import Image
-            emoji_url = "https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/1f916.png"
-            emoji_path = os.path.join(USER_HOME, ".sbobby_robot.png")
-            if not os.path.exists(emoji_path):
-                req = urllib.request.Request(emoji_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=3) as resp:
-                    with open(emoji_path, 'wb') as f:
-                        f.write(resp.read())
-            img = Image.open(emoji_path)
-            robot_img = ctk.CTkImage(light_image=img, dark_image=img, size=(30, 30))
-            ctk.CTkLabel(title_inner, text="", image=robot_img).pack(side="left", padx=(4, 0))
+            mascot_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.png")
+            img = Image.open(mascot_path)
+            robot_img = ctk.CTkImage(light_image=img, dark_image=img, size=(42, 42))
+            ctk.CTkLabel(title_inner, text="", image=robot_img).pack(side="left", padx=(0, 10))
         except Exception:
-            # Fallback se non c'è internet al primo avvio
-            ctk.CTkLabel(title_inner, text="🤖", font=(FONT_UI, 26), text_color="#CDD6F4").pack(side="left", padx=(4, 0))
+            ctk.CTkLabel(title_inner, text="🤖", font=(FONT_UI, 32), text_color="#CDD6F4").pack(side="left", padx=(0, 10))
+
+        ctk.CTkLabel(title_inner, text="🎓 Sbobby", font=(FONT_UI, 28, "bold"), text_color="#CDD6F4").pack(side="left")
 
         # API KEY CARD
         self.api_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
@@ -427,18 +428,18 @@ class SbobinatoreModernApp(ctk.CTk):
         self.entry_api.insert(0, config_data.get("api_key", ""))
 
         # DROP ZONE (area cliccabile centrata per caricare file)
-        self.drop_zone = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=2, border_color=self.BORDER, cursor="hand2")
+        self.drop_zone = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=16, border_width=2, border_color=self.BORDER, cursor="hand2")
         self.drop_zone.grid(row=2, column=0, padx=30, pady=15, sticky="ew")
         self.drop_zone.grid_columnconfigure(0, weight=1)
 
-        self.drop_icon = ctk.CTkLabel(self.drop_zone, text="📂", font=(FONT_UI, 38), text_color=self.TEXT_DIM)
-        self.drop_icon.grid(row=0, column=0, pady=(22, 4))
+        self.drop_icon = ctk.CTkLabel(self.drop_zone, text="📁", font=(FONT_UI, 44), text_color=self.ACCENT)
+        self.drop_icon.grid(row=0, column=0, pady=(35, 8))
 
-        self.lbl_file = ctk.CTkLabel(self.drop_zone, text="Clicca qui per caricare un file audio o video", font=(FONT_UI, 14, "bold"), text_color=self.TEXT_DIM)
-        self.lbl_file.grid(row=1, column=0, pady=(0, 2))
+        self.lbl_file = ctk.CTkLabel(self.drop_zone, text="Trascina qui o clicca per caricare l'audio", font=(FONT_UI, 16, "bold"), text_color=self.TEXT_BRIGHT)
+        self.lbl_file.grid(row=1, column=0, pady=(0, 4))
 
-        self.lbl_file_hint = ctk.CTkLabel(self.drop_zone, text="Formati supportati: MP3, M4A, WAV, MP4, AVI, MOV, MKV", font=(FONT_UI, 11), text_color="#45475A")
-        self.lbl_file_hint.grid(row=2, column=0, pady=(0, 22))
+        self.lbl_file_hint = ctk.CTkLabel(self.drop_zone, text="Supporta MP3, M4A, WAV, MP4, MKV", font=(FONT_UI, 12), text_color=self.TEXT_DIM)
+        self.lbl_file_hint.grid(row=2, column=0, pady=(0, 35))
 
         # Tutta la drop zone è cliccabile
         for widget in [self.drop_zone, self.drop_icon, self.lbl_file, self.lbl_file_hint]:
