@@ -109,8 +109,10 @@ class PrintRedirector:
         self.text_widget.after(0, self._append, string)
 
     def _append(self, string):
+        self.text_widget.configure(state="normal")
         self.text_widget.insert(ctk.END, string + "\n")
         self.text_widget.see(ctk.END)
+        self.text_widget.configure(state="disabled")
 
     def flush(self):
         pass
@@ -171,14 +173,14 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
             chunk.close()
             
             # 2. Upload
-            print("   -> (2/3) Caricamento sicuro nei server dell'Intelligenza Artificiale...")
+            print("   -> (2/3) Caricamento sicuro nei server di google...")
             audio_file = client.files.upload(file=nome_chunk)
             while "PROCESSING" in str(audio_file.state):
                 time.sleep(3)
                 audio_file = client.files.get(name=audio_file.name)
                 
             # 3. Generazione testuale
-            print("   -> (3/3) Generazione sbobina dettagliata in corso (La fase più lunga)...")
+            print("   -> (3/3) Generazione sbobina in corso (La fase più lunga)...")
             prompt_dinamico = "Ascolta questo blocco di lezione e crea la sbobina seguendo rigorosamente le istruzioni di sistema."
             if memoria_precedente:
                 prompt_dinamico += f"\n\nATTENZIONE: Stai continuando una stesura. Questo è l'ultimo paragrafo che hai generato nel blocco precedente:\n\"...{memoria_precedente}\"\n\nRiprendi il discorso da qui IN MODO FLUIDO. Usa la stessa grandezza per i titoli e NON RIPETERE testualmente i concetti in sovrapposizione."
@@ -236,7 +238,7 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
         # FASE 2: REVISIONE LOGICA E CUCITURA DOPPIONI
         # ==========================================
         print("\n======================================")
-        print("[*] INIZIO FASE 2: REVISIONE FINALE E CUCITURA DOPPIONI")
+        print("[*] INIZIO FASE 2: REVISIONE FINALE (Eliminazione Doppioni, Correzione grammaticale, Miglioramento leggibilità, etc.)")
 
         paragrafi = testo_completo_sbobina.split("\n\n")
         macro_blocchi = []
@@ -252,7 +254,7 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
         if blocco_corrente.strip():
             macro_blocchi.append(blocco_corrente)
             
-        print(f"Il documento è stato diviso in {len(macro_blocchi)} macro-sezioni. Revisione grammaticale in corso...")
+        print(f"Il documento è stato diviso in {len(macro_blocchi)} macro-sezioni per mantenere il livello di dettaglio. Revisione in corso...")
 
         testo_finale_revisionato = ""
 
@@ -320,6 +322,14 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
         print(f"\n======================================")
         print("SBOBINATURA COMPLETATA CON SUCCESSO!")
         print(f"File salvato in: {nome_file_output}")
+        
+        # Forza l'aggiornamento visivo del file sul Desktop in Windows
+        if platform.system() == "Windows":
+            try:
+                import ctypes
+                ctypes.windll.shell32.SHChangeNotify(0x08000000, 0x0000, None, None)
+            except Exception:
+                pass
     
     except Exception as e:
         print(f"\n[X] ERRORE IMPREVISTO DURANTE L'ESECUZIONE:\n{e}")
@@ -342,7 +352,7 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
 if platform.system() == "Windows":
     try:
         import ctypes
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("sbobinatore.ai.app")
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("sbobby.ai.app")
     except Exception:
         pass
 
@@ -365,7 +375,7 @@ class SbobinatoreModernApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        self.title("Sbobinatore AI")
+        self.title("Sbobby 🤖")
         self.geometry("850x700")
         self.configure(fg_color="#0F0F14")
         self.minsize(750, 600)
@@ -386,7 +396,7 @@ class SbobinatoreModernApp(ctk.CTk):
         self.title_frame.grid_columnconfigure(0, weight=1)
         title_inner = ctk.CTkFrame(self.title_frame, fg_color="transparent")
         title_inner.grid(row=0, column=0)
-        ctk.CTkLabel(title_inner, text="🎓 Sbobinatore AI", font=(FONT_UI, 26, "bold"), text_color="#CDD6F4").pack()
+        ctk.CTkLabel(title_inner, text="🎓 Sbobby 🤖", font=(FONT_UI, 26, "bold"), text_color="#CDD6F4").pack()
 
         # API KEY CARD
         self.api_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
@@ -422,7 +432,7 @@ class SbobinatoreModernApp(ctk.CTk):
 
         # TERMINALE OUTPUT
         self.console_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=12, border_width=1, border_color=self.BORDER)
-        self.console_card.grid(row=4, column=0, padx=30, pady=(0, 25), sticky="nsew")
+        self.console_card.grid(row=4, column=0, padx=30, pady=(0, 15), sticky="nsew")
         self.console_card.grid_columnconfigure(0, weight=1)
         self.console_card.grid_rowconfigure(2, weight=1)
         ctk.CTkLabel(self.console_card, text="⚡ Output", font=(FONT_UI, 12, "bold"), text_color=self.TEXT_DIM).grid(row=0, column=0, sticky="w", padx=16, pady=(12, 4))
@@ -431,10 +441,32 @@ class SbobinatoreModernApp(ctk.CTk):
         self.progress_bar.set(0)
         self.console = ctk.CTkTextbox(self.console_card, font=(FONT_MONO, 12), fg_color=self.TERMINAL_BG, text_color=self.TERMINAL_FG, corner_radius=8, wrap="word", border_width=0)
         self.console.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 12))
+        self.console.configure(state="disabled")
 
         sys.stdout = PrintRedirector(self.console)
         sys.stderr = PrintRedirector(self.console)
-        print("Sbobinatore AI pronto all'uso.\n")
+        print("Sbobby 🤖 pronto all'uso.\n")
+        
+        # CREDITS FOOTER
+        self.footer_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.footer_frame.grid(row=5, column=0, pady=(0, 10), sticky="ew")
+        
+        # Testo e link affiancati manualmente simulando un testo
+        import webbrowser
+        lbl_center = ctk.CTkFrame(self.footer_frame, fg_color="transparent")
+        lbl_center.pack(expand=True)
+        
+        ctk.CTkLabel(lbl_center, text="Sbobby 🤖 — Progetto open-source | ", font=(FONT_UI, 11), text_color=self.TEXT_DIM).pack(side="left")
+        
+        lk_gh = ctk.CTkLabel(lbl_center, text="GitHub", font=(FONT_UI, 11, "underline"), text_color=self.ACCENT, cursor="hand2")
+        lk_gh.pack(side="left")
+        lk_gh.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/vimuw/Sbobinatore-AI"))
+        
+        ctk.CTkLabel(lbl_center, text=" • ", font=(FONT_UI, 11), text_color=self.TEXT_DIM).pack(side="left", padx=5)
+        
+        lk_kofi = ctk.CTkLabel(lbl_center, text="☕ Offrimi un caffè su Ko-fi", font=(FONT_UI, 11, "underline"), text_color=self.SUCCESS, cursor="hand2")
+        lk_kofi.pack(side="left")
+        lk_kofi.bind("<Button-1>", lambda e: webbrowser.open("https://ko-fi.com/vimuw"))
 
     def scegli_file(self, event=None):
         if self.is_running: return
