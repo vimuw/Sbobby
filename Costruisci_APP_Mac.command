@@ -18,7 +18,7 @@ echo "Attendi pazientemente, non chiudere la finestra..."
 echo "======================================================="
 echo ""
 
-pyinstaller --noconfirm --windowed --collect-all customtkinter --collect-all tkinterdnd2 --copy-metadata imageio --name "Sbobby" "Sbobinatore.pyw"
+pyinstaller --noconfirm --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --name "Sbobby" "Sbobinatore.pyw"
 
 echo ""
 echo "======================================================="

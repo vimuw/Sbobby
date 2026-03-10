@@ -11,7 +11,8 @@ import os
 import json
 from google import genai
 from google.genai import types
-from moviepy.editor import AudioFileClip
+import imageio_ffmpeg
+import subprocess
 
 # ==========================================
 # CONFIGURAZIONE UI E FILE
@@ -142,8 +143,15 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
 
         print(f"[*] Analisi del file originale in corso:\n{os.path.basename(nome_file_video)}")
         try:
-            audio_completo = AudioFileClip(nome_file_video)
-            durata_totale_secondi = audio_completo.duration
+            # Ricava durata audio con ffprobe leggero
+            ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+            comando_probe = [
+                ffmpeg_exe, "-v", "error", "-show_entries",
+                "format=duration", "-of", "default=noprint_wrappers=1:nokey=1",
+                nome_file_video
+            ]
+            risultato = subprocess.run(comando_probe, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=True)
+            durata_totale_secondi = float(risultato.stdout.strip())
         except Exception as e:
             print(f"Errore caricamento audio. File corrotto o formato non supportato.\n{e}")
             return
@@ -168,9 +176,13 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
             # 1. Taglio
             # Spiegazione per l'utente loggata direttamente in app
             print("   -> (1/3) Estrazione e taglio in corso (Può richiedere qualche secondo)...")
-            chunk = audio_completo.subclip(inizio_sec, fine_sec)
-            chunk.write_audiofile(nome_chunk, logger=None)
-            chunk.close()
+            durata_cut = fine_sec - inizio_sec
+            comando_cut = [
+                ffmpeg_exe, "-y", "-i", nome_file_video,
+                "-ss", str(inizio_sec), "-t", str(durata_cut),
+                "-q:a", "0", "-map", "a", nome_chunk
+            ]
+            subprocess.run(comando_cut, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
             # 2. Upload
             print("   -> (2/3) Caricamento sicuro nei server di google...")
@@ -304,13 +316,12 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
         base_name = os.path.basename(nome_file_video)
         nome_puro = os.path.splitext(base_name)[0]
         
-        # Salva la sbobina finita sempre sul Desktop
-        desktop_dir = os.path.join(os.path.expanduser("~"), "Desktop")
-        os.makedirs(desktop_dir, exist_ok=True)
-        nome_file_output = os.path.join(desktop_dir, f"{nome_puro}_Sbobina.html")
+        # Salva la sbobina finita *nella stessa cartella* del file multimediale analizzato
+        cartella_origine = os.path.dirname(os.path.abspath(nome_file_video))
+        nome_file_output = os.path.join(cartella_origine, f"{nome_puro}_Sbobina.html")
 
         if not base_name: 
-            nome_file_output = os.path.join(desktop_dir, "Sbobina_Definitiva.html")
+            nome_file_output = os.path.join(cartella_origine, "Sbobina_Definitiva.html")
 
         with open(nome_file_output, "w", encoding="utf-8") as f:
             f.write("<!DOCTYPE html>\n<html>\n<head>\n<meta charset='utf-8'>\n")
@@ -321,7 +332,7 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
 
         print(f"\n======================================")
         print("SBOBINATURA COMPLETATA CON SUCCESSO!")
-        print(f"File salvato in: {nome_file_output}")
+        print(f"File salvato in: {cartella_origine}")
         
         # Forza l'aggiornamento visivo del file sul Desktop in Windows
         if platform.system() == "Windows":
@@ -334,9 +345,6 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
     except Exception as e:
         print(f"\n[X] ERRORE IMPREVISTO DURANTE L'ESECUZIONE:\n{e}")
     finally:
-        if audio_completo:
-            try: audio_completo.close()
-            except: pass
         for f in app_instance.file_temporanei:
             try:
                 if os.path.exists(f): os.remove(f)
@@ -345,16 +353,6 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
         app_instance.aggiorna_progresso(1.0)
         app_instance.processo_terminato()
 
-
-# ==========================================
-# FIX TASKBAR ICON (Solo Windows)
-# ==========================================
-if platform.system() == "Windows":
-    try:
-        import ctypes
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("sbobby.ai.app")
-    except Exception:
-        pass
 
 # ==========================================
 # INTERFACCIA GRAFICA CUSTOM-TKINTER
@@ -383,13 +381,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.configure(fg_color="#0F0F14")
         self.minsize(750, 620)
         
-        # Imposta l'icona dell'app nativa (barra applicazioni e finestra)
-        try:
-            icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.ico")
-            if os.path.exists(icon_path):
-                self.iconbitmap(icon_path)
-        except Exception:
-            pass
+        self.minsize(750, 620)
 
         self.file_path = None
         self.is_running = False
