@@ -180,7 +180,7 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
             
             # 1. Taglio
             # Spiegazione per l'utente loggata direttamente in app
-            print("   -> (1/3) Estrazione e taglio in corso (Può richiedere qualche secondo)...")
+            print("   -> (1/3) Estrazione e taglio in corso...")
             durata_cut = fine_sec - inizio_sec
             comando_cut = [
                 ffmpeg_exe, "-y", "-i", nome_file_video,
@@ -197,14 +197,14 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                 audio_file = client.files.get(name=audio_file.name)
                 
             # 3. Generazione testuale
-            print("   -> (3/3) Generazione sbobina in corso (La fase più lunga)...")
+            print("   -> (3/3) Generazione sbobina in corso...")
             prompt_dinamico = "Ascolta questo blocco di lezione e crea la sbobina seguendo rigorosamente le istruzioni di sistema."
             if memoria_precedente:
                 prompt_dinamico += f"\n\nATTENZIONE: Stai continuando una stesura. Questo è l'ultimo paragrafo che hai generato nel blocco precedente:\n\"...{memoria_precedente}\"\n\nRiprendi il discorso da qui IN MODO FLUIDO. Usa la stessa grandezza per i titoli e NON RIPETERE testualmente i concetti in sovrapposizione."
                 
             successo = False
             rate_limit = False
-            for tent in range(3):
+            for tent in range(4):
                 try:
                     risposta = client.models.generate_content(
                         model='gemini-2.5-flash',
@@ -223,16 +223,21 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                 except Exception as e:
                     errore = str(e).lower()
                     if '429' in errore or 'resource_exhausted' in errore or 'quota' in errore:
-                        print("\n" + "="*50)
-                        print("⛔ LIMITE GIORNALIERO RAGGIUNTO!")
-                        print("="*50)
-                        print("Hai esaurito le richieste gratuite di oggi.")
-                        print("Cosa puoi fare:")
-                        print("  1. Aspetta domani mattina (~ore 9:00 italiane)")
-                        print("  2. Usa una API Key di un altro account Google")
-                        print("="*50)
-                        rate_limit = True
-                        break
+                        if tent < 3:
+                            print(f"      [Limite richieste per minuto. Attesa di 65s per il reset quota...]")
+                            time.sleep(65)
+                            continue
+                        else:
+                            print("\n" + "="*50)
+                            print("⛔ LIMITE GIORNALIERO RAGGIUNTO!")
+                            print("="*50)
+                            print("Hai esaurito le richieste gratuite di oggi.")
+                            print("Cosa puoi fare:")
+                            print("  1. Aspetta domani mattina (~ore 9:00 italiane)")
+                            print("  2. Usa una API Key di un account Google DIVERSO")
+                            print("="*50)
+                            rate_limit = True
+                            break
                     print(f"      [Server occupati. Riprovo in 30 secondi...]")
                     time.sleep(30)
                     
@@ -280,7 +285,7 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
         for i, blocco in enumerate(macro_blocchi, 1):
             print(f"   -> Revisione Macro-blocco {i} di {len(macro_blocchi)}...")
             successo_revisione = False
-            for tent in range(3):
+            for tent in range(4):
                 try:
                     risposta_rev = client.models.generate_content(
                         model='gemini-2.5-flash',
@@ -295,14 +300,19 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                 except Exception as e:
                     errore = str(e).lower()
                     if '429' in errore or 'resource_exhausted' in errore or 'quota' in errore:
-                        print("\n⛔ LIMITE GIORNALIERO RAGGIUNTO durante la revisione!")
-                        print("   Salvo tutto il lavoro fatto finora senza revisione.")
-                        # Salva tutti i blocchi rimanenti senza revisione
-                        testo_finale_revisionato += f"\n\n{blocco}\n\n"
-                        for j, b_rimanente in enumerate(macro_blocchi[i:], i+1):
-                            testo_finale_revisionato += f"\n\n{b_rimanente}\n\n"
-                        successo_revisione = True  # Evita il doppio salvataggio sotto
-                        break
+                        if tent < 3:
+                            print(f"      [Limite richieste per minuto. Attesa di 65s per il reset quota...]")
+                            time.sleep(65)
+                            continue
+                        else:
+                            print("\n⛔ LIMITE GIORNALIERO RAGGIUNTO durante la revisione!")
+                            print("   Salvo tutto il lavoro fatto finora senza revisione.")
+                            # Salva tutti i blocchi rimanenti senza revisione
+                            testo_finale_revisionato += f"\n\n{blocco}\n\n"
+                            for j, b_rimanente in enumerate(macro_blocchi[i:], i+1):
+                                testo_finale_revisionato += f"\n\n{b_rimanente}\n\n"
+                            successo_revisione = True  # Evita il doppio salvataggio sotto
+                            break
                     print(f"      [Errore di coda. Riprovo in 20 secondi...]")
                     time.sleep(20)
                     
@@ -512,16 +522,12 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             return
         if self.is_running:
             return
-        # Validazione rapida della API Key
+        # Validazione rapida della API Key (Senza consumare token di generazione)
         try:
             test_client = genai.Client(api_key=api_key)
-            test_client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents='test',
-                config=types.GenerateContentConfig(max_output_tokens=1)
-            )
+            test_client.models.get(name='models/gemini-2.5-flash')
         except Exception as e:
-            messagebox.showerror("API Key non valida", f"La chiave API non funziona.\nControlla di averla copiata correttamente.\n\nErrore: {e}")
+            messagebox.showerror("API Key non valida", f"La chiave API non è valida o non hai accesso ai server Google.\nControlla di averla copiata correttamente, senza spazi extra.\n\nErrore: {e}")
             return
         save_config(api_key)
         self.is_running = True
