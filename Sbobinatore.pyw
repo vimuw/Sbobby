@@ -133,6 +133,18 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
 
         client = genai.Client(api_key=api_key_value.strip())
         
+        def richiedi_chiave_riserva():
+            evento = threading.Event()
+            esito = {"nuova_chiave": None}
+            def mostra_popup():
+                dialog = ctk.CTkInputDialog(text="Hai esaurito la Quota Gratuita limitata di Google per questo account.\n\nInserisci un'altra API Key appartenente a un account Google DIVERSO per riprendere il processo senza perdere progressi.\n\nLascia vuoto o clicca Annulla per interrompere definitivamente e salvare a metà.", title="🔌 Esaurimento Quota")
+                esito["nuova_chiave"] = dialog.get_input()
+                evento.set()
+            app_instance.after(0, mostra_popup)
+            print("   [In attesa di una nuova chiave API dall'utente nel popup...]")
+            evento.wait()
+            return esito["nuova_chiave"]
+        
         blocco_minuti = 15
         blocco_secondi = blocco_minuti * 60
         sovrapposizione_secondi = 30
@@ -207,7 +219,8 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                 
             successo = False
             rate_limit = False
-            for tent in range(4):
+            tent = 0
+            while tent < 4:
                 try:
                     risposta = client.models.generate_content(
                         model='gemini-2.5-flash',
@@ -229,20 +242,31 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                         if tent < 3:
                             print(f"      [Limite richieste per minuto. Attesa di 65s per il reset quota...]")
                             time.sleep(65)
+                            tent += 1
                             continue
                         else:
                             print("\n" + "="*50)
                             print("⛔ LIMITE GIORNALIERO RAGGIUNTO!")
+                            nuova_api = richiedi_chiave_riserva()
+                            if nuova_api and nuova_api.strip():
+                                try:
+                                    test_c = genai.Client(api_key=nuova_api.strip())
+                                    test_c.models.get(model='gemini-2.5-flash')
+                                    client = test_c
+                                    print("   ✅ Nuova API Key valida! Ripresa automatica dell'elaborazione...")
+                                    tent = 0 # reset tentativi
+                                    continue
+                                except Exception as err:
+                                    print(f"   [!] Chiave non valida fornita: {err}")
+                            
                             print("="*50)
-                            print("Hai esaurito le richieste gratuite di oggi.")
-                            print("Cosa puoi fare:")
-                            print("  1. Aspetta domani mattina (~ore 9:00 italiane)")
-                            print("  2. Usa una API Key di un account Google DIVERSO")
+                            print("Hai esaurito le richieste.")
                             print("="*50)
                             rate_limit = True
                             break
                     print(f"      [Server occupati. Riprovo in 30 secondi...]")
                     time.sleep(30)
+                    tent += 1
                     
             if rate_limit:
                 break
@@ -288,7 +312,8 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
         for i, blocco in enumerate(macro_blocchi, 1):
             print(f"   -> Revisione Macro-blocco {i} di {len(macro_blocchi)}...")
             successo_revisione = False
-            for tent in range(4):
+            tent = 0
+            while tent < 4:
                 try:
                     risposta_rev = client.models.generate_content(
                         model='gemini-2.5-flash',
@@ -306,10 +331,23 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                         if tent < 3:
                             print(f"      [Limite richieste per minuto. Attesa di 65s per il reset quota...]")
                             time.sleep(65)
+                            tent += 1
                             continue
                         else:
                             print("\n⛔ LIMITE GIORNALIERO RAGGIUNTO durante la revisione!")
-                            print("   Salvo tutto il lavoro fatto finora senza revisione.")
+                            nuova_api = richiedi_chiave_riserva()
+                            if nuova_api and nuova_api.strip():
+                                try:
+                                    test_c = genai.Client(api_key=nuova_api.strip())
+                                    test_c.models.get(model='gemini-2.5-flash')
+                                    client = test_c
+                                    print("   ✅ Nuova API Key valida! Ripresa automatica della revisione...")
+                                    tent = 0
+                                    continue
+                                except Exception as err:
+                                    print(f"   [!] Chiave non valida fornita: {err}")
+                            
+                            print("   Scarto la chiave. Salvo tutto il lavoro fatto finora senza revisione successiva.")
                             # Salva tutti i blocchi rimanenti senza revisione
                             testo_finale_revisionato += f"\n\n{blocco}\n\n"
                             for j, b_rimanente in enumerate(macro_blocchi[i:], i+1):
@@ -318,6 +356,7 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                             break
                     print(f"      [Errore di coda. Riprovo in 20 secondi...]")
                     time.sleep(20)
+                    tent += 1
                     
             if '429' in str(locals().get('e', '')).lower() or 'resource_exhausted' in str(locals().get('e', '')).lower():
                 break  # Esci dal loop dei macro_blocchi
