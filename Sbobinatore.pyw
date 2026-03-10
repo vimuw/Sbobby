@@ -380,9 +380,18 @@ class SbobinatoreModernApp(ctk.CTk):
         self.configure(fg_color="#0F0F14")
         self.minsize(750, 620)
         
+        def resource_path(relative_path):
+            try:
+                base_path = sys._MEIPASS
+            except Exception:
+                base_path = os.path.dirname(os.path.abspath(__file__))
+            return os.path.join(base_path, relative_path)
+        
+        self.resource_path = resource_path
+
         # Imposta l'icona dell'app nativa (barra applicazioni e finestra)
         try:
-            icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.ico")
+            icon_path = self.resource_path(os.path.join("assets", "icon.ico"))
             if os.path.exists(icon_path):
                 self.iconbitmap(icon_path)
         except Exception:
@@ -408,7 +417,7 @@ class SbobinatoreModernApp(ctk.CTk):
         # Caricamento della Mascot in alta risoluzione
         try:
             from PIL import Image
-            mascot_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.png")
+            mascot_path = self.resource_path(os.path.join("assets", "icon.png"))
             img = Image.open(mascot_path)
             robot_img = ctk.CTkImage(light_image=img, dark_image=img, size=(42, 42))
             ctk.CTkLabel(title_inner, text="", image=robot_img).pack(side="left", padx=(0, 10))
