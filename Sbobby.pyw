@@ -23,7 +23,7 @@ ctk.set_default_color_theme("blue")
 
 # Usa il profilo utente per salvare la configurazione in modo persistente anche quando è un .exe creato con PyInstaller
 USER_HOME = os.path.expanduser("~")
-CONFIG_FILE = os.path.join(USER_HOME, ".sbobinatore_config.json")
+CONFIG_FILE = os.path.join(USER_HOME, ".sbobby_config.json")
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
@@ -121,7 +121,7 @@ class PrintRedirector:
 
 
 # ==========================================
-# LOGICA PRINCIPALE DELLO SBOBINATORE
+# LOGICA PRINCIPALE DI SBOBBY
 # ==========================================
 def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
     audio_completo = None
@@ -188,7 +188,7 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
             print(f"-> LAVORAZIONE BLOCCO AUDIO {blocco_corrente_idx} DI {blocchi_totali} (Da {inizio_sec}s a {int(fine_sec)}s)")
             
             # Salva i pezzi temporanei nella cartella TEMP del sistema operativo
-            nome_chunk = os.path.join(tempfile.gettempdir(), f"sbobinatore_temp_{inizio_sec}_{int(fine_sec)}.mp3")
+            nome_chunk = os.path.join(tempfile.gettempdir(), f"sbobby_temp_{inizio_sec}_{int(fine_sec)}.mp3")
             app_instance.file_temporanei.append(nome_chunk)
             
             # 1. Taglio
@@ -522,7 +522,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         
         lk_gh = ctk.CTkLabel(lbl_center, text="GitHub", font=(FONT_UI, 11, "underline"), text_color=self.ACCENT, cursor="hand2")
         lk_gh.pack(side="left")
-        lk_gh.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/vimuw/Sbobinatore-AI"))
+        lk_gh.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/vimuw/Sbobby"))
         
         ctk.CTkLabel(lbl_center, text=" • ", font=(FONT_UI, 11), text_color=self.TEXT_DIM).pack(side="left", padx=5)
         
