@@ -84,8 +84,9 @@ L'intelligenza artificiale di Google non è illimitata: funziona a **"gettoni" (
 **Quanto consuma una sbobina?** L'app divide l'audio in blocchi da 15 minuti. Per ogni blocco effettua in media 1.6 richieste (una di trascrizione, e proporzionalmente una di revisione su macro-blocchi di testo uniti). Avendo a disposizione 20 token (richieste) gratuiti al giorno con Gemini 2.5 Flash, **la lunghezza massima consigliata per l'audio in una singola giornata è di circa 3 ore (180 minuti)**. Oltre questa soglia temporale, l'app supererà le 20 richieste e il processo verrà interrotto per esaurimento del limite gratuito giornaliero di Google.
 
 **Ho finito i token (Errore: ⛔ LIMITE GIORNALIERO RAGGIUNTO!), cosa faccio?**
-- **Opzione 1 (Aspettare):** I limiti si resettano ogni giorno a mezzanotte ora del Pacifico, che corrisponde circa alle **ore 9:00 di mattina in Italia**.
-- **Opzione 2 (Cambiare account):** Crea una nuova chiave API da un **account Google diverso** (es. una seconda email Gmail). I limiti sono legati all'account, non all'app. *(Nota bene: creare una seconda chiave API dallo stesso account Google non azzera il limite).*
+L'app è intelligente e gestirà questo blocco per te:
+- **Opzione 1 (Inserire una nuova chiave a caldo):** L'applicazione metterà in pausa il processo (senza farti perdere la sbobina generata finora) e aprirà un popup a schermo. Ti basterà generare una nuova chiave API da un **account Google diverso** (es. una seconda email Gmail), incollarla nel popup e premere OK. Sbobby riprenderà automaticamente a sbobinare l'audio dal punto esatto in cui si era interrotto!
+- **Opzione 2 (Aspettare l'indomani):** Se non hai altre email o vuoi fermarti, premi "Annulla" nel popup. L'app salverà su file la porzione di lezione sbobinata fino a quel punto e si chiuderà. I limiti gratuiti si resettano ogni giorno a mezzanotte ora del Pacifico, che corrisponde circa alle **ore 9:00 di mattina in Italia**.
 
 ---
 
