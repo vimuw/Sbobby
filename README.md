@@ -11,7 +11,7 @@ L'intelligenza artificiale (basata sul modello Gemini 2.5 Flash) ascolterà la t
 ### 1) Come Scaricare il programma
 1. Clicca sulla sezione **Releases** sulla destra di questa pagina GitHub (oppure scarica dai link forniti).
 2. Scarica il programma per il tuo sistema operativo:
-   - **Per Windows:** Scarica il file `Sbobby-Windows.zip`
+   - **Per Windows:** Scarica il file `Sbobby.exe`
    - **Per Mac:** Scarica il file `Sbobby_Mac.zip`
 3. Salva il file dove preferisci (es. sul Desktop).
 
@@ -29,10 +29,10 @@ Essendo Google Gemini il cervello del programma, ti serve una password unica (AP
 È un programma "plug & play", non devi installare nulla sul PC.
 
 ### 💻 Se usi Windows:
-Estrai l'archivio ZIP in una cartella a tuo piacimento e fai **doppio clic** sul file `Sbobby.exe` contenuto al suo interno.
+Fai semplicemente **doppio clic** sul file `Sbobby.exe`.
 *(Nota: Se l'antivirus o Windows blocca l'applicazione al primo avvio, non preoccuparti! Consulta la sezione FAQ qui sotto per capire come fare e perché succede).*
 
-> ⚡ **Avvio Istantaneo:** L'applicazione si aprirà in una frazione di secondo grazie alla nuova architettura non compressa! Nessuna attesa noiosa all'avvio.
+> ⏳ **Pazienza all'avvio (Non cliccare mille volte!):** > Sbobby pesa circa 65 MB perché contiene al suo interno tutto il "motore" necessario per funzionare senza farti installare Python. Ogni volta che lo apri, il tuo computer deve "scompattare" questo motore in background. Per questo motivo, **l'avvio richiederà sempre qualche secondo (il tempo esatto dipende dalla velocità e dalla potenza del tuo PC)**. Dagli quindi un attimo di tempo per caricarsi.
 
 ### 🍎 Se usi Mac:
 Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `Sbobby.app` (puoi trascinarla nella cartella Applicazioni).

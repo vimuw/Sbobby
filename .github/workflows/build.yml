@@ -17,8 +17,8 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            artifact_name: Sbobby-Windows.zip
-            asset_name: Sbobby-Windows.zip
+            artifact_name: Sbobby.exe
+            asset_name: Sbobby-Windows.exe
           - os: macos-latest
             artifact_name: Sbobby.app
             asset_name: Sbobby-MacOS.zip
@@ -47,9 +47,7 @@ jobs:
       - name: Build Windows Executable
         if: runner.os == 'Windows'
         run: |
-          pyinstaller --noconfirm --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --name "Sbobby" "Sbobby.pyw"
-          cd dist
-          Compress-Archive -Path "Sbobby\*" -DestinationPath "Sbobby-Windows.zip"
+          pyinstaller --noconfirm --onefile --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --name "Sbobby" "Sbobby.pyw"
 
       - name: Build macOS App
         if: runner.os == 'macOS'
@@ -87,7 +85,7 @@ jobs:
         run: |
           mkdir release_assets
           # Move artifacts out of their individual folders for clean release upload
-          mv output_files/Sbobby-Windows.zip/Sbobby-Windows.zip release_assets/Sbobby-Windows.zip || echo "Win build not found"
+          mv output_files/Sbobby-Windows.exe/Sbobby.exe release_assets/Sbobby-Windows.exe || echo "Win build not found"
           mv output_files/Sbobby-MacOS.zip/Sbobby.zip release_assets/Sbobby-MacOS.zip || echo "Mac build not found"
 
       - name: Publish Release to GitHub

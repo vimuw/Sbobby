@@ -16,15 +16,15 @@ echo Attendi pazientemente, non chiudere la finestra...
 echo =======================================================
 echo.
 
-pyinstaller --noconfirm --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --name "Sbobby" "Sbobby.pyw"
+pyinstaller --noconfirm --onefile --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --name "Sbobby" "Sbobby.pyw"
 
 echo.
 echo =======================================================
 echo COMPILAZIONE COMPLETATA CON SUCCESSO!
 echo =======================================================
-echo Troverai la cartella del tuo programma pronto all'uso "Sbobby" 
-echo all'interno della cartella base "dist".
-echo Ora puoi prendere QUELLA CARTELLA e condividerla
-echo con chiunque, l'eseguibile Sbobby.exe e' compreso al suo interno!
+echo Troverai il tuo programma pronto all'uso "Sbobby.exe" 
+echo all'interno della cartella "dist".
+echo Ora puoi prendere quel piccolo file .exe e condividerlo
+echo con chiunque, non servira' avere Python installato!
 echo.
 pause
