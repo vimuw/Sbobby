@@ -44,8 +44,8 @@ Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `Sbobby.app` (puoi
 1. Aperta la schermata del programma, incolla in alto la **Chiave API** copiata prima. Il programma se la salverà, così non dovrai rimetterla mai più.
 2. Clicca "**Sfoglia / Carica**" e seleziona la registrazione audio della tua lezione.
 3. Clicca il pulsantone verde **AVVIA**.
-4. Niente panico se l'app sembra bloccarsi: nel terminale dentro al programma leggerai esattamente a che punto è! Ad esempio, se l'audio dura un'ora, farà **4 estrazioni** da 15 minuti l'una, e ci metterà all'incirca 3-5 minuti in base al traffico dei server Google e alla tua connessione.
-5. Quando ha finito, troverai il file `.html` (la Sbobina) pronto direttamente sul tuo **Desktop**, già formattato per il copia-incolla su Google Docs.
+4. Niente panico se l'app sembra bloccarsi: nel terminale dentro al programma leggerai esattamente a che punto e'! Ad esempio, se l'audio dura un'ora, fara' **4 estrazioni** da 15 minuti l'una, e ci mettera' all'incirca 3-5 minuti in base al traffico dei server Google e alla tua connessione.
+5. Quando ha finito, troverai il file `.html` sul tuo **Desktop**, gia' formattato per il copia-incolla su Google Docs.
 
 ---
 
@@ -54,13 +54,7 @@ Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `Sbobby.app` (puoi
 
 Stiamo parlando di una percentuale di imprecisione davvero minuscola rispetto al testo totale. Il vero vantaggio è che l'app **farà il 90% del lavoro sporco e noioso al posto tuo**. A te basterà dare una rapida rilettura per sistemare quelle due o tre imperfezioni, risparmiando comunque ore e ore di digitazione manuale!
 
-## 💡 Consigli per una sbobina perfetta
 Ricorda sempre una regola d'oro dell'intelligenza artificiale: **la qualità del risultato dipende dalla qualità dell'audio di partenza**. Se l'audio è incomprensibile per un umano, lo sarà anche per l'AI!
-
-Per ottenere i risultati migliori, segui queste accortezze durante la lezione:
-* **Avvicinati alla fonte:** Cerca di sederti nei primi banchi o comunque assicurati che la voce del professore arrivi forte e chiara al tuo dispositivo.
-* **Attenzione ai rumori di sottofondo:** L'AI è bravissima a isolare la voce principale, ma se c'è molto chiacchiericcio dei vicini di banco, rumore di fogli, colpi sul tavolo o rimbombi eccessivi, l'audio potrebbe confondersi generando errori o frasi saltate.
-* **Non coprire il microfono:** Se registri con lo smartphone, il tablet o il PC, assicurati che il microfono non sia ostruito da oggetti.
 
 ---
 
@@ -108,7 +102,7 @@ Scaricando e utilizzando questa applicazione, accetti e comprendi che:
 * **Diritto d'autore e Uso Personale:** Le lezioni universitarie sono proprietà intellettuale dei rispettivi docenti. L'uso di questo strumento è inteso **esclusivamente per scopi di studio personale**. La diffusione pubblica, la pubblicazione online o la vendita a terzi delle sbobine generate senza il consenso esplicito del docente è una violazione del diritto d'autore. L'autore di questo software declina ogni responsabilità per l'uso improprio o illecito dei testi generati.
 * **Privacy e Gestione dei Dati:** Inserendo la tua chiave API personale (BYOK), stabilisci una connessione diretta tra il tuo computer e i server di Google, accettando i [Termini di Servizio di Google](https://policies.google.com/terms). Sbobby 🤖 non ha server propri: non intercetta, non salva in cloud e non condivide con nessuno (nemmeno con il creatore dell'app) i tuoi file audio, le tue sbobine o la tua chiave API. Tutto avviene e rimane sul tuo dispositivo.
 * **Tassativo Divieto per Dati Clinici Sensibili (Privacy e GDPR):** Sbobby elabora i file audio inviandoli tramite API per la trascrizione. Per questo motivo, è assolutamente vietato dare in pasto all'app registrazioni effettuate in ambiente clinico, durante i tirocini in reparto o che contengono conversazioni con pazienti reali. L'elaborazione di dati sanitari sensibili o informazioni che possano identificare un paziente tramite API esterne è una grave violazione della privacy. Usa l'app **solo per trascrivere le lezioni frontali in aula**.
-* **Nessuna Garanzia:** Come specificato dalla Licenza MIT allegata al progetto, il software è fornito "così com'è", senza alcuna garanzia. L'autore non è responsabile per eventuali crash, perdita di dati, esami andati male o inesattezze nelle trascrizioni. 😉
+* **Nessuna Garanzia:** Come specificato dalla Licenza MIT allegata al progetto, il software è fornito "così com'è", senza alcuna garanzia.
 
 ---
 ## 📝 Licenza

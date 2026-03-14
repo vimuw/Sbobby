@@ -1,0 +1,5 @@
+google-genai==1.67.0
+imageio-ffmpeg==0.6.0
+customtkinter==5.2.2
+markdown==3.5.2
+tkinterdnd2==0.4.3

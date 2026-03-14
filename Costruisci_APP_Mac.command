@@ -7,9 +7,20 @@ echo "======================================================="
 # Spostati nella cartella d'origine
 cd "$(dirname "$0")"
 
+echo "Creazione/attivazione ambiente virtuale (.venv)..."
+if [ ! -f ".venv/bin/python" ]; then
+  python3 -m venv .venv
+fi
+source ".venv/bin/activate"
+
 echo "Installazione dei requisiti e PyInstaller in corso..."
-pip3 install -r requirements.txt
-pip3 install pyinstaller
+python -m pip install --upgrade pip
+if [ -f requirements.lock ]; then
+  python -m pip install -r requirements.lock
+else
+  python -m pip install -r requirements.txt
+fi
+python -m pip install pyinstaller
 
 echo ""
 echo "======================================================="
@@ -18,7 +29,7 @@ echo "Attendi pazientemente, non chiudere la finestra..."
 echo "======================================================="
 echo ""
 
-pyinstaller --noconfirm --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --name "Sbobby" "Sbobby.pyw"
+python -m pyinstaller --noconfirm --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --name "Sbobby" "Sbobby.pyw"
 
 echo ""
 echo "======================================================="

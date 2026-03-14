@@ -9,7 +9,9 @@ config.json
 # Audio/Video processing temp
 sbobinatore_temp_*.mp3
 *_Sbobina.html
+*_Sbobina.md
 Sbobina_Definitiva.html
+Sbobina_Definitiva.md
 pdf_output.txt
 
 # PyInstaller build artifacts
@@ -28,6 +30,7 @@ dist/
 *.pdf
 
 # Virtual envs
+.venv/
 venv/
 env/
 .env
