@@ -10,6 +10,10 @@ import markdown
 import os
 import json
 import re
+import hashlib
+import shutil
+import difflib
+from datetime import datetime
 from google import genai
 from google.genai import types
 import imageio_ffmpeg
@@ -25,6 +29,36 @@ ctk.set_default_color_theme("blue")
 USER_HOME = os.path.expanduser("~")
 CONFIG_FILE = os.path.join(USER_HOME, ".sbobby_config.json")
 
+def get_desktop_dir():
+    # Cross-platform Desktop path (Windows/macOS/Linux). Fallback: home directory.
+    try:
+        if platform.system() == "Windows":
+            # Prefer OneDrive Desktop if present (common on Windows 10/11).
+            for env_key in ("OneDriveConsumer", "OneDriveCommercial", "OneDrive"):
+                od = os.environ.get(env_key)
+                if od:
+                    p = os.path.join(od, "Desktop")
+                    if os.path.isdir(p):
+                        return p
+            up = os.environ.get("USERPROFILE") or USER_HOME
+            p = os.path.join(up, "Desktop")
+            if os.path.isdir(p):
+                return p
+        # macOS/Linux default
+        p = os.path.join(USER_HOME, "Desktop")
+        if os.path.isdir(p):
+            return p
+    except Exception:
+        pass
+    return USER_HOME
+
+def safe_output_basename(name: str) -> str:
+    # Safe across Windows/macOS. Keep it readable.
+    s = (name or "").strip() or "Sbobina"
+    s = re.sub(r"[<>:\"/\\\\|?*]+", "_", s)
+    s = re.sub(r"\\s+", " ", s).strip()
+    return s[:140] if len(s) > 140 else s
+
 def load_config():
     if os.path.exists(CONFIG_FILE):
         try:
@@ -37,6 +71,52 @@ def load_config():
 def save_config(api_key):
     with open(CONFIG_FILE, "w") as f:
         json.dump({"api_key": api_key}, f)
+
+
+# ==========================================
+# SESSIONI (AUTOSAVE / RIPRESA)
+# ==========================================
+SESSION_SCHEMA_VERSION = 1
+SESSION_ROOT = os.path.join(USER_HOME, ".sbobby_sessions")
+
+def _now_iso():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def _safe_mkdir(path):
+    os.makedirs(path, exist_ok=True)
+
+def _atomic_write_text(path, text):
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(tmp_path, path)
+
+def _atomic_write_json(path, data):
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, path)
+
+def _load_json(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def _file_fingerprint(path):
+    abs_path = os.path.abspath(path)
+    st = os.stat(abs_path)
+    return {
+        "path": abs_path,
+        "size": int(getattr(st, "st_size", 0)),
+        "mtime": float(getattr(st, "st_mtime", 0.0)),
+    }
+
+def _session_id_for_file(path):
+    fp = _file_fingerprint(path)
+    blob = json.dumps(fp, sort_keys=True).encode("utf-8", errors="ignore")
+    return hashlib.sha256(blob).hexdigest()
+
+def _session_dir_for_file(path):
+    return os.path.join(SESSION_ROOT, _session_id_for_file(path))
 
 
 # ==========================================
@@ -97,6 +177,21 @@ REGOLE INVIOLABILI:
 8. FORMULE MATEMATICHE: NON usare MAI formattazione LaTeX (niente simboli $, niente \\frac). Scrivi le equazioni esclusivamente in testo lineare (es: V = (RT/F) * ln(Est/Int)).
 """
 
+PROMPT_REVISIONE_CONFINE = """
+Sei un revisore editoriale accademico.
+Ti passo DUE estratti in Markdown: la FINE del blocco N e l'INIZIO del blocco N+1, separati dal marker:
+<<<SBOBBY_SPLIT>>>
+
+IL TUO UNICO OBIETTIVO: eliminare ripetizioni e ridondanze che stanno tra i due estratti (doppioni che scappano tra macro-blocchi).
+
+REGOLE INVIOLABILI:
+1. SILENZIO ASSOLUTO: Rispondi SOLO con i due estratti revisionati.
+2. OUTPUT OBBLIGATORIO: Mantieni ESATTAMENTE lo stesso marker <<<SBOBBY_SPLIT>>> tra i due testi revisionati.
+3. NON RIASSUMERE MAI: Elimina solo i doppioni. Tutto il resto resta.
+4. MANTIENI LA FORMATTAZIONE Markdown: titoli (## / ###), elenchi, grassetti, ecc.
+5. FORMULE MATEMATICHE: niente LaTeX, solo testo lineare.
+"""
+
 
 # ==========================================
 # CLASSE PER REDIRECT DELL'OUTPUT NELLA GUI
@@ -106,15 +201,24 @@ class PrintRedirector:
         self.text_widget = text_widget
 
     def write(self, string):
-        if string == '\r' or string == '\n': return
-        # Usa after() per garantire thread-safety con Tkinter
-        self.text_widget.after(0, self._append, string)
+        if string == '\r' or string == '\n':
+            return
+        # Usa after() per garantire thread-safety con Tkinter.
+        # In chiusura app, il widget puo' essere gia' distrutto: ignora.
+        try:
+            self.text_widget.after(0, self._append, string)
+        except Exception:
+            pass
 
     def _append(self, string):
-        self.text_widget.configure(state="normal")
-        self.text_widget.insert(ctk.END, string + "\n")
-        self.text_widget.see(ctk.END)
-        self.text_widget.configure(state="disabled")
+        try:
+            self.text_widget.configure(state="normal")
+            self.text_widget.insert(ctk.END, string + "\n")
+            self.text_widget.see(ctk.END)
+            self.text_widget.configure(state="disabled")
+        except Exception:
+            # Probabile chiusura finestra (widget distrutto).
+            pass
 
     def flush(self):
         pass
@@ -123,9 +227,74 @@ class PrintRedirector:
 # ==========================================
 # LOGICA PRINCIPALE DI SBOBBY
 # ==========================================
-def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
-    audio_completo = None
+def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, session_dir_hint=None, resume_session=False):
     app_instance.file_temporanei = []  # Condiviso con l'app per pulizia alla chiusura
+    cancel_event = getattr(app_instance, "cancel_event", None)
+
+    def cancelled():
+        return cancel_event is not None and cancel_event.is_set()
+
+    def ui_alive():
+        try:
+            return bool(app_instance.winfo_exists())
+        except Exception:
+            return False
+
+    def safe_after(delay_ms, callback, *args):
+        if not ui_alive():
+            return False
+        try:
+            app_instance.after(delay_ms, callback, *args)
+            return True
+        except Exception:
+            return False
+
+    def safe_progress(value):
+        try:
+            if ui_alive():
+                app_instance.aggiorna_progresso(value)
+        except Exception:
+            pass
+
+    def safe_process_done():
+        try:
+            if ui_alive():
+                app_instance.processo_terminato()
+        except Exception:
+            pass
+
+    def sleep_with_cancel(seconds, step=0.2):
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            if cancelled():
+                return False
+            time.sleep(min(step, deadline - time.monotonic()))
+        return True
+
+    def wait_for_file_ready(client_for_file, file_obj, max_wait_seconds=900, poll_seconds=3):
+        start_time = time.monotonic()
+        while True:
+            state = str(getattr(file_obj, "state", "")).upper()
+            # Alcune versioni SDK ritornano state vuoto/STATE_UNSPECIFIED subito dopo l'upload.
+            # Aspettiamo finche' non diventa ACTIVE (o FAILED).
+            if "ACTIVE" not in state and "FAILED" not in state:
+                if time.monotonic() - start_time > max_wait_seconds:
+                    raise TimeoutError("Timeout durante l'elaborazione del file audio sui server Google.")
+                if not sleep_with_cancel(poll_seconds):
+                    return None
+                file_obj = client_for_file.files.get(name=file_obj.name)
+                continue
+            if "FAILED" in state:
+                raise RuntimeError(f"Caricamento fallito (state={state}).")
+            return file_obj
+
+    def upload_audio_path(client_for_upload, path_str):
+        # Compatibilita' tra versioni diverse di google-genai:
+        # alcune usano upload(path=...), altre upload(file=...).
+        try:
+            return client_for_upload.files.upload(path=path_str)
+        except TypeError:
+            return client_for_upload.files.upload(file=path_str)
     try:
         if not api_key_value or api_key_value.strip() == "":
             print("Errore: Formato API Key non valido o assente.")
@@ -136,15 +305,109 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
         def richiedi_chiave_riserva():
             evento = threading.Event()
             esito = {"nuova_chiave": None}
+
             def mostra_popup():
-                dialog = ctk.CTkInputDialog(text="Hai esaurito la Quota Gratuita limitata di Google per questo account.\n\nInserisci un'altra API Key appartenente a un account Google DIVERSO per riprendere il processo senza perdere progressi.\n\nLascia vuoto o clicca Annulla per interrompere definitivamente e salvare a metà.", title="🔌 Esaurimento Quota")
-                esito["nuova_chiave"] = dialog.get_input()
+                try:
+                    dialog = ctk.CTkInputDialog(
+                        text="Hai esaurito la Quota Gratuita limitata di Google per questo account.\n\nInserisci un'altra API Key appartenente a un account Google DIVERSO per riprendere il processo senza perdere progressi.\n\nLascia vuoto o clicca Annulla per interrompere definitivamente e salvare a metà.",
+                        title="🔌 Esaurimento Quota",
+                    )
+                    esito["nuova_chiave"] = dialog.get_input()
+                finally:
+                    evento.set()
+
+            if not safe_after(0, mostra_popup):
                 evento.set()
-            app_instance.after(0, mostra_popup)
+
             print("   [In attesa di una nuova chiave API dall'utente nel popup...]")
-            evento.wait()
+            while not evento.is_set():
+                if cancelled():
+                    return None
+                evento.wait(0.2)
             return esito["nuova_chiave"]
-        
+
+        # ------------------------------
+        # SESSIONE (AUTOSAVE / RIPRESA)
+        # ------------------------------
+        try:
+            _safe_mkdir(SESSION_ROOT)
+        except Exception:
+            pass
+
+        try:
+            session_dir = os.path.abspath(session_dir_hint) if session_dir_hint else _session_dir_for_file(nome_file_video)
+        except Exception:
+            session_dir = os.path.join(tempfile.gettempdir(), "sbobby_session_fallback")
+
+        session_path = os.path.join(session_dir, "session.json")
+        phase1_chunks_dir = os.path.join(session_dir, "phase1_chunks")
+        phase2_revised_dir = os.path.join(session_dir, "phase2_revised")
+        boundary_dir = os.path.join(session_dir, "phase2_boundary")
+        macro_path = os.path.join(session_dir, "phase2_macro_blocks.json")
+
+        try:
+            _safe_mkdir(session_dir)
+            _safe_mkdir(phase1_chunks_dir)
+            _safe_mkdir(phase2_revised_dir)
+            _safe_mkdir(boundary_dir)
+        except Exception:
+            pass
+
+        session = None
+        if resume_session and os.path.exists(session_path):
+            try:
+                session = _load_json(session_path)
+            except Exception:
+                session = None
+
+        if session is None:
+            try:
+                fp = _file_fingerprint(nome_file_video)
+            except Exception:
+                fp = {"path": os.path.abspath(nome_file_video), "size": None, "mtime": None}
+
+            session = {
+                "schema_version": SESSION_SCHEMA_VERSION,
+                "created_at": _now_iso(),
+                "updated_at": _now_iso(),
+                "stage": "phase1",
+                "input": fp,
+                "settings": {
+                    "model": "gemini-2.5-flash",
+                    "chunk_minutes": 15,
+                    "overlap_seconds": 30,
+                    "macro_char_limit": 15000,
+                    "audio": {"channels": 1, "sample_rate_hz": 16000, "bitrate": "48k", "format": "mp3"},
+                },
+                "phase1": {"next_start_sec": 0, "chunks_done": 0, "memoria_precedente": ""},
+                "phase2": {"macro_total": 0, "revised_done": 0},
+                "boundary": {"pairs_total": 0, "next_pair": 1},
+                "outputs": {},
+                "last_error": None,
+            }
+            try:
+                _atomic_write_json(session_path, session)
+            except Exception:
+                pass
+        else:
+            session.setdefault("schema_version", SESSION_SCHEMA_VERSION)
+            session.setdefault("stage", "phase1")
+            session.setdefault("phase1", {})
+            session.setdefault("phase2", {})
+            session.setdefault("boundary", {})
+            session.setdefault("outputs", {})
+
+        def save_session():
+            try:
+                session["updated_at"] = _now_iso()
+                _atomic_write_json(session_path, session)
+                return True
+            except Exception as e:
+                print(f"   [!] Autosave sessione fallito: {e}")
+                return False
+
+        print(f"[*] Autosalvataggio attivo. Sessione: {session_dir}")
+         
         blocco_minuti = 15
         blocco_secondi = blocco_minuti * 60
         sovrapposizione_secondi = 30
@@ -154,6 +417,39 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
 
         istruzioni_sistema = PROMPT_SISTEMA
 
+        CHUNK_MD_RE = re.compile(r"^chunk_(\d{3})_(\d+)_(\d+)\.md$", re.IGNORECASE)
+
+        def _list_phase1_chunks():
+            items = []
+            try:
+                for name in os.listdir(phase1_chunks_dir):
+                    m = CHUNK_MD_RE.match(name)
+                    if not m:
+                        continue
+                    idx = int(m.group(1))
+                    start_sec = int(m.group(2))
+                    end_sec = int(m.group(3))
+                    items.append((idx, start_sec, end_sec, os.path.join(phase1_chunks_dir, name)))
+            except Exception:
+                return []
+            return sorted(items, key=lambda t: (t[0], t[1], t[2]))
+
+        def _read_text(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+
+        def _load_phase1_text():
+            chunks = _list_phase1_chunks()
+            parts = []
+            for _, _, _, p in chunks:
+                try:
+                    txt = _read_text(p).strip()
+                    if txt:
+                        parts.append(txt)
+                except Exception:
+                    continue
+            return "\n\n".join(parts).strip()
+ 
         print(f"[*] Analisi del file originale in corso:\n{os.path.basename(nome_file_video)}")
         try:
             # Ricava durata audio leggendo l'output di ffmpeg (ffprobe non è garantito in imageio_ffmpeg)
@@ -175,77 +471,186 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
             return
 
         print(f"[*] Durata totale rilevata: {int(durata_totale_secondi / 60)} minuti.")
-        print("[*] INIZIO FASE 1: Trascrizione a blocchi (Ogni blocco circa 15 min)")
+
+        # Persisti metadati fase1 nella sessione
+        session.setdefault("phase1", {})
+        session["phase1"]["duration_seconds"] = float(durata_totale_secondi)
+        session["phase1"]["step_seconds"] = int(passo_secondi)
+        save_session()
+
+        stage = str(session.get("stage", "phase1")).strip().lower()
+        if stage not in ("phase1", "phase2", "boundary", "done"):
+            stage = "phase1"
+            session["stage"] = "phase1"
+            save_session()
+
+        # Ripristino (se presente) dai chunk gia' salvati
+        existing_chunks = _list_phase1_chunks()
+        start_sec = int(session.get("phase1", {}).get("next_start_sec", 0) or 0)
+        if existing_chunks:
+            try:
+                last_start = max(s for _, s, _, _ in existing_chunks)
+                start_sec = max(start_sec, int(last_start + passo_secondi))
+            except Exception:
+                pass
+            testo_completo_sbobina = _load_phase1_text()
+            try:
+                _, _, _, last_path = existing_chunks[-1]
+                memoria_precedente = _read_text(last_path).strip()[-1000:]
+            except Exception:
+                memoria_precedente = (testo_completo_sbobina or "")[-1000:]
+        else:
+            # Se stiamo riprendendo direttamente dalla fase2 (o oltre), carica comunque il testo
+            if stage != "phase1":
+                testo_completo_sbobina = _load_phase1_text()
+                memoria_precedente = (testo_completo_sbobina or "")[-1000:]
+            else:
+                memoria_precedente = str(session.get("phase1", {}).get("memoria_precedente", "") or "")
+
+        if stage == "phase1":
+            print("[*] INIZIO FASE 1: Trascrizione a blocchi (Ogni blocco circa 15 min)")
+        else:
+            print(f"[*] Ripresa sessione: stage='{stage}'. Salto Fase 1.")
+            start_sec = int(durata_totale_secondi)  # skip chunk loop
 
         blocchi_totali = len(list(range(0, int(durata_totale_secondi), passo_secondi)))
-        blocco_corrente_idx = 0
+        blocco_corrente_idx = len(list(range(0, int(start_sec), passo_secondi)))
 
-        for inizio_sec in range(0, int(durata_totale_secondi), passo_secondi):
+        for inizio_sec in range(int(start_sec), int(durata_totale_secondi), passo_secondi):
             blocco_corrente_idx += 1
             fine_sec = min(inizio_sec + blocco_secondi, durata_totale_secondi)
             
             print(f"\n======================================")
             print(f"-> LAVORAZIONE BLOCCO AUDIO {blocco_corrente_idx} DI {blocchi_totali} (Da {inizio_sec}s a {int(fine_sec)}s)")
-            
+
+            if cancelled():
+                print("   [*] Operazione annullata dall'utente.")
+                return
+             
             # Salva i pezzi temporanei nella cartella TEMP del sistema operativo
             nome_chunk = os.path.join(tempfile.gettempdir(), f"sbobby_temp_{inizio_sec}_{int(fine_sec)}.mp3")
             app_instance.file_temporanei.append(nome_chunk)
-            
-            # 1. Taglio
-            # Spiegazione per l'utente loggata direttamente in app
-            print("   -> (1/3) Estrazione e taglio in corso...")
-            durata_cut = fine_sec - inizio_sec
-            comando_cut = [
-                ffmpeg_exe, "-y", "-i", nome_file_video,
-                "-ss", str(inizio_sec), "-t", str(durata_cut),
-                "-q:a", "0", "-map", "a", nome_chunk
-            ]
-            
-            creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-            subprocess.run(comando_cut, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creation_flags)
-            
-            # 2. Upload
-            print("   -> (2/3) Caricamento sicuro nei server di google...")
-            audio_file = client.files.upload(file=nome_chunk)
-            while "PROCESSING" in str(audio_file.state):
-                time.sleep(3)
-                audio_file = client.files.get(name=audio_file.name)
-                
-            # 3. Generazione testuale
-            print("   -> (3/3) Generazione sbobina in corso...")
-            prompt_dinamico = "Ascolta questo blocco di lezione e crea la sbobina seguendo rigorosamente le istruzioni di sistema."
-            if memoria_precedente:
-                prompt_dinamico += f"\n\nATTENZIONE: Stai continuando una stesura. Questo è l'ultimo paragrafo che hai generato nel blocco precedente:\n\"...{memoria_precedente}\"\n\nRiprendi il discorso da qui IN MODO FLUIDO. Usa la stessa grandezza per i titoli e NON RIPETERE testualmente i concetti in sovrapposizione."
-                
+
+            audio_file = None
+            file_client = None
             successo = False
             rate_limit = False
-            tent = 0
-            while tent < 4:
+
+            try:
+                # 1. Taglio
+                # Spiegazione per l'utente loggata direttamente in app
+                print("   -> (1/3) Estrazione e taglio in corso...")
+                durata_cut = fine_sec - inizio_sec
+                comando_cut = [
+                    ffmpeg_exe, "-y", "-i", nome_file_video,
+                    "-ss", str(inizio_sec), "-t", str(durata_cut),
+                    "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k",
+                    "-map", "a:0", nome_chunk
+                ]
+
+                creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                risultato_cut = subprocess.run(
+                    comando_cut,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    creationflags=creation_flags,
+                )
+                if risultato_cut.returncode != 0:
+                    stderr = (risultato_cut.stderr or "").strip()
+                    if stderr:
+                        stderr = "\n".join(stderr.splitlines()[-12:])
+                        raise RuntimeError(f"FFmpeg ha fallito l'estrazione audio:\n{stderr}")
+                    raise RuntimeError("FFmpeg ha fallito l'estrazione audio.")
+                if (not os.path.exists(nome_chunk)) or os.path.getsize(nome_chunk) < 1024:
+                    raise RuntimeError("FFmpeg non ha prodotto un chunk audio valido.")
+
+                # 2. Upload
+                print("   -> (2/3) Caricamento sicuro nei server di google...")
+                audio_file = upload_audio_path(client, nome_chunk)
+                file_client = client  # il file e' legato alla chiave che l'ha caricato
+                audio_file = wait_for_file_ready(client, audio_file)
+                if audio_file is None:
+                    print("   [*] Operazione annullata dall'utente.")
+                    return
+
+                # 3. Generazione testuale
+                print("   -> (3/3) Generazione sbobina in corso...")
+                prompt_dinamico = "Ascolta questo blocco di lezione e crea la sbobina seguendo rigorosamente le istruzioni di sistema."
+                if memoria_precedente:
+                    prompt_dinamico += f"\n\nATTENZIONE: Stai continuando una stesura. Questo è l'ultimo paragrafo che hai generato nel blocco precedente:\n\"...{memoria_precedente}\"\n\nRiprendi il discorso da qui IN MODO FLUIDO. Usa la stessa grandezza per i titoli e NON RIPETERE testualmente i concetti in sovrapposizione."
+
+                # Wrapper esplicito del file audio come Part (piu' stabile tra versioni SDK/API).
+                audio_input = audio_file
                 try:
-                    risposta = client.models.generate_content(
-                        model='gemini-2.5-flash',
-                        contents=[audio_file, prompt_dinamico],
-                        config=types.GenerateContentConfig(
-                            system_instruction=istruzioni_sistema,
-                            temperature=0.35 
+                    if getattr(audio_file, "uri", None):
+                        audio_input = types.Part.from_uri(
+                            file_uri=audio_file.uri,
+                            mime_type=(getattr(audio_file, "mime_type", None) or "audio/mpeg"),
                         )
-                    )
-                    testo_generato = risposta.text.strip()
-                    testo_completo_sbobina += f"\n\n{testo_generato}\n\n"
-                    memoria_precedente = testo_generato[-1000:]
-                    successo = True
-                    app_instance.aggiorna_progresso(0.7 * blocco_corrente_idx / blocchi_totali)
-                    break
-                except Exception as e:
-                    errore = str(e).lower()
-                    if '429' in errore or 'resource_exhausted' in errore or 'quota' in errore:
-                        is_daily_limit = 'per day' in errore or 'quota_exceeded' in errore or 'daily' in errore or ('429' in errore and 'minute' not in errore and 'rpm' not in errore)
-                        if not is_daily_limit and tent < 3:
-                            print(f"      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]")
-                            time.sleep(65)
-                            tent += 1
-                            continue
-                        else:
+                except Exception:
+                    audio_input = audio_file
+
+                tent = 0
+                while tent < 4:
+                    try:
+                        risposta = client.models.generate_content(
+                            model='gemini-2.5-flash',
+                            contents=[prompt_dinamico, audio_input],
+                            config=types.GenerateContentConfig(
+                                system_instruction=istruzioni_sistema,
+                                temperature=0.35
+                            )
+                        )
+                        testo_generato = risposta.text.strip()
+                        testo_completo_sbobina += f"\n\n{testo_generato}\n\n"
+                        memoria_precedente = testo_generato[-1000:]
+
+                        # Autosave: salva il chunk su disco e aggiorna la sessione
+                        try:
+                            out_chunk_md = os.path.join(
+                                phase1_chunks_dir,
+                                f"chunk_{blocco_corrente_idx:03}_{inizio_sec}_{int(fine_sec)}.md",
+                            )
+                            _atomic_write_text(out_chunk_md, testo_generato + "\n")
+                            print(f"   [autosave] Chunk salvato: {os.path.basename(out_chunk_md)}")
+                        except Exception as save_err:
+                            print(f"   [!] Autosave chunk fallito: {save_err}")
+
+                        session["stage"] = "phase1"
+                        session.setdefault("phase1", {})
+                        session["phase1"]["chunks_done"] = int(blocco_corrente_idx)
+                        session["phase1"]["next_start_sec"] = int(inizio_sec + passo_secondi)
+                        session["phase1"]["memoria_precedente"] = memoria_precedente
+                        session["last_error"] = None
+                        save_session()
+
+                        successo = True
+                        safe_progress(0.7 * blocco_corrente_idx / blocchi_totali)
+                        break
+                    except Exception as e:
+                        err_txt = str(e)
+                        errore = err_txt.lower()
+
+                        # Quota / rate limit
+                        if '429' in errore or 'resource_exhausted' in errore or 'quota' in errore:
+                            is_daily_limit = (
+                                'per day' in errore
+                                or 'quota_exceeded' in errore
+                                or 'daily' in errore
+                                or ('429' in errore and 'minute' not in errore and 'rpm' not in errore)
+                            )
+
+                            # Rate limit temporaneo (al minuto)
+                            if not is_daily_limit and tent < 3:
+                                print("      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]")
+                                if not sleep_with_cancel(65):
+                                    print("   [*] Operazione annullata dall'utente.")
+                                    return
+                                tent += 1
+                                continue
+
+                            # Daily limit: prova cambio chiave
                             print("\n" + "="*50)
                             print("⛔ LIMITE GIORNALIERO RAGGIUNTO!")
                             nuova_api = richiedi_chiave_riserva()
@@ -253,36 +658,103 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                                 try:
                                     test_c = genai.Client(api_key=nuova_api.strip())
                                     test_c.models.get(model='gemini-2.5-flash')
-                                    client = test_c
-                                    print("   ✅ Nuova API Key valida! Ripresa automatica dell'elaborazione...")
-                                    tent = 0 # reset tentativi
-                                    continue
                                 except Exception as err:
                                     print(f"   [!] Chiave non valida fornita: {err}")
-                            
+                                else:
+                                    # Best-effort: elimina il file caricato con la chiave vecchia, poi ricarica con la nuova.
+                                    if audio_file is not None and file_client is not None:
+                                        try:
+                                            file_client.files.delete(name=audio_file.name)
+                                        except Exception:
+                                            pass
+
+                                    client = test_c
+                                    print("   ✅ Nuova API Key valida! Ricarico questo blocco con la nuova chiave...")
+                                    try:
+                                        audio_file = upload_audio_path(client, nome_chunk)
+                                        file_client = client
+                                        audio_file = wait_for_file_ready(client, audio_file)
+                                        if audio_file is None:
+                                            print("   [*] Operazione annullata dall'utente.")
+                                            return
+
+                                        # aggiorna anche il Part audio dopo il re-upload
+                                        try:
+                                            if getattr(audio_file, "uri", None):
+                                                audio_input = types.Part.from_uri(
+                                                    file_uri=audio_file.uri,
+                                                    mime_type=(getattr(audio_file, "mime_type", None) or "audio/mpeg"),
+                                                )
+                                            else:
+                                                audio_input = audio_file
+                                        except Exception:
+                                            audio_input = audio_file
+                                    except Exception as up_err:
+                                        print(f"   [!] Errore durante il ricaricamento del blocco: {up_err}")
+                                        rate_limit = True
+                                        break
+
+                                    print("   ✅ Ripresa automatica dell'elaborazione...")
+                                    tent = 0  # reset tentativi
+                                    continue
+
                             print("="*50)
                             print("Hai esaurito le richieste.")
                             print("="*50)
                             rate_limit = True
                             break
-                    print(f"      [Server occupati o errore. Riprovo in 30 secondi...]")
-                    time.sleep(30)
-                    tent += 1
-                    
+
+                        # Errore non quota: se e' 400, non ha senso riprovare.
+                        if "400" in err_txt or "BadRequest" in err_txt or "INVALID_ARGUMENT" in err_txt:
+                            print(f"   [!] Richiesta non valida (400). Dettagli:\n{err_txt}")
+                            session["last_error"] = "bad_request_phase1"
+                            save_session()
+                            return
+
+                        print(f"      [Server occupati o errore: {err_txt}]")
+                        print("      [Riprovo in 30 secondi...]")
+                        if not sleep_with_cancel(30):
+                            print("   [*] Operazione annullata dall'utente.")
+                            return
+                        tent += 1
+
+            except Exception as e:
+                print(f"   [!] Errore durante l'elaborazione del blocco: {e}")
+
+            finally:
+                # Pulizia: locale + file remoto, anche in caso di rate limit/errori
+                if os.path.exists(nome_chunk):
+                    try:
+                        os.remove(nome_chunk)
+                    except Exception:
+                        pass
+                if audio_file is not None and file_client is not None:
+                    try:
+                        file_client.files.delete(name=audio_file.name)
+                    except Exception:
+                        pass
+
             if rate_limit:
-                break
+                session["last_error"] = "rate_limit_phase1"
+                save_session()
+                print("[*] Interruzione: progressi salvati. Potrai riprendere piu' tardi.")
+                return
             if not successo:
-                print("   [!] Errore critico sui server. Interrompo e passo alla Fase 2 con il lavoro fatto.")
-                break
-                
-            # 4. Pulizia
-            if os.path.exists(nome_chunk):
-                try: os.remove(nome_chunk)
-                except: pass
-            client.files.delete(name=audio_file.name)
-            
+                session["last_error"] = f"phase1_chunk_failed_{blocco_corrente_idx}"
+                save_session()
+                print("   [!] Errore critico durante l'elaborazione del blocco. Interrompo (progressi salvati).")
+                return
+
             # Piccola pausa tra chiamate per evitare rate limit
-            time.sleep(5)
+            if not sleep_with_cancel(5):
+                print("   [*] Operazione annullata dall'utente.")
+                return
+
+        # Se la fase 1 e' terminata senza interruzioni, passa alla fase 2
+        if stage == "phase1":
+            session["stage"] = "phase2"
+            session["last_error"] = None
+            save_session()
 
         # ==========================================
         # FASE 2: REVISIONE LOGICA E CUCITURA DOPPIONI
@@ -290,28 +762,71 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
         print("\n======================================")
         print("[*] INIZIO FASE 2: REVISIONE FINALE (Eliminazione Doppioni, Correzione grammaticale, Miglioramento leggibilità, etc.)")
 
-        paragrafi = testo_completo_sbobina.split("\n\n")
-        macro_blocchi = []
-        blocco_corrente = ""
-        limite_caratteri = 15000
+        limite_caratteri = int(session.get("settings", {}).get("macro_char_limit", 15000) or 15000)
 
-        for p in paragrafi:
-            if len(blocco_corrente) + len(p) > limite_caratteri:
+        macro_blocchi = None
+        if os.path.exists(macro_path):
+            try:
+                macro_data = _load_json(macro_path)
+                macro_blocchi = list(macro_data.get("blocks") or [])
+            except Exception:
+                macro_blocchi = None
+
+        if not macro_blocchi:
+            paragrafi = testo_completo_sbobina.split("\n\n")
+            macro_blocchi = []
+            blocco_corrente = ""
+
+            for p in paragrafi:
+                if len(blocco_corrente) + len(p) > limite_caratteri:
+                    if blocco_corrente.strip():
+                        macro_blocchi.append(blocco_corrente)
+                    blocco_corrente = p + "\n\n"
+                else:
+                    blocco_corrente += p + "\n\n"
+            if blocco_corrente.strip():
                 macro_blocchi.append(blocco_corrente)
-                blocco_corrente = p + "\n\n"
-            else:
-                blocco_corrente += p + "\n\n"
-        if blocco_corrente.strip():
-            macro_blocchi.append(blocco_corrente)
+
+            try:
+                _atomic_write_json(macro_path, {"limit_chars": limite_caratteri, "blocks": macro_blocchi})
+            except Exception:
+                pass
             
         print(f"Il documento è stato diviso in {len(macro_blocchi)} macro-sezioni per mantenere il livello di dettaglio. Revisione in corso...")
+        session.setdefault("phase2", {})
+        session["phase2"]["macro_total"] = int(len(macro_blocchi))
+        save_session()
 
         testo_finale_revisionato = ""
 
         prompt_revisione = PROMPT_REVISIONE
-
+        macro_total = len(macro_blocchi)
+        revised_done = 0
+ 
         for i, blocco in enumerate(macro_blocchi, 1):
-            print(f"   -> Revisione Macro-blocco {i} di {len(macro_blocchi)}...")
+            if cancelled():
+                print("   [*] Operazione annullata dall'utente.")
+                return
+
+            # Ripresa: se il macro-blocco e' gia' stato revisionato e salvato, lo ri-usa
+            rev_path = os.path.join(phase2_revised_dir, f"rev_{i:03}.md")
+            if os.path.exists(rev_path):
+                try:
+                    testo_rev_esistente = _read_text(rev_path).strip()
+                    if testo_rev_esistente:
+                        testo_finale_revisionato += f"\n\n{testo_rev_esistente}\n\n"
+                        revised_done += 1
+                        session["stage"] = "phase2"
+                        session.setdefault("phase2", {})
+                        session["phase2"]["revised_done"] = int(revised_done)
+                        session["last_error"] = None
+                        save_session()
+                        safe_progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
+                        continue
+                except Exception:
+                    pass
+
+            print(f"   -> Revisione Macro-blocco {i} di {macro_total}...")
             successo_revisione = False
             tent = 0
             while tent < 4:
@@ -323,8 +838,28 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                             temperature=0.1 
                         )
                     )
-                    testo_finale_revisionato += f"\n\n{risposta_rev.text.strip()}\n\n"
+                    testo_rev = (risposta_rev.text or "").strip()
+                    if not testo_rev:
+                        raise RuntimeError("Risposta vuota dal modello in revisione.")
+
+                    testo_finale_revisionato += f"\n\n{testo_rev}\n\n"
+
+                    # Autosave: salva la revisione su disco e aggiorna la sessione
+                    try:
+                        _atomic_write_text(rev_path, testo_rev + "\n")
+                        print(f"   [autosave] Revisione salvata: {os.path.basename(rev_path)}")
+                    except Exception as save_err:
+                        print(f"   [!] Autosave revisione fallito: {save_err}")
+
+                    revised_done += 1
+                    session["stage"] = "phase2"
+                    session.setdefault("phase2", {})
+                    session["phase2"]["revised_done"] = int(revised_done)
+                    session["last_error"] = None
+                    save_session()
+
                     successo_revisione = True
+                    safe_progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
                     break
                 except Exception as e:
                     errore = str(e).lower()
@@ -332,7 +867,9 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                         is_daily_limit = 'per day' in errore or 'quota_exceeded' in errore or 'daily' in errore or ('429' in errore and 'minute' not in errore and 'rpm' not in errore)
                         if not is_daily_limit and tent < 3:
                             print(f"      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]")
-                            time.sleep(65)
+                            if not sleep_with_cancel(65):
+                                print("   [*] Operazione annullata dall'utente.")
+                                return
                             tent += 1
                             continue
                         else:
@@ -349,45 +886,479 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                                 except Exception as err:
                                     print(f"   [!] Chiave non valida fornita: {err}")
                             
-                            print("   Scarto la chiave. Salvo tutto il lavoro fatto finora senza revisione successiva.")
-                            # Salva tutti i blocchi rimanenti senza revisione
-                            testo_finale_revisionato += f"\n\n{blocco}\n\n"
-                            for j, b_rimanente in enumerate(macro_blocchi[i:], i+1):
-                                testo_finale_revisionato += f"\n\n{b_rimanente}\n\n"
-                            successo_revisione = True  # Evita il doppio salvataggio sotto
-                            break
+                            print("   Interruzione: progressi salvati. Potrai riprendere piu' tardi.")
+                            session["last_error"] = "quota_daily_limit_phase2"
+                            save_session()
+                            return
                     print(f"      [Server occupati o errore. Riprovo in 20 secondi...]")
-                    time.sleep(20)
+                    if not sleep_with_cancel(20):
+                        print("   [*] Operazione annullata dall'utente.")
+                        return
                     tent += 1
                     
-            if '429' in str(locals().get('e', '')).lower() or 'resource_exhausted' in str(locals().get('e', '')).lower():
-                break  # Esci dal loop dei macro_blocchi
-                
             if not successo_revisione:
-                print(f"   [!] Errore prolungato nella revisione. Salvo il blocco {i} così com'è per evitare perdite di dati.")
-                testo_finale_revisionato += f"\n\n{blocco}\n\n"
-            app_instance.aggiorna_progresso(0.7 + 0.3 * (i / len(macro_blocchi)))
-            time.sleep(5)
+                print(f"   [!] Errore prolungato nella revisione. Salvo il blocco {i} cosi' com'e' per evitare perdite di dati.")
+                testo_rev_fallback = (blocco or "").strip()
+                testo_finale_revisionato += f"\n\n{testo_rev_fallback}\n\n"
+                try:
+                    _atomic_write_text(rev_path, testo_rev_fallback + "\n")
+                    print(f"   [autosave] Revisione (fallback) salvata: {os.path.basename(rev_path)}")
+                except Exception as save_err:
+                    print(f"   [!] Autosave revisione fallito: {save_err}")
+
+                revised_done += 1
+                session["stage"] = "phase2"
+                session.setdefault("phase2", {})
+                session["phase2"]["revised_done"] = int(revised_done)
+                session["last_error"] = None
+                save_session()
+            safe_progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
+            if not sleep_with_cancel(5):
+                print("   [*] Operazione annullata dall'utente.")
+                return
+
+        # ------------------------------------------
+        # FASE 2B: REVISIONE DI CONFINE (AUTOSAVE)
+        # ------------------------------------------
+        if str(session.get("stage", "phase2")).strip().lower() == "phase2":
+            session["stage"] = "boundary"
+            session.setdefault("boundary", {})
+            session["boundary"]["pairs_total"] = int(max(0, macro_total - 1))
+            session["boundary"]["next_pair"] = int(session.get("boundary", {}).get("next_pair", 1) or 1)
+            session["last_error"] = None
+            save_session()
+
+        stage2 = str(session.get("stage", "phase1")).strip().lower()
+        if stage2 == "boundary":
+            pairs_total = int(session.get("boundary", {}).get("pairs_total", max(0, macro_total - 1)) or 0)
+            if pairs_total > 0:
+                try:
+                    done_files = [n for n in os.listdir(boundary_dir) if n.lower().startswith("boundary_") and n.lower().endswith(".done")]
+                except Exception:
+                    done_files = []
+
+                done_idxs = set()
+                for n in done_files:
+                    m = re.match(r"^boundary_(\d{3})\.done$", n, flags=re.IGNORECASE)
+                    if m:
+                        try:
+                            done_idxs.add(int(m.group(1)))
+                        except Exception:
+                            pass
+
+                next_pair = int(session.get("boundary", {}).get("next_pair", 1) or 1)
+                if done_idxs:
+                    next_pair = max(next_pair, max(done_idxs) + 1)
+
+                def _split_paras(t):
+                    return [p for p in (t or "").split("\n\n") if p.strip()]
+
+                def _join_paras(parts):
+                    return "\n\n".join([p.strip() for p in parts if p and p.strip()]).strip()
+
+                k_par = 6
+                MIN_NORM_CHARS_STRICT = 80
+                MIN_NORM_CHARS_SUSPECT = 120
+                SUSPECT_RATIO = 0.975
+
+                def _is_heading_para(p: str) -> bool:
+                    first = (p or "").lstrip()
+                    return bool(re.match(r"^#{1,6}\s+\\S", first))
+
+                def _norm_para(p: str) -> str:
+                    s = (p or "").strip()
+                    # Rimuovi marker Markdown comuni per confronti piu' stabili
+                    s = s.replace("**", "")
+                    s = re.sub(r"(?m)^\\s*([*+-]|\\d+\\.)\\s+", "", s)  # bullet/numero a inizio riga
+                    s = re.sub(r"[^\\w\\s]", " ", s, flags=re.UNICODE)  # rimuove punteggiatura, preserva lettere accentate
+                    s = re.sub(r"\\s+", " ", s).strip().lower()
+                    return s
+
+                def _strict_dup(tail_p: str, head_p: str) -> bool:
+                    # Conservativo: elimina solo duplicati certi (uguali o quasi uguali per contenimento forte).
+                    if _is_heading_para(head_p):
+                        return False
+                    a = _norm_para(tail_p)
+                    b = _norm_para(head_p)
+                    if len(b) < MIN_NORM_CHARS_STRICT or len(a) < MIN_NORM_CHARS_STRICT:
+                        return False
+                    if a == b:
+                        return True
+                    # Se la testa del blocco N+1 e' praticamente contenuta nella coda del blocco N (stesso contenuto),
+                    # possiamo rimuovere il duplicato nel blocco N+1 senza perdere dettaglio.
+                    if b in a and (len(b) / max(1, len(a))) >= 0.92:
+                        return True
+                    return False
+
+                def _max_similarity(tail_list, head_list) -> float:
+                    best = 0.0
+                    for tp in tail_list:
+                        na = _norm_para(tp)
+                        if len(na) < MIN_NORM_CHARS_SUSPECT:
+                            continue
+                        for hp in head_list:
+                            if _is_heading_para(hp):
+                                continue
+                            nb = _norm_para(hp)
+                            if len(nb) < MIN_NORM_CHARS_SUSPECT:
+                                continue
+                            r = difflib.SequenceMatcher(a=na, b=nb).ratio()
+                            if r > best:
+                                best = r
+                    return best
+
+                for pair_idx in range(next_pair, pairs_total + 1):
+                    if cancelled():
+                        print("   [*] Operazione annullata dall'utente.")
+                        return
+
+                    try:
+                        a = _read_text(os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md")).strip()
+                        b = _read_text(os.path.join(phase2_revised_dir, f"rev_{pair_idx+1:03}.md")).strip()
+                    except Exception:
+                        a = ""
+                        b = ""
+
+                    a_parts = _split_paras(a)
+                    b_parts = _split_paras(b)
+                    if not a_parts or not b_parts:
+                        done_path = os.path.join(boundary_dir, f"boundary_{pair_idx:03}.done")
+                        try:
+                            _atomic_write_text(done_path, "")
+                        except Exception:
+                            pass
+                        session["boundary"]["next_pair"] = int(pair_idx + 1)
+                        save_session()
+                        continue
+
+                    tail_count = min(k_par, len(a_parts))
+                    head_count = min(k_par, len(b_parts))
+                    tail_list = a_parts[-tail_count:]
+                    head_list = b_parts[:head_count]
+
+                    # ------------------------------------------
+                    # Confine "intelligente" (locale + AI fallback)
+                    # ------------------------------------------
+                    # 1) Deduplica locale (solo duplicati certi, per non perdere dettaglio)
+                    overlap = 0
+                    max_try = min(len(tail_list), len(head_list))
+                    for L in range(max_try, 0, -1):
+                        ok = True
+                        for j in range(L):
+                            if not _strict_dup(tail_list[-L + j], head_list[j]):
+                                ok = False
+                                break
+                        if ok:
+                            overlap = L
+                            break
+
+                    if overlap > 0:
+                        print(f"   -> Confine {pair_idx}/{pairs_total}: duplicati certi trovati (locale). Rimuovo {overlap} paragrafo/i duplicati dal blocco N+1.")
+                        new_b_parts = b_parts[overlap:]
+                        new_b = _join_paras(new_b_parts)
+                        path_b = os.path.join(phase2_revised_dir, f"rev_{pair_idx+1:03}.md")
+                        try:
+                            _atomic_write_text(path_b, (new_b + "\n") if new_b else "")
+                        except Exception:
+                            pass
+                        done_path = os.path.join(boundary_dir, f"boundary_{pair_idx:03}.done")
+                        try:
+                            _atomic_write_text(done_path, "")
+                        except Exception:
+                            pass
+                        session["boundary"]["next_pair"] = int(pair_idx + 1)
+                        session["last_error"] = None
+                        save_session()
+                        safe_progress(0.9 + 0.08 * (pair_idx / max(1, pairs_total)))
+                        continue
+
+                    # 2) Se non ci sono segnali di sovrapposizione, salta la chiamata AI
+                    sim = _max_similarity(tail_list, head_list)
+                    if sim < SUSPECT_RATIO:
+                        print(f"   -> Confine {pair_idx}/{pairs_total}: nessuna sovrapposizione evidente (locale). Skip AI.")
+                        done_path = os.path.join(boundary_dir, f"boundary_{pair_idx:03}.done")
+                        try:
+                            _atomic_write_text(done_path, "")
+                        except Exception:
+                            pass
+                        session["boundary"]["next_pair"] = int(pair_idx + 1)
+                        session["last_error"] = None
+                        save_session()
+                        safe_progress(0.9 + 0.08 * (pair_idx / max(1, pairs_total)))
+                        continue
+
+                    # 3) Caso ambiguo: fallback all'AI (manteniamo dettaglio, ma consumiamo richieste solo quando serve)
+                    tail = _join_paras(tail_list)
+                    head = _join_paras(head_list)
+                    print(f"   -> Confine {pair_idx}/{pairs_total}: sovrapposizione sospetta (sim={sim:.3f}). Fallback AI...")
+
+                    payload = (
+                        "FINE BLOCCO N:\n"
+                        + tail
+                        + "\n\n<<<SBOBBY_SPLIT>>>\n\n"
+                        + "INIZIO BLOCCO N+1:\n"
+                        + head
+                    )
+
+                    tent = 0
+                    while tent < 4:
+                        try:
+                            resp = client.models.generate_content(
+                                model="gemini-2.5-flash",
+                                contents=[payload, PROMPT_REVISIONE_CONFINE],
+                                config=types.GenerateContentConfig(temperature=0.1),
+                            )
+                            out = (resp.text or "").strip()
+                            if "<<<SBOBBY_SPLIT>>>" not in out:
+                                raise RuntimeError("Marker non trovato nell'output di revisione confine.")
+
+                            left, right = out.split("<<<SBOBBY_SPLIT>>>", 1)
+                            new_tail = left.strip()
+                            new_head = right.strip()
+                            if not new_tail or not new_head:
+                                raise RuntimeError("Output confine vuoto.")
+
+                            a_prefix = _join_paras(a_parts[:-tail_count])
+                            b_suffix = _join_paras(b_parts[head_count:])
+
+                            new_a = (a_prefix + "\n\n" + new_tail).strip() if a_prefix else new_tail
+                            new_b = (new_head + "\n\n" + b_suffix).strip() if b_suffix else new_head
+
+                            path_a = os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md")
+                            path_b = os.path.join(phase2_revised_dir, f"rev_{pair_idx+1:03}.md")
+                            _atomic_write_text(path_a, new_a + "\n")
+                            _atomic_write_text(path_b, new_b + "\n")
+
+                            done_path = os.path.join(boundary_dir, f"boundary_{pair_idx:03}.done")
+                            try:
+                                _atomic_write_text(done_path, "")
+                            except Exception:
+                                pass
+
+                            session["boundary"]["next_pair"] = int(pair_idx + 1)
+                            session["last_error"] = None
+                            save_session()
+
+                            safe_progress(0.9 + 0.08 * (pair_idx / max(1, pairs_total)))
+                            break
+                        except Exception as e:
+                            errore = str(e).lower()
+                            if "429" in errore or "resource_exhausted" in errore or "quota" in errore:
+                                is_daily_limit = (
+                                    "per day" in errore
+                                    or "quota_exceeded" in errore
+                                    or "daily" in errore
+                                    or ("429" in errore and "minute" not in errore and "rpm" not in errore)
+                                )
+                                if not is_daily_limit and tent < 3:
+                                    print("      [Limite temporaneo. Attesa di 65s...]")
+                                    if not sleep_with_cancel(65):
+                                        print("   [*] Operazione annullata dall'utente.")
+                                        return
+                                    tent += 1
+                                    continue
+
+                                print("\n[!] LIMITE GIORNALIERO durante revisione confine!")
+                                nuova_api = richiedi_chiave_riserva()
+                                if nuova_api and nuova_api.strip():
+                                    try:
+                                        test_c = genai.Client(api_key=nuova_api.strip())
+                                        test_c.models.get(model="gemini-2.5-flash")
+                                    except Exception as err:
+                                        print(f"   [!] Chiave non valida fornita: {err}")
+                                    else:
+                                        client = test_c
+                                        print("   [*] Nuova API Key valida! Ripresa automatica...")
+                                        tent = 0
+                                        continue
+
+                                print("[*] Interruzione: progressi salvati. Potrai riprendere piu' tardi.")
+                                session["last_error"] = "quota_daily_limit_boundary"
+                                save_session()
+                                return
+
+                            print("      [Errore confine. Riprovo in 20 secondi...]")
+                            if not sleep_with_cancel(20):
+                                print("   [*] Operazione annullata dall'utente.")
+                                return
+                            tent += 1
+
+            session["stage"] = "done"
+            session["last_error"] = None
+            save_session()
 
         # ==========================================
-        # 3. SALVATAGGIO FINALE IN HTML
+        # 3. SALVATAGGIO FINALE (MARKDOWN + HTML)
         # ==========================================
         base_name = os.path.basename(nome_file_video)
-        nome_puro = os.path.splitext(base_name)[0]
+        nome_puro = os.path.splitext(base_name)[0] if base_name else ""
+        titolo = safe_output_basename(nome_puro) if nome_puro else "Sbobina"
+
+        # Salva SEMPRE sul Desktop (cross-platform). Fallback: home.
+        cartella_origine = get_desktop_dir()
+        try:
+            os.makedirs(cartella_origine, exist_ok=True)
+        except Exception:
+            cartella_origine = USER_HOME
+
+        nome_file_html = os.path.join(cartella_origine, f"{titolo}_Sbobina.html")
+        if not base_name:
+            nome_file_html = os.path.join(cartella_origine, "Sbobina_Definitiva.html")
+
+        def _sanitize_html_basic(html: str) -> str:
+            # Sanitizzazione di base (difensiva) nel caso l'AI inserisca HTML pericoloso.
+            html = re.sub(r"(?is)<script\b.*?>.*?</script>", "", html)
+            html = re.sub(r"(?is)<(iframe|object|embed)\b.*?>.*?</\1>", "", html)
+            html = re.sub(r"(?i)\son\w+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", "", html)
+            html = re.sub(r"(?i)javascript:", "", html)
+            return html
         
-        # Salva la sbobina finita *nella stessa cartella* del file multimediale analizzato
-        cartella_origine = os.path.dirname(os.path.abspath(nome_file_video))
-        nome_file_output = os.path.join(cartella_origine, f"{nome_puro}_Sbobina.html")
+        def _normalize_inline_star_lists(md: str) -> str:
+            # Normalizza elenchi che a volte l'AI produce in modo non-standard.
+            # Obiettivo: farli diventare liste Markdown reali, senza interpretare '*' come testo.
+            src = (md or "").replace("\u00A0", " ")
 
-        if not base_name: 
-            nome_file_output = os.path.join(cartella_origine, "Sbobina_Definitiva.html")
+            # 1) Trasforma elenchi in-line tipo "Esempi: * Voce1 ... * Voce2 ..."
+            out_lines = []
+            in_fence = False
+            for line in src.splitlines():
+                s = line.strip()
+                if s.startswith("```"):
+                    in_fence = not in_fence
+                    out_lines.append(line)
+                    continue
+                if in_fence:
+                    out_lines.append(line)
+                    continue
 
-        with open(nome_file_output, "w", encoding="utf-8") as f:
-            f.write("<!DOCTYPE html>\n<html>\n<head>\n<meta charset='utf-8'>\n")
-            f.write("<style>body{font-family: Arial, sans-serif; line-height: 1.5; color: #000000; background-color: #ffffff; max-width: 900px; margin: auto; padding: 40px;} h1, h2, h3{color: #000000; margin-top: 1.5em; margin-bottom: 0.5em;} p, li{margin-bottom: 0.5em;}</style>\n")
-            f.write("</head>\n<body>\n")
-            f.write(markdown.markdown(testo_finale_revisionato))
-            f.write("\n</body>\n</html>")
+                # Converti solo se:
+                # - c'e' un ":" seguito da "* " (tipico "Esempi: * ... * ...")
+                # - non e' gia' una lista/numero
+                if not re.match(r"^\s*([*+-]|\d+\.)\s+", line) and re.search(r":[ \t]*\*[ \t]+(\*\*|[A-ZÀ-ÖØ-Ý])", line):
+                    if line.count("* ") >= 1:
+                        line2 = re.sub(r":[ \t]*\*[ \t]+", ":\n\n- ", line, count=1)
+                        line2 = re.sub(r"[ \t]+\*[ \t]+", "\n- ", line2)
+                        out_lines.extend(line2.splitlines())
+                        continue
+
+                out_lines.append(line)
+
+            mid = "\n".join(out_lines)
+
+            # 2) Python-Markdown spesso richiede una riga vuota prima di una lista per riconoscerla.
+            # Se la lista parte subito dopo una riga di testo, aggiungiamo una blank line.
+            fixed = []
+            in_fence = False
+            for line in mid.splitlines():
+                s = line.strip()
+                if s.startswith("```"):
+                    in_fence = not in_fence
+                    fixed.append(line)
+                    continue
+                if in_fence:
+                    fixed.append(line)
+                    continue
+
+                is_list = bool(re.match(r"^\s{0,3}([*+-]|\d+\.)\s+", line))
+                if is_list and fixed:
+                    prev = fixed[-1]
+                    prev_is_list = bool(re.match(r"^\s{0,3}([*+-]|\d+\.)\s+", prev))
+                    if prev.strip() != "" and not prev_is_list:
+                        fixed.append("")
+
+                fixed.append(line)
+
+            return "\n".join(fixed)
+
+        # Ricostruisci il testo finale dai file revisionati (include la revisione di confine).
+        blocchi_finali = []
+        try:
+            if os.path.isdir(phase2_revised_dir):
+                rev_files = []
+                for fn in os.listdir(phase2_revised_dir):
+                    if re.match(r"^rev_\\d{3}\\.md$", fn):
+                        rev_files.append(os.path.join(phase2_revised_dir, fn))
+                for p in sorted(rev_files):
+                    blocchi_finali.append(_read_text(p))
+        except Exception:
+            blocchi_finali = []
+        if not blocchi_finali:
+            blocchi_finali = [testo_finale_revisionato]
+
+        body_md = "\n\n".join([b.strip() for b in blocchi_finali if b and b.strip()]).strip()
+
+        # Indice semplice: elenca le sezioni "## ..." se presenti
+        headings = []
+        seen = set()
+        for line in body_md.splitlines():
+            m = re.match(r"^##\\s+(.+?)\\s*$", line.strip())
+            if not m:
+                continue
+            h = re.sub(r"\\s+#.*$", "", m.group(1)).strip()
+            if h and h not in seen:
+                headings.append(h)
+                seen.add(h)
+
+        if headings:
+            index_md = "## Indice\n" + "\n".join([f"- {h}" for h in headings]) + "\n\n"
+        else:
+            index_md = ""
+
+        final_md = f"# {titolo}\n\n{index_md}{body_md}\n"
+        final_md = _normalize_inline_star_lists(final_md)
+
+        # Export HTML: serve per copia-incolla su Google Docs (file locale, stile leggibile).
+        html_body = markdown.markdown(final_md, extensions=["extra", "sane_lists"], output_format="html5")
+        html_body = _sanitize_html_basic(html_body)
+        html_doc = f"""<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{titolo} - Sbobina</title>
+  <style>
+    :root {{
+      --text: #111;
+      --muted: #444;
+      --bg: #fff;
+      --rule: #e6e6e6;
+    }}
+    body {{
+      font-family: Georgia, "Times New Roman", serif;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--bg);
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 48px 22px;
+    }}
+    h1 {{ font-size: 2.0rem; margin: 0 0 0.9rem; }}
+    h2 {{ font-size: 1.35rem; margin: 1.6rem 0 0.6rem; padding-top: 0.2rem; border-top: 1px solid var(--rule); }}
+    h3 {{ font-size: 1.15rem; margin: 1.1rem 0 0.45rem; }}
+    p, li {{ margin: 0.55rem 0; }}
+    ul, ol {{ padding-left: 1.25rem; }}
+    strong {{ font-weight: 700; }}
+    hr {{ border: 0; border-top: 1px solid var(--rule); margin: 1.2rem 0; }}
+    code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 0.95em; }}
+    blockquote {{ margin: 0.9rem 0; padding: 0.1rem 0 0.1rem 1rem; border-left: 3px solid var(--rule); color: var(--muted); }}
+  </style>
+</head>
+<body>
+{html_body}
+</body>
+</html>
+"""
+        try:
+            _atomic_write_text(nome_file_html, html_doc)
+        except Exception as e:
+            print(f"[!] Errore salvataggio HTML: {e}")
+
+        try:
+            session.setdefault("outputs", {})
+            session["outputs"]["html"] = nome_file_html
+            save_session()
+        except Exception:
+            pass
 
         print(f"\n======================================")
         print("SBOBINATURA COMPLETATA CON SUCCESSO!")
@@ -409,8 +1380,20 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance):
                 if os.path.exists(f): os.remove(f)
             except: pass
         app_instance.file_temporanei = []
-        app_instance.aggiorna_progresso(1.0)
-        app_instance.processo_terminato()
+        if not cancelled():
+            safe_progress(1.0)
+            safe_process_done()
+
+
+def esegui_sbobinatura(nome_file_video, api_key_value, app_instance, session_dir_hint=None, resume_session=False):
+    # Wrapper stabile: mantiene la firma pubblica mentre l'implementazione evolve.
+    return _esegui_sbobinatura_legacy(
+        nome_file_video,
+        api_key_value,
+        app_instance,
+        session_dir_hint=session_dir_hint,
+        resume_session=resume_session,
+    )
 
 
 # ==========================================
@@ -443,7 +1426,10 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.minsize(750, 620)
 
         self.file_path = None
+        self.session_dir = None
+        self.resume_session = False
         self.is_running = False
+        self.cancel_event = threading.Event()
         self.file_temporanei = []  # Lista file temp condivisa col thread
 
         # Intercetta la chiusura della finestra per pulire i file temporanei
@@ -543,10 +1529,56 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             messagebox.showwarning("Formato non valido", "Trascina un file multimediale valido (Audio/Video).")
 
     def _setta_file(self, percorso_file):
+        # Se esiste una sessione incompleta per questo file, proponi ripresa o reset.
+        try:
+            session_dir = _session_dir_for_file(percorso_file)
+            session_path = os.path.join(session_dir, "session.json")
+            resume = False
+            if os.path.exists(session_path):
+                sess = _load_json(session_path) or {}
+                stage = (sess.get("stage") or "").strip().lower()
+                msg = None
+                if stage == "done":
+                    msg = (
+                        "Ho trovato una sessione GIA' COMPLETATA per questo file.\n\n"
+                        "Vuoi riutilizzare i risultati salvati (riesportare HTML/MD senza consumare token)?\n\n"
+                        "Si = Riutilizza\nNo = Ricomincia da zero\nAnnulla = Non cambiare file"
+                    )
+                else:
+                    msg = (
+                        "Ho trovato una sessione salvata per questo file.\n\n"
+                        "Vuoi riprendere da dove eri rimasto?\n\n"
+                        "Si = Riprendi\nNo = Ricomincia da zero\nAnnulla = Non cambiare file"
+                    )
+
+                scelta = messagebox.askyesnocancel("Sessione trovata", msg)
+                if scelta is None:
+                    return
+                if scelta is True:
+                    resume = True
+                    print(f"[*] Ripresa sessione: {session_dir}")
+                else:
+                    try:
+                        shutil.rmtree(session_dir, ignore_errors=True)
+                        print("[*] Sessione precedente eliminata. Riparto da zero.")
+                    except Exception as e:
+                        print(f"[!] Errore durante reset sessione: {e}")
+                    resume = False
+
+            self.session_dir = session_dir
+            self.resume_session = resume
+        except Exception as e:
+            self.session_dir = None
+            self.resume_session = False
+            print(f"[!] Errore controllo sessione: {e}")
+
         self.file_path = percorso_file
         self.drop_icon.configure(text="✅")
         self.lbl_file.configure(text=os.path.basename(self.file_path), text_color=self.TEXT_BRIGHT)
-        self.lbl_file_hint.configure(text="Clicca di nuovo per cambiare file")
+        if self.resume_session:
+            self.lbl_file_hint.configure(text="Sessione trovata: riprendero' da dove eri rimasto")
+        else:
+            self.lbl_file_hint.configure(text="Clicca di nuovo per cambiare file")
         self.drop_zone.configure(border_color=self.SUCCESS)
         print(f"[+] File caricato: {os.path.basename(self.file_path)}")
 
@@ -586,6 +1618,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             return
         save_config(api_key)
         self.is_running = True
+        self.cancel_event.clear()
         self.progress_bar.set(0)
         self.btn_avvia.configure(state="disabled", fg_color=self.BORDER, text="⏳  Elaborazione in corso...")
         for w in [self.drop_zone, self.drop_icon, self.lbl_file, self.lbl_file_hint]:
@@ -595,7 +1628,12 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         print("  INIZIO PROCESSO DI ANALISI ED ESTRAZIONE AI")
         print("  Non chiudere l'app durante l'elaborazione.")
         print("━"*50 + "\n")
-        thread = threading.Thread(target=esegui_sbobinatura, args=(self.file_path, api_key, self), daemon=True)
+        thread = threading.Thread(
+            target=esegui_sbobinatura,
+            args=(self.file_path, api_key, self),
+            kwargs={"session_dir_hint": self.session_dir, "resume_session": self.resume_session},
+            daemon=True,
+        )
         thread.start()
 
     def processo_terminato(self):
@@ -616,8 +1654,15 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
     def _on_close(self):
         """Pulisce i file temporanei rimasti prima di chiudere l'applicazione."""
         if self.is_running:
-            if not messagebox.askokcancel("Chiudi", "L'elaborazione è ancora in corso.\nSe chiudi ora, il lavoro fatto andrà perso.\n\nVuoi chiudere comunque?"):
+            if not messagebox.askokcancel(
+                "Chiudi",
+                "L'elaborazione e' ancora in corso.\n\n"
+                "Nota: Sbobby salva automaticamente dopo ogni chunk e dopo ogni revisione.\n"
+                "Se chiudi ora potresti perdere solo l'ultimo step non ancora salvato.\n\n"
+                "Vuoi chiudere comunque?"
+            ):
                 return
+            self.cancel_event.set()
         # Pulizia sicura di tutti i file temporanei
         for f in self.file_temporanei:
             try:
