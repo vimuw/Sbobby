@@ -20,6 +20,8 @@ import imageio_ffmpeg
 import subprocess
 
 
+DEFAULT_MODEL = "gemini-2.5-flash"
+
 def cleanup_orphan_temp_chunks(max_age_seconds: int = 12 * 3600) -> int:
     """
     Best-effort cleanup of temp chunk files left behind by crashes/forced closes.
@@ -427,14 +429,15 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 "stage": "phase1",
                 "input": fp,
                 "settings": {
-                    "model": "gemini-2.5-flash",
+                    "model": DEFAULT_MODEL,
                     "chunk_minutes": 15,
                     "overlap_seconds": 30,
                     # Macro-blocchi piu' grandi = meno chiamate di revisione (senza riassumere).
                     "macro_char_limit": 22000,
                     # Pre-conversione unica dell'audio per velocizzare taglio/upload dei chunk.
                     "preconvert_audio": True,
-                    "audio": {"channels": 1, "sample_rate_hz": 16000, "bitrate": "48k", "format": "mp3"},
+                    # Unico setting effettivamente usato oggi: bitrate MP3 dei chunk/preconvert.
+                    "audio": {"bitrate": "48k"},
                 },
                 "phase1": {"next_start_sec": 0, "chunks_done": 0, "memoria_precedente": ""},
                 "phase2": {"macro_total": 0, "revised_done": 0},
@@ -467,13 +470,15 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
 
         # Settings (con fallback per sessioni vecchie)
         session.setdefault("settings", {})
+        session["settings"].setdefault("model", DEFAULT_MODEL)
         session["settings"].setdefault("chunk_minutes", 15)
         session["settings"].setdefault("overlap_seconds", 30)
         session["settings"].setdefault("macro_char_limit", 22000)
         session["settings"].setdefault("preconvert_audio", True)
-        session["settings"].setdefault("audio", {"channels": 1, "sample_rate_hz": 16000, "bitrate": "48k", "format": "mp3"})
+        session["settings"].setdefault("audio", {"bitrate": "48k"})
         save_session()
 
+        model_name = str(session.get("settings", {}).get("model") or DEFAULT_MODEL)
         blocco_minuti = int(session.get("settings", {}).get("chunk_minutes", 15) or 15)
         blocco_secondi = blocco_minuti * 60
         sovrapposizione_secondi = int(session.get("settings", {}).get("overlap_seconds", 30) or 30)
@@ -645,8 +650,11 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 safe_phase(f"Fase: ripresa ({stage})")
             start_sec = int(durata_totale_secondi)  # skip chunk loop
 
-        blocchi_totali = len(list(range(0, int(durata_totale_secondi), passo_secondi)))
-        blocco_corrente_idx = len(list(range(0, int(start_sec), passo_secondi)))
+        dur_int = int(durata_totale_secondi)
+        # range(0, n, step) ha lunghezza: 0 se n<=0, altrimenti ceil(n/step)
+        blocchi_totali = 0 if dur_int <= 0 else (dur_int + passo_secondi - 1) // passo_secondi
+        start_int = int(start_sec)
+        blocco_corrente_idx = 0 if start_int <= 0 else (start_int + passo_secondi - 1) // passo_secondi
 
         for inizio_sec in range(int(start_sec), int(durata_totale_secondi), passo_secondi):
             blocco_corrente_idx += 1
@@ -793,7 +801,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                                 return
 
                         risposta = client.models.generate_content(
-                            model='gemini-2.5-flash',
+                            model=model_name,
                             contents=[prompt_dinamico, audio_input],
                             config=types.GenerateContentConfig(
                                 system_instruction=istruzioni_sistema,
@@ -868,7 +876,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                             if nuova_api and nuova_api.strip():
                                 try:
                                     test_c = genai.Client(api_key=nuova_api.strip())
-                                    test_c.models.get(model='gemini-2.5-flash')
+                                    test_c.models.get(model=model_name)
                                 except Exception as err:
                                     print(f"   [!] Chiave non valida fornita: {err}")
                                 else:
@@ -1088,7 +1096,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             while tent < 4:
                 try:
                     risposta_rev = client.models.generate_content(
-                        model='gemini-2.5-flash',
+                        model=model_name,
                         contents=[blocco_for_ai, prompt_revisione],
                         config=types.GenerateContentConfig(
                             temperature=0.1 
@@ -1134,7 +1142,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                             if nuova_api and nuova_api.strip():
                                 try:
                                     test_c = genai.Client(api_key=nuova_api.strip())
-                                    test_c.models.get(model='gemini-2.5-flash')
+                                    test_c.models.get(model=model_name)
                                     client = test_c
                                     print("   ✅ Nuova API Key valida! Ripresa automatica della revisione...")
                                     tent = 0
@@ -1362,7 +1370,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                     while tent < 4:
                         try:
                             resp = client.models.generate_content(
-                                model="gemini-2.5-flash",
+                                model=model_name,
                                 contents=[payload, PROMPT_REVISIONE_CONFINE],
                                 config=types.GenerateContentConfig(temperature=0.1),
                             )
@@ -1421,7 +1429,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                                 if nuova_api and nuova_api.strip():
                                     try:
                                         test_c = genai.Client(api_key=nuova_api.strip())
-                                        test_c.models.get(model="gemini-2.5-flash")
+                                        test_c.models.get(model=model_name)
                                     except Exception as err:
                                         print(f"   [!] Chiave non valida fornita: {err}")
                                     else:
@@ -1911,7 +1919,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
                 if stage == "done":
                     msg = (
                         "Ho trovato una sessione GIA' COMPLETATA per questo file.\n\n"
-                        "Vuoi riutilizzare i risultati salvati (riesportare HTML/MD senza consumare token)?\n\n"
+                        "Vuoi riutilizzare i risultati salvati (riesportare HTML senza consumare token)?\n\n"
                         "Si = Riutilizza\nNo = Ricomincia da zero\nAnnulla = Non cambiare file"
                     )
                 else:
@@ -1987,7 +1995,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         # Validazione rapida della API Key (Senza consumare token di generazione)
         try:
             test_client = genai.Client(api_key=api_key)
-            test_client.models.get(model='gemini-2.5-flash')
+            test_client.models.get(model=DEFAULT_MODEL)
         except Exception as e:
             messagebox.showerror("API Key non valida", f"La chiave API non è valida o non hai accesso ai server Google.\nControlla di averla copiata correttamente, senza spazi extra.\n\nErrore: {e}")
             return
