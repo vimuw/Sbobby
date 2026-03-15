@@ -302,24 +302,24 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 raise RuntimeError(f"Caricamento fallito (state={state}).")
             return file_obj
 
-        def upload_audio_path(client_for_upload, path_str):
-            # Compatibilita' tra versioni diverse di google-genai:
-            # alcune usano upload(path=...), altre upload(file=...).
-            try:
-                return client_for_upload.files.upload(path=path_str)
-            except TypeError:
-                return client_for_upload.files.upload(file=path_str)
+    def upload_audio_path(client_for_upload, path_str):
+        # Compatibilita' tra versioni diverse di google-genai:
+        # alcune usano upload(path=...), altre upload(file=...).
+        try:
+            return client_for_upload.files.upload(path=path_str)
+        except TypeError:
+            return client_for_upload.files.upload(file=path_str)
 
-        def _make_inline_audio_part(path_str: str):
-            # Prova a inviare l'audio inline (bytes) per evitare upload+polling.
-            # Fallback automatico a files.upload se fallisce.
-            try:
-                with open(path_str, "rb") as f:
-                    data = f.read()
-                # I chunk sono esportati in MP3 (vedi ffmpeg -b:a 48k)
-                return types.Part.from_bytes(data=data, mime_type="audio/mpeg")
-            except Exception:
-                return None
+    def _make_inline_audio_part(path_str: str):
+        # Prova a inviare l'audio inline (bytes) per evitare upload+polling.
+        # Fallback automatico a files.upload se fallisce.
+        try:
+            with open(path_str, "rb") as f:
+                data = f.read()
+            # I chunk sono esportati in MP3 (vedi ffmpeg -b:a 48k)
+            return types.Part.from_bytes(data=data, mime_type="audio/mpeg")
+        except Exception:
+            return None
     try:
         if not api_key_value or api_key_value.strip() == "":
             print("Errore: Formato API Key non valido o assente.")
