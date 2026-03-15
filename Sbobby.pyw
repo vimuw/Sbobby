@@ -432,6 +432,8 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                     "overlap_seconds": 30,
                     # Macro-blocchi piu' grandi = meno chiamate di revisione (senza riassumere).
                     "macro_char_limit": 22000,
+                    # Pre-conversione unica dell'audio per velocizzare taglio/upload dei chunk.
+                    "preconvert_audio": True,
                     "audio": {"channels": 1, "sample_rate_hz": 16000, "bitrate": "48k", "format": "mp3"},
                 },
                 "phase1": {"next_start_sec": 0, "chunks_done": 0, "memoria_precedente": ""},
@@ -462,10 +464,19 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 return False
 
         print(f"[*] Autosalvataggio attivo. Sessione: {session_dir}")
-         
-        blocco_minuti = 15
+
+        # Settings (con fallback per sessioni vecchie)
+        session.setdefault("settings", {})
+        session["settings"].setdefault("chunk_minutes", 15)
+        session["settings"].setdefault("overlap_seconds", 30)
+        session["settings"].setdefault("macro_char_limit", 22000)
+        session["settings"].setdefault("preconvert_audio", True)
+        session["settings"].setdefault("audio", {"channels": 1, "sample_rate_hz": 16000, "bitrate": "48k", "format": "mp3"})
+        save_session()
+
+        blocco_minuti = int(session.get("settings", {}).get("chunk_minutes", 15) or 15)
         blocco_secondi = blocco_minuti * 60
-        sovrapposizione_secondi = 30
+        sovrapposizione_secondi = int(session.get("settings", {}).get("overlap_seconds", 30) or 30)
         passo_secondi = blocco_secondi - sovrapposizione_secondi
         memoria_precedente = ""
         testo_completo_sbobina = ""
@@ -540,6 +551,62 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             session["stage"] = "phase1"
             save_session()
 
+        # ------------------------------------------
+        # PRE-CONVERSIONE UNICA (piu' veloce)
+        # ------------------------------------------
+        preconv_enabled = bool(session.get("settings", {}).get("preconvert_audio", True))
+        preconv_path = os.path.join(session_dir, "sbobby_preconverted_mono16k.mp3")
+
+        def _ensure_preconverted():
+            nonlocal preconv_enabled
+            if not preconv_enabled:
+                return None
+            # Se siamo gia' oltre la fase 1, non serve.
+            if stage != "phase1":
+                return None
+            try:
+                if os.path.exists(preconv_path) and os.path.getsize(preconv_path) > 1024:
+                    print("[*] Pre-conversione: file gia' presente. Riutilizzo.")
+                    return preconv_path
+            except Exception:
+                pass
+
+            safe_phase("Fase 0/3: pre-conversione audio")
+            print("[*] Pre-conversione unica dell'audio (mono, 16kHz) in corso...")
+            audio_cfg = session.get("settings", {}).get("audio", {}) or {}
+            bitrate = str(audio_cfg.get("bitrate") or "48k")
+
+            cmd = [
+                ffmpeg_exe, "-y", "-i", nome_file_video,
+                "-vn", "-ac", "1", "-ar", "16000", "-b:a", bitrate,
+                "-map", "a:0", preconv_path
+            ]
+            creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=creation_flags)
+            if res.returncode != 0:
+                stderr = (res.stderr or "").strip()
+                if stderr:
+                    stderr = "\n".join(stderr.splitlines()[-12:])
+                print("[!] Pre-conversione fallita. Continuo senza pre-conversione.")
+                if stderr:
+                    print(stderr)
+                preconv_enabled = False
+                return None
+            try:
+                if os.path.exists(preconv_path) and os.path.getsize(preconv_path) > 1024:
+                    print("[*] Pre-conversione completata.")
+                    session.setdefault("phase1", {})
+                    session["phase1"]["preconverted_path"] = preconv_path
+                    session["phase1"]["preconverted_done"] = True
+                    save_session()
+                    return preconv_path
+            except Exception:
+                pass
+            preconv_enabled = False
+            return None
+
+        preconv_used_path = _ensure_preconverted()
+
         # Ripristino (se presente) dai chunk gia' salvati
         existing_chunks = _list_phase1_chunks()
         start_sec = int(session.get("phase1", {}).get("next_start_sec", 0) or 0)
@@ -607,12 +674,28 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 # Spiegazione per l'utente loggata direttamente in app
                 print("   -> (1/3) Estrazione e taglio in corso...")
                 durata_cut = fine_sec - inizio_sec
-                comando_cut = [
-                    ffmpeg_exe, "-y", "-i", nome_file_video,
-                    "-ss", str(inizio_sec), "-t", str(durata_cut),
-                    "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k",
-                    "-map", "a:0", nome_chunk
-                ]
+                audio_cfg = session.get("settings", {}).get("audio", {}) or {}
+                bitrate = str(audio_cfg.get("bitrate") or "48k")
+
+                # Preferisci taglio dal file preconvertito (piu' veloce) usando stream copy.
+                if preconv_used_path and os.path.exists(preconv_used_path):
+                    comando_cut = [
+                        ffmpeg_exe, "-y",
+                        "-ss", str(inizio_sec), "-t", str(durata_cut),
+                        "-i", preconv_used_path,
+                        "-vn", "-c:a", "copy",
+                        "-map", "a:0",
+                        "-reset_timestamps", "1",
+                        "-avoid_negative_ts", "make_zero",
+                        nome_chunk
+                    ]
+                else:
+                    comando_cut = [
+                        ffmpeg_exe, "-y", "-i", nome_file_video,
+                        "-ss", str(inizio_sec), "-t", str(durata_cut),
+                        "-vn", "-ac", "1", "-ar", "16000", "-b:a", bitrate,
+                        "-map", "a:0", nome_chunk
+                    ]
 
                 creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
                 risultato_cut = subprocess.run(
@@ -623,11 +706,35 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                     creationflags=creation_flags,
                 )
                 if risultato_cut.returncode != 0:
-                    stderr = (risultato_cut.stderr or "").strip()
-                    if stderr:
-                        stderr = "\n".join(stderr.splitlines()[-12:])
-                        raise RuntimeError(f"FFmpeg ha fallito l'estrazione audio:\n{stderr}")
-                    raise RuntimeError("FFmpeg ha fallito l'estrazione audio.")
+                    # Se il taglio veloce dal preconvertito fallisce, riprova con il metodo classico.
+                    if preconv_used_path and os.path.exists(preconv_used_path):
+                        comando_cut_fallback = [
+                            ffmpeg_exe, "-y", "-i", nome_file_video,
+                            "-ss", str(inizio_sec), "-t", str(durata_cut),
+                            "-vn", "-ac", "1", "-ar", "16000", "-b:a", bitrate,
+                            "-map", "a:0", nome_chunk
+                        ]
+                        risultato_cut2 = subprocess.run(
+                            comando_cut_fallback,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                            creationflags=creation_flags,
+                        )
+                        if risultato_cut2.returncode == 0:
+                            risultato_cut = risultato_cut2
+                        else:
+                            stderr = (risultato_cut2.stderr or "").strip()
+                            if stderr:
+                                stderr = "\n".join(stderr.splitlines()[-12:])
+                                raise RuntimeError(f"FFmpeg ha fallito l'estrazione audio:\n{stderr}")
+                            raise RuntimeError("FFmpeg ha fallito l'estrazione audio.")
+                    else:
+                        stderr = (risultato_cut.stderr or "").strip()
+                        if stderr:
+                            stderr = "\n".join(stderr.splitlines()[-12:])
+                            raise RuntimeError(f"FFmpeg ha fallito l'estrazione audio:\n{stderr}")
+                        raise RuntimeError("FFmpeg ha fallito l'estrazione audio.")
                 if (not os.path.exists(nome_chunk)) or os.path.getsize(nome_chunk) < 1024:
                     raise RuntimeError("FFmpeg non ha prodotto un chunk audio valido.")
 
@@ -1554,6 +1661,13 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
         print("SBOBINATURA COMPLETATA CON SUCCESSO!")
         print(f"File salvato in: {cartella_origine}")
         safe_phase("Fase: completato")
+
+        # Pulizia: rimuovi il file preconvertito (grande) se presente. I progressi testuali restano nella sessione.
+        try:
+            if preconv_used_path and os.path.exists(preconv_used_path):
+                os.remove(preconv_used_path)
+        except Exception:
+            pass
         
         # Forza l'aggiornamento visivo del file sul Desktop in Windows
         if platform.system() == "Windows":
