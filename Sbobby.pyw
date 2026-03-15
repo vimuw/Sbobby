@@ -405,7 +405,8 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
 
                     try:
                         # Piu' "quadrato" (meno rettangolo) e piu' piacevole visivamente.
-                        win.geometry("440x440")
+                        # Altezza ridotta: evita spazio vuoto sotto.
+                        win.geometry("440x310")
                     except Exception:
                         pass
                     try:
@@ -424,9 +425,10 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                         pass
 
                     msg = (
-                        "Hai esaurito la quota gratuita di Google per questo account.\n\n"
-                        "Inserisci un'altra API Key (di un account Google DIVERSO) per riprendere senza perdere i progressi.\n\n"
-                        "Lascia vuoto o clicca Annulla per interrompere e salvare a meta'."
+                        "La quota del tuo account Google per le API Gemini sembra esaurita (o temporaneamente limitata).\n\n"
+                        "Se hai un'altra API Key con quota disponibile, incollala qui per continuare da dove eri rimasto, "
+                        "senza perdere i progressi.\n\n"
+                        "In alternativa, premi Annulla: i progressi restano salvati e potrai riprendere piu' tardi."
                     )
                     ctk.CTkLabel(
                         win,
@@ -435,13 +437,13 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                         text_color="#E8EDF6",
                         justify="left",
                         wraplength=400,
-                    ).pack(padx=18, pady=(18, 12), anchor="w")
+                    ).pack(padx=18, pady=(18, 10), anchor="w")
 
                     entry = ctk.CTkEntry(win, placeholder_text="Incolla qui la nuova API Key...", show="*", font=(FONT_UI, 13), height=34)
-                    entry.pack(fill="x", padx=18, pady=(0, 18))
+                    entry.pack(fill="x", padx=18, pady=(0, 12))
 
                     btns = ctk.CTkFrame(win, fg_color="transparent")
-                    btns.pack(fill="x", padx=18, pady=(0, 16))
+                    btns.pack(fill="x", padx=18, pady=(0, 14))
 
                     def _close_and_set(value):
                         try:
