@@ -19,6 +19,35 @@ from google.genai import types
 import imageio_ffmpeg
 import subprocess
 
+
+def cleanup_orphan_temp_chunks(max_age_seconds: int = 12 * 3600) -> int:
+    """
+    Best-effort cleanup of temp chunk files left behind by crashes/forced closes.
+    Only touches files matching our own prefix in the OS temp directory.
+    """
+    removed = 0
+    try:
+        tmpdir = tempfile.gettempdir()
+        now = time.time()
+        for name in os.listdir(tmpdir):
+            low = name.lower()
+            if not low.startswith("sbobby_temp_"):
+                continue
+            if not (low.endswith(".mp3") or low.endswith(".wav") or low.endswith(".m4a")):
+                continue
+            path = os.path.join(tmpdir, name)
+            try:
+                age = now - float(os.path.getmtime(path))
+                if age < max(0, int(max_age_seconds)):
+                    continue
+                os.remove(path)
+                removed += 1
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return removed
+
 # ==========================================
 # CONFIGURAZIONE UI E FILE
 # ==========================================
@@ -1849,6 +1878,15 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             messagebox.showerror("API Key non valida", f"La chiave API non è valida o non hai accesso ai server Google.\nControlla di averla copiata correttamente, senza spazi extra.\n\nErrore: {e}")
             return
         save_config(api_key)
+
+        # Best-effort: pulizia file temporanei rimasti da crash/chiusure forzate precedenti.
+        try:
+            removed = cleanup_orphan_temp_chunks()
+            if removed > 0:
+                print(f"[*] Pulizia: rimossi {removed} file temporanei rimasti in sospeso.")
+        except Exception:
+            pass
+
         self.is_running = True
         self.cancel_event.clear()
         self._run_started_monotonic = time.monotonic()
