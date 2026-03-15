@@ -404,7 +404,8 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                         pass
 
                     try:
-                        win.geometry("560x260")
+                        # Piu' "quadrato" (meno rettangolo) e piu' piacevole visivamente.
+                        win.geometry("440x440")
                     except Exception:
                         pass
                     try:
@@ -427,12 +428,17 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                         "Inserisci un'altra API Key (di un account Google DIVERSO) per riprendere senza perdere i progressi.\n\n"
                         "Lascia vuoto o clicca Annulla per interrompere e salvare a meta'."
                     )
-                    ctk.CTkLabel(win, text=msg, font=(FONT_UI, 12), text_color="#E8EDF6", justify="left", wraplength=520).pack(
-                        padx=18, pady=(16, 10), anchor="w"
-                    )
+                    ctk.CTkLabel(
+                        win,
+                        text=msg,
+                        font=(FONT_UI, 12),
+                        text_color="#E8EDF6",
+                        justify="left",
+                        wraplength=400,
+                    ).pack(padx=18, pady=(18, 12), anchor="w")
 
                     entry = ctk.CTkEntry(win, placeholder_text="Incolla qui la nuova API Key...", show="*", font=(FONT_UI, 13), height=34)
-                    entry.pack(fill="x", padx=18, pady=(0, 12))
+                    entry.pack(fill="x", padx=18, pady=(0, 18))
 
                     btns = ctk.CTkFrame(win, fg_color="transparent")
                     btns.pack(fill="x", padx=18, pady=(0, 16))
@@ -481,6 +487,21 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
 
                     try:
                         entry.focus_set()
+                    except Exception:
+                        pass
+
+                    # Centra grossolanamente rispetto alla finestra principale.
+                    try:
+                        win.update_idletasks()
+                        px = int(app_instance.winfo_rootx())
+                        py = int(app_instance.winfo_rooty())
+                        pw = int(app_instance.winfo_width())
+                        ph = int(app_instance.winfo_height())
+                        w = int(win.winfo_width())
+                        h = int(win.winfo_height())
+                        x = max(0, px + (pw // 2) - (w // 2))
+                        y = max(0, py + (ph // 2) - (h // 2))
+                        win.geometry(f"{w}x{h}+{x}+{y}")
                     except Exception:
                         pass
                 except Exception:
