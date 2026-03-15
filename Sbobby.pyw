@@ -489,7 +489,8 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                         req_h = int(win.winfo_reqheight())
                         # clamp per evitare finestre troppo grandi su schermi piccoli
                         max_h = int(max(260, win.winfo_screenheight() * 0.80))
-                        target_h = max(240, min(req_h, max_h))
+                        # min un po' piu' alto + piccolo margine, per evitare che i bottoni finiscano "tagliati"
+                        target_h = max(300, min(req_h + 10, max_h))
                         win.geometry(f"{target_w}x{target_h}")
                     except Exception:
                         pass
@@ -508,7 +509,6 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                     # Centra grossolanamente rispetto alla finestra principale.
                     try:
                         win.update_idletasks()
-                        win.update_idletasks()
                         px = int(app_instance.winfo_rootx())
                         py = int(app_instance.winfo_rooty())
                         pw = int(app_instance.winfo_width())
@@ -517,7 +517,8 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                         h = int(win.winfo_height())
                         x = max(0, px + (pw // 2) - (w // 2))
                         y = max(0, py + (ph // 2) - (h // 2))
-                        win.geometry(f"{w}x{h}+{x}+{y}")
+                        # Sposta soltanto: non riscrivere w/h, altrimenti rischiamo di perdere l'auto-size.
+                        win.geometry(f"+{x}+{y}")
                     except Exception:
                         pass
                 except Exception:
