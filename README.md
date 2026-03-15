@@ -1,128 +1,127 @@
-# Sbobby 🤖
+# Sbobby
 
-Un'applicazione gratuita e open-source che trasforma le registrazioni audio delle tue lezioni in vere e proprie **sbobine** dettagliate.
+Sbobby e' un'app gratuita e open-source che trasforma le registrazioni audio delle lezioni in **sbobine** dettagliate.
 
-L'intelligenza artificiale (basata sul modello Gemini 2.5 Flash) ascolterà la tua registrazione e scriverà una dispensa eliminando i difetti tipici del parlato (es. ripetizioni, retorica, esitazioni) e strutturando il discorso con paragrafi chiari, elenchi puntati a dizionario e definizioni in grassetto.
-
----
-
-## 🚀 Come iniziare
-
-### 1) Come Scaricare il programma
-1. Clicca sulla sezione **Releases** sulla destra di questa pagina GitHub (oppure scarica dai link forniti).
-2. Scarica il programma per il tuo sistema operativo:
-   - **Per Windows:** Scarica il file `Sbobby-Windows.exe`
-   - **Per Mac:** Scarica il file `Sbobby-MacOS.zip`
-3. Salva il file dove preferisci (es. sul Desktop).
-
-### 2) Creare la tua Chiave API di Gemini (Gratis)
-Essendo Google Gemini il cervello del programma, ti serve una password unica (API Key) per usarlo. L'API key è completamente gratuita.
-1. Vai su: [Google AI Studio](https://aistudio.google.com/app/apikey) e accedi col tuo account Google.
-2. Clicca sul bottone azzurro `"Create API Key"`.
-3. Seleziona `"Create API key in a new project"`.
-4. Compariranno un sacco di lettere e numeri segreti (iniziano solitamente con `AIzaSy...`). **Questa è la tua chiave. Copiala.**
+L'intelligenza artificiale (basata sul modello Gemini 2.5 Flash) ascolta la registrazione e scrive una dispensa eliminando i difetti tipici del parlato (ripetizioni, esitazioni, retorica) e strutturando il discorso con paragrafi chiari ed elenchi puntati.
 
 ---
 
-## ▶️ Come Avviare l'App!
+## Come iniziare
 
-È un programma "plug & play", non devi installare nulla sul PC.
+### 1) Scaricare il programma
+1. Apri la sezione **Releases** di GitHub.
+2. Scarica il file giusto per il tuo sistema operativo:
+   - Windows: `Sbobby-Windows.exe`
+   - macOS: `Sbobby-MacOS.zip`
+3. Salva il file dove preferisci (ad esempio sul Desktop).
 
-### 💻 Se usi Windows:
-Fai semplicemente **doppio clic** sul file `Sbobby.exe`.
-*(Nota: Se l'antivirus o Windows blocca l'applicazione al primo avvio, non preoccuparti! Consulta la sezione FAQ qui sotto per capire come fare e perché succede).*
+Nota: su Windows il programma puo' anche chiamarsi `Sbobby.exe` (e' lo stesso). Se vuoi, puoi rinominare `Sbobby-Windows.exe` in `Sbobby.exe`.
 
-> ⏳ **Pazienza all'avvio (Non cliccare mille volte!):** > Sbobby pesa circa 65 MB perché contiene al suo interno tutto il "motore" necessario per funzionare senza farti installare Python. Ogni volta che lo apri, il tuo computer deve "scompattare" questo motore in background. Per questo motivo, **l'avvio richiederà sempre qualche secondo (il tempo esatto dipende dalla velocità e dalla potenza del tuo PC)**. Dagli quindi un attimo di tempo per caricarsi.
+### 2) Creare la tua chiave API di Gemini (gratis)
+Per usare Sbobby serve una API key di Google Gemini.
 
-### 🍎 Se usi Mac:
-Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `Sbobby.app` (puoi trascinarla nella cartella Applicazioni).
-*(Nota: Al primissimo avvio, se il Mac dovesse bloccarti dicendo "proveniente da uno sviluppatore non identificato", ti basta fare **clic col tasto destro** — o Control+Clic — sull'icona, e scegliere **Apri** dal menu).*
+Creare la API key e' gratis. L'uso delle API ha dei limiti (quota): vedi la sezione FAQ piu' sotto.
 
----
-
-## 📖 Come lo uso una volta aperto?
-1. Aperta la schermata del programma, incolla in alto la **Chiave API** copiata prima. Il programma se la salverà, così non dovrai rimetterla mai più.
-2. Clicca "**Sfoglia / Carica**" e seleziona la registrazione audio della tua lezione.
-3. Clicca il pulsantone verde **AVVIA**.
-4. Niente panico se l'app sembra bloccarsi: nel terminale dentro al programma leggerai esattamente a che punto e'! Ad esempio, se l'audio dura un'ora, fara' **4 estrazioni** da 15 minuti l'una, e ci mettera' all'incirca 3-5 minuti in base al traffico dei server Google e alla tua connessione.
-5. Quando ha finito, troverai il file `.html` sul tuo **Desktop**, gia' formattato per il copia-incolla su Google Docs.
+1. Vai su [Google AI Studio](https://aistudio.google.com/app/apikey) e accedi con il tuo account Google.
+2. Clicca `Create API Key`.
+3. Seleziona `Create API key in a new project`.
+4. Copia la chiave (di solito inizia con `AIzaSy...`).
 
 ---
 
-## 💾 Autosalvataggio e Ripresa (Importante)
-Sbobby salva automaticamente i progressi mentre lavora, così se chiudi l'app, crasha il PC o finisci la quota giornaliera puoi riprendere senza perdere tutto.
-
-- **Dove salva?** In una cartella locale sul tuo PC, dentro la home utente (es. `C:\Users\TUO_UTENTE\.sbobby_sessions\...` su Windows o `~/.sbobby_sessions/...` su macOS).
-- **Cosa salva?** Testi parziali (sbobine per chunk), progressi e stati di avanzamento.
-- **Quando riprendi una sessione:** se selezioni lo stesso file audio, Sbobby può proporti di **riutilizzare** i risultati già pronti (rigenera l'HTML senza consumare richieste) oppure di **ricominciare da zero** (cancella la sessione e rifà tutto dall'inizio).
+## Requisiti
+- Connessione Internet.
+- Un account Google per creare la API key.
+- Un file audio/video supportato (MP3, M4A, WAV, MP4, MKV e simili).
 
 ---
 
-## 🎯 Cosa aspettarsi dai risultati (Disclaimer sull'AI)
-È importante ricordare che l'intelligenza artificiale **non è perfetta**. La sbobina generata potrebbe contenere qualche piccolo errore di trascrizione, parole tecniche interpretate male o, talvolta, piccolissime porzioni di testo sdoppiate (specialmente nel punto di giunzione tra una parte di audio e l'altra). 
+## Come avviare l'app
+E' un programma plug and play: non devi installare Python.
 
-Stiamo parlando di una percentuale di imprecisione davvero minuscola rispetto al testo totale. Il vero vantaggio è che l'app **farà il 90% del lavoro sporco e noioso al posto tuo**. A te basterà dare una rapida rilettura per sistemare quelle due o tre imperfezioni, risparmiando comunque ore e ore di digitazione manuale!
+### Windows
+1. Fai doppio clic su `Sbobby-Windows.exe` (o `Sbobby.exe`).
+2. Se Windows SmartScreen/antivirus lo blocca al primo avvio, vedi FAQ.
 
-Ricorda sempre una regola d'oro dell'intelligenza artificiale: **la qualità del risultato dipende dalla qualità dell'audio di partenza**. Se l'audio è incomprensibile per un umano, lo sarà anche per l'AI!
+Nota: al primo avvio puo' metterci qualche secondo (il file contiene tutto il necessario per funzionare).
 
----
-
-## ❓ FAQ - Domande Frequenti
-
-### È sicuro? Il mio antivirus lo segnala come minaccia!
-Assolutamente sì, è sicuro al 100%. Il codice sorgente dell'applicazione è completamente pubblico e verificabile da chiunque su GitHub. Se il tuo antivirus o Windows Defender blocca l'app (segnalandola magari come *Trojan* o *Malware*), si tratta di un **falso positivo**.
-
-**Cos'è un falso positivo e perché succede?**
-Un falso positivo avviene quando un antivirus scambia un file innocuo per un virus. Questo succede quasi sempre con i programmi scritti in Python e trasformati in eseguibili `.exe` tramite un tool chiamato *PyInstaller*. Gli antivirus diffidano "di default" dei programmi creati da sviluppatori indipendenti che non possiedono una firma digitale a pagamento (che costa centinaia di euro l'anno).
-
-Nota: alcuni antivirus possono segnalare eseguibili creati con PyInstaller come "sospetti" (falsi positivi), soprattutto se il file non e' firmato digitalmente. Se vuoi una verifica in piu', puoi caricare il file su VirusTotal e controllare che le segnalazioni (se presenti) siano poche e di tipo generico/euristico.
-
-**Come risolvere su Windows:**
-- **Se appare la schermata blu di Windows SmartScreen:** Clicca su `"Ulteriori Informazioni"` e poi sul pulsante in basso `"Esegui Comunque"`.
-- **Se l'antivirus lo elimina:** Vai nella Cronologia Protezione di Windows, clicca sulla minaccia rilevata e seleziona `"Consenti nel dispositivo"` o `"Ripristina"`.
-
-### Quali sono i limiti giornalieri dell'API (Importante!)
-L'intelligenza artificiale di Google non è illimitata: esistono limiti/quote di utilizzo (numero di richieste, e altri parametri) che dipendono dal tuo account/progetto e possono cambiare nel tempo.
-
-**Nota importante:** le quote gratuite possono cambiare nel tempo e possono dipendere dal tuo progetto/account. Se hai dubbi, controlla la tua quota su Google AI Studio.
-
-**Quanto consuma una sbobina?** L'app divide l'audio in blocchi da 15 minuti. Per ogni blocco effettua circa 1 richiesta di generazione, più alcune richieste extra per la revisione/merge (dipende dalla lunghezza totale). In generale, più l'audio è lungo, più richieste servono.
-
-**Ho finito i token (Errore: ⛔ LIMITE GIORNALIERO RAGGIUNTO!), cosa faccio?**
-L'app è intelligente e gestirà questo blocco per te:
-- **Opzione 1 (Inserire una nuova chiave a caldo):** L'applicazione metterà in pausa il processo (senza farti perdere la sbobina generata finora) e aprirà un popup a schermo. Ti basterà generare una nuova chiave API da un **account Google diverso** (es. una seconda email Gmail), incollarla nel popup e premere OK. Sbobby riprenderà automaticamente a sbobinare l'audio dal punto esatto in cui si era interrotto!
-- **Opzione 2 (Aspettare l'indomani):** Se non hai altre email o vuoi fermarti, premi "Annulla" nel popup. L'app salverà su file la porzione di lezione sbobinata fino a quel punto e si chiuderà. I limiti gratuiti si resettano ogni giorno a mezzanotte ora del Pacifico, che corrisponde circa alle **ore 9:00 di mattina in Italia**.
+### macOS
+1. Estrai `Sbobby-MacOS.zip`.
+2. Avvia `Sbobby.app` (puoi trascinarla in Applicazioni).
+3. Se macOS blocca l'avvio per "sviluppatore non identificato": tasto destro sull'app, poi **Apri**.
 
 ---
 
-## ☕ Supporta il progetto!
-Sbobby 🤖 è e sarà sempre **100% gratuito e open-source**.
-
-Tuttavia, se questa app ti ha svoltato la sessione d'esami, ti ha fatto risparmiare decine (o centinaia) di ore di noiosissima sbobinatura manuale e vuoi supportare il mio lavoro, puoi offrirmi un caffè!
-
-* [☕ Offrimi un caffè su Ko-fi](https://ko-fi.com/vimuw)
-
-Grazie e in bocca al lupo per gli esami! 🎉
+## Come si usa
+1. Incolla in alto la tua **API key** (l'app la salva, quindi non devi reinserirla ogni volta).
+2. Seleziona il file audio/video.
+3. Premi **AVVIA**.
+4. Segui l'avanzamento nel log dentro l'app.
+5. A fine processo troverai un file `.html` sul tuo **Desktop**, pronto per il copia-incolla su Google Docs.
 
 ---
 
-## ⚖️ Disclaimer Etico e Legale (Importante)
-Sbobby 🤖 è esclusivamente uno **strumento software locale** che facilita l'interazione tra l'utente e le API pubbliche di Google Gemini.
+## Autosalvataggio e ripresa (importante)
+Sbobby salva automaticamente i progressi mentre lavora. Se chiudi l'app, crasha il PC o finisci la quota giornaliera puoi riprendere senza perdere tutto.
 
-Scaricando e utilizzando questa applicazione, accetti e comprendi che:
-* **Diritto d'autore e Uso Personale:** Le lezioni universitarie sono proprietà intellettuale dei rispettivi docenti. L'uso di questo strumento è inteso **esclusivamente per scopi di studio personale**. La diffusione pubblica, la pubblicazione online o la vendita a terzi delle sbobine generate senza il consenso esplicito del docente è una violazione del diritto d'autore. L'autore di questo software declina ogni responsabilità per l'uso improprio o illecito dei testi generati.
-* **Privacy e Gestione dei Dati:** Inserendo la tua chiave API personale (BYOK), stabilisci una connessione diretta tra il tuo computer e i server di Google, accettando i [Termini di Servizio di Google](https://policies.google.com/terms). Sbobby 🤖 non ha server propri: non intercetta, non salva in cloud e non condivide con nessuno (nemmeno con il creatore dell'app) i tuoi file audio, le tue sbobine o la tua chiave API. Tutto avviene e rimane sul tuo dispositivo.
-* **Tassativo Divieto per Dati Clinici Sensibili (Privacy e GDPR):** Sbobby elabora i file audio inviandoli tramite API per la trascrizione. Per questo motivo, è assolutamente vietato dare in pasto all'app registrazioni effettuate in ambiente clinico, durante i tirocini in reparto o che contengono conversazioni con pazienti reali. L'elaborazione di dati sanitari sensibili o informazioni che possano identificare un paziente tramite API esterne è una grave violazione della privacy. Usa l'app **solo per trascrivere le lezioni frontali in aula**.
-* **Nessuna Garanzia:** Come specificato dalla Licenza MIT allegata al progetto, il software è fornito "così com'è", senza alcuna garanzia.
-
----
-## 📝 Licenza
-Questo progetto è open-source e distribuito sotto la **Licenza MIT**.
-Per tutti i dettagli, consulta il file `LICENSE` incluso in questa repository.
+- Dove salva: in una cartella locale nella home utente (es. `C:\Users\TUO_UTENTE\.sbobby_sessions\...` su Windows o `~/.sbobby_sessions/...` su macOS).
+- Cosa salva: testi parziali (sbobine per chunk), progressi e stati di avanzamento.
+- Quando riprendi: se selezioni lo stesso file audio, Sbobby puo' proporti di:
+  - riutilizzare i risultati gia' pronti (riesporta l'HTML senza consumare richieste)
+  - ricominciare da zero (cancella la sessione e rifà tutto da capo)
 
 ---
 
-## 🛠️ Costruire l'App dai sorgenti
-Se scarichi il codice sorgente completo e vuoi compilare tu stesso i file eseguibili nativi (`.exe` o `.app`), usa gli script di automazione inclusi:
-- **Windows:** Fai doppio clic su `Costruisci_EXE_Windows.bat`. Verrà creata la cartella `dist` contenente l'applicativo compilato con PyInstaller.
-- **Mac:** Dal terminale, avvia `Costruisci_APP_Mac.command` per generare l'app macOS nativa.
+## Cosa aspettarsi dai risultati (nota sull'AI)
+L'intelligenza artificiale non e' perfetta. La sbobina puo' contenere piccoli errori di trascrizione o termini tecnici interpretati male. In rari casi possono comparire piccole ripetizioni, soprattutto vicino alle giunzioni tra blocchi.
+
+L'obiettivo e' farti risparmiare la maggior parte del lavoro: una rapida rilettura finale e' comunque consigliata.
+
+---
+
+## FAQ
+
+### Windows SmartScreen o antivirus blocca l'app
+E' comune per applicazioni nuove/non firmate.
+
+- SmartScreen: clicca `Ulteriori informazioni` e poi `Esegui comunque`.
+- Antivirus: controlla la cronologia delle minacce e scegli `Consenti nel dispositivo` o `Ripristina`.
+
+### Limiti giornalieri dell'API (quota)
+Google Gemini ha limiti/quote di utilizzo che possono cambiare nel tempo (dipendono dal tuo account/progetto).
+
+In generale, Sbobby divide l'audio in blocchi da circa 15 minuti: 1 richiesta per ogni blocco, piu' alcune richieste extra di revisione/merge (dipende dalla durata totale).
+
+Se vedi l'errore di limite giornaliero, puoi:
+- inserire un'altra API key (di un account Google diverso) quando l'app te la chiede
+- fermarti e riprendere piu' tardi: l'app salva i progressi e puoi continuare
+
+---
+
+## Disclaimer etico e legale (importante)
+Sbobby e' uno strumento locale che facilita l'interazione tra il tuo PC e le API pubbliche di Google Gemini.
+
+Usando l'app, accetti che:
+- Diritto d'autore e uso personale: le lezioni possono essere protette da diritto d'autore; usa le sbobine solo per studio personale.
+- Privacy: l'audio viene inviato ai server di Google tramite API per la trascrizione/generazione. Sbobby non ha server propri e non carica nulla su server dell'autore; l'autosalvataggio salva testi localmente in `~/.sbobby_sessions`.
+- Divieto per dati clinici/pazienti: non usare l'app con audio contenente dati sanitari o conversazioni con pazienti reali.
+- Nessuna garanzia: il software e' fornito "cosi' com'e'", senza garanzie (Licenza MIT).
+
+---
+
+## Licenza
+Questo progetto e' open-source e distribuito sotto Licenza MIT. Vedi [LICENSE](LICENSE).
+
+---
+
+## Costruire l'app dai sorgenti
+Se vuoi compilare da sorgenti i file eseguibili nativi (`.exe` o `.app`), usa gli script inclusi:
+- Windows: `Costruisci_EXE_Windows.bat` (crea `dist\Sbobby.exe`)
+- macOS: `Costruisci_APP_Mac.command` (crea `dist/Sbobby.app`)
+
+---
+
+## Supporta il progetto
+Se ti e' stato utile e vuoi supportare lo sviluppo:
+- [Offrimi un caffe' su Ko-fi](https://ko-fi.com/vimuw)
+
