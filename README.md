@@ -1,4 +1,4 @@
-# Sbobby
+# Sbobby 🤖
 
 Sbobby e' un'app gratuita e open-source che trasforma le registrazioni audio delle lezioni in **sbobine** dettagliate.
 
@@ -6,7 +6,7 @@ L'intelligenza artificiale (basata sul modello Gemini 2.5 Flash) ascolta la regi
 
 ---
 
-## Come iniziare
+## 🚀 Come iniziare
 
 ### 1) Scaricare il programma
 1. Apri la sezione **Releases** di GitHub.
@@ -29,30 +29,30 @@ Creare la API key e' gratis. L'uso delle API ha dei limiti (quota): vedi la sezi
 
 ---
 
-## Requisiti
+## ✅ Requisiti
 - Connessione Internet.
 - Un account Google per creare la API key.
 - Un file audio/video supportato (MP3, M4A, WAV, MP4, MKV e simili).
 
 ---
 
-## Come avviare l'app
+## ▶️ Come avviare l'app
 E' un programma plug and play: non devi installare Python.
 
-### Windows
+### 💻 Windows
 1. Fai doppio clic su `Sbobby-Windows.exe` (o `Sbobby.exe`).
 2. Se Windows SmartScreen/antivirus lo blocca al primo avvio, vedi FAQ.
 
 Nota: al primo avvio puo' metterci qualche secondo (il file contiene tutto il necessario per funzionare).
 
-### macOS
+### 🍎 macOS
 1. Estrai `Sbobby-MacOS.zip`.
 2. Avvia `Sbobby.app` (puoi trascinarla in Applicazioni).
 3. Se macOS blocca l'avvio per "sviluppatore non identificato": tasto destro sull'app, poi **Apri**.
 
 ---
 
-## Come si usa
+## 📚 Come si usa
 1. Incolla in alto la tua **API key** (l'app la salva, quindi non devi reinserirla ogni volta).
 2. Seleziona il file audio/video.
 3. Premi **AVVIA**.
@@ -61,25 +61,25 @@ Nota: al primo avvio puo' metterci qualche secondo (il file contiene tutto il ne
 
 ---
 
-## Autosalvataggio e ripresa (importante)
+## 💾 Autosalvataggio e ripresa (importante)
 Sbobby salva automaticamente i progressi mentre lavora. Se chiudi l'app, crasha il PC o finisci la quota giornaliera puoi riprendere senza perdere tutto.
 
 - Dove salva: in una cartella locale nella home utente (es. `C:\Users\TUO_UTENTE\.sbobby_sessions\...` su Windows o `~/.sbobby_sessions/...` su macOS).
 - Cosa salva: testi parziali (sbobine per chunk), progressi e stati di avanzamento.
 - Quando riprendi: se selezioni lo stesso file audio, Sbobby puo' proporti di:
   - riutilizzare i risultati gia' pronti (riesporta l'HTML senza consumare richieste)
-  - ricominciare da zero (cancella la sessione e rifà tutto da capo)
+  - ricominciare da zero (cancella la sessione e rifa' tutto da capo)
 
 ---
 
-## Cosa aspettarsi dai risultati (nota sull'AI)
+## 🎯 Cosa aspettarsi dai risultati (nota sull'AI)
 L'intelligenza artificiale non e' perfetta. La sbobina puo' contenere piccoli errori di trascrizione o termini tecnici interpretati male. In rari casi possono comparire piccole ripetizioni, soprattutto vicino alle giunzioni tra blocchi.
 
 L'obiettivo e' farti risparmiare la maggior parte del lavoro: una rapida rilettura finale e' comunque consigliata.
 
 ---
 
-## FAQ
+## ❓ FAQ
 
 ### Windows SmartScreen o antivirus blocca l'app
 E' comune per applicazioni nuove/non firmate.
@@ -98,7 +98,7 @@ Se vedi l'errore di limite giornaliero, puoi:
 
 ---
 
-## Disclaimer etico e legale (importante)
+## ⚖️ Disclaimer etico e legale (importante)
 Sbobby e' uno strumento locale che facilita l'interazione tra il tuo PC e le API pubbliche di Google Gemini.
 
 Usando l'app, accetti che:
@@ -109,19 +109,18 @@ Usando l'app, accetti che:
 
 ---
 
-## Licenza
+## 📝 Licenza
 Questo progetto e' open-source e distribuito sotto Licenza MIT. Vedi [LICENSE](LICENSE).
 
 ---
 
-## Costruire l'app dai sorgenti
+## 🛠️ Costruire l'app dai sorgenti
 Se vuoi compilare da sorgenti i file eseguibili nativi (`.exe` o `.app`), usa gli script inclusi:
 - Windows: `Costruisci_EXE_Windows.bat` (crea `dist\Sbobby.exe`)
 - macOS: `Costruisci_APP_Mac.command` (crea `dist/Sbobby.app`)
 
 ---
 
-## Supporta il progetto
+## ☕ Supporta il progetto
 Se ti e' stato utile e vuoi supportare lo sviluppo:
 - [Offrimi un caffe' su Ko-fi](https://ko-fi.com/vimuw)
-
