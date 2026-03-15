@@ -136,9 +136,9 @@ PROMPT_SISTEMA = """
 Agisci come un 'Autore di Libri di Testo Universitari'. Trasforma l'audio della lezione in un MANUALE DI STUDIO formale, strutturato e pronto per la stampa.
 
 REGOLA 1 — ZERO RIPETIZIONI (PRIORITÀ MASSIMA)
-1. DIVIETO ASSOLUTO DI RIDONDANZA: Se un concetto, una definizione o un esempio compare più volte nell'audio (perché il docente lo riformula, lo ripete o ci ritorna sopra), scrivi quel concetto UNA SOLA VOLTA, nella posizione più logica del testo, fondendo tutte le formulazioni in un unico paragrafo completo e definitivo.
+1. DIVIETO ASSOLUTO DI RIDONDANZA: Se un concetto, una definizione o un esempio compare più volte nell'audio (perché il docente lo riformula, lo ripete o ci ritorna sopra), scrivi quel concetto UNA SOLA VOLTA, nella posizione più logica del testo, fondendo tutte le formulazioni in un unico paragrafo completo e definitivo. IMPORTANTISSIMO: quando fondi, conserva e integra la SOMMA di tutti i dettagli unici comparsi nelle ripetizioni. Non perdere mai un dettaglio che appare una sola volta.
 2. MAI RIFORMULARE: Non scrivere mai la stessa idea con parole diverse in punti diversi del testo. Un concetto = un paragrafo.
-3. OVERLAP AUDIO: I blocchi audio si sovrappongono. Se le prime frasi di questo blocco ripetono contenuti già trascritti nel blocco precedente, IGNORALE completamente e riprendi solo dal punto in cui iniziano informazioni nuove.
+3. OVERLAP AUDIO: I blocchi audio si sovrappongono. Se le prime frasi di questo blocco ripetono contenuti già trascritti nel blocco precedente, ignora solo le parti chiaramente identiche o puramente ripetitive. Se nella sovrapposizione c'è ANCHE SOLO un'informazione nuova (numero, termine, definizione, correzione, esempio), includila.
 4. CORREZIONI IN TEMPO REALE: Se il docente sbaglia e si corregge, trascrivi solo la versione corretta finale.
 
 REGOLA 2 — STILE SCIENTIFICO IMPERSONALE
@@ -401,7 +401,8 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                     "model": "gemini-2.5-flash",
                     "chunk_minutes": 15,
                     "overlap_seconds": 30,
-                    "macro_char_limit": 15000,
+                    # Macro-blocchi piu' grandi = meno chiamate di revisione (senza riassumere).
+                    "macro_char_limit": 22000,
                     "audio": {"channels": 1, "sample_rate_hz": 16000, "bitrate": "48k", "format": "mp3"},
                 },
                 "phase1": {"next_start_sec": 0, "chunks_done": 0, "memoria_precedente": ""},
@@ -612,7 +613,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 print("   -> (3/3) Generazione sbobina in corso...")
                 prompt_dinamico = "Ascolta questo blocco di lezione e crea la sbobina seguendo rigorosamente le istruzioni di sistema."
                 if memoria_precedente:
-                    prompt_dinamico += f"\n\nATTENZIONE: Stai continuando una stesura. Questo è l'ultimo paragrafo che hai generato nel blocco precedente:\n\"...{memoria_precedente}\"\n\nRiprendi il discorso da qui IN MODO FLUIDO. Usa la stessa grandezza per i titoli e NON RIPETERE testualmente i concetti in sovrapposizione."
+                    prompt_dinamico += f"\n\nATTENZIONE: Stai continuando una stesura. Questo è l'ultimo paragrafo che hai generato nel blocco precedente:\n\"...{memoria_precedente}\"\n\nRiprendi il discorso da qui IN MODO FLUIDO. Usa la stessa grandezza per i titoli. Se all'inizio di questo blocco c'e' sovrapposizione, NON ripetere testualmente le frasi gia' dette, ma se compare anche solo un dettaglio nuovo includilo."
 
                 def _ensure_uploaded_audio_input():
                     nonlocal audio_file, file_client
@@ -822,7 +823,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
         safe_phase("Fase 2/3: revisione")
         print("[*] INIZIO FASE 2: REVISIONE FINALE (Eliminazione Doppioni, Correzione grammaticale, Miglioramento leggibilità, etc.)")
 
-        limite_caratteri = int(session.get("settings", {}).get("macro_char_limit", 15000) or 15000)
+        limite_caratteri = int(session.get("settings", {}).get("macro_char_limit", 22000) or 22000)
 
         macro_blocchi = None
         if os.path.exists(macro_path):
@@ -915,21 +916,6 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             total = len(paras)
             return cleaned, removed_exact, removed_adj, near_adj, total
 
-        def _macro_should_call_ai(removed_exact: int, removed_adj: int, near_adj: int, total: int) -> bool:
-            # Chiamata AI SOLO quando vediamo segnali concreti di doppioni/ridondanza non banale.
-            # Se e' pulito, skippiamo per ridurre richieste senza perdere dettaglio.
-            if total <= 2:
-                return False
-            # Se i paragrafi adiacenti sono molto simili ma non identici, e' un caso ambiguo:
-            # preferiamo l'AI come fallback per evitare doppioni "quasi uguali".
-            if near_adj >= 1:
-                return True
-            if removed_exact + removed_adj >= 4:
-                return True
-            if total >= 10 and (removed_exact + removed_adj) >= 2:
-                return True
-            return False
- 
         for i, blocco in enumerate(macro_blocchi, 1):
             if cancelled():
                 print("   [*] Operazione annullata dall'utente.")
@@ -956,35 +942,9 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
 
             blocco_src = (blocco or "").strip()
             blocco_local, removed_exact, removed_adj, near_adj, total_paras = _local_macro_cleanup(blocco_src)
-            need_ai = _macro_should_call_ai(removed_exact, removed_adj, near_adj, total_paras)
-
-            if not need_ai:
-                # Salva direttamente: dedup locale conservativo, zero richieste.
-                if removed_exact or removed_adj or near_adj:
-                    print(f"   -> Macro-blocco {i}/{macro_total}: check locale OK (dup rimossi={removed_exact+removed_adj}, sospetti={near_adj}). Skip revisione AI.")
-                else:
-                    print(f"   -> Macro-blocco {i}/{macro_total}: nessun doppione sospetto. Skip revisione AI.")
-
-                testo_rev = (blocco_local or blocco_src).strip()
-                testo_finale_revisionato += f"\n\n{testo_rev}\n\n"
-
-                try:
-                    _atomic_write_text(rev_path, testo_rev + "\n")
-                    print(f"   [autosave] Revisione (locale) salvata: {os.path.basename(rev_path)}")
-                except Exception as save_err:
-                    print(f"   [!] Autosave revisione (locale) fallito: {save_err}")
-
-                revised_done += 1
-                session["stage"] = "phase2"
-                session.setdefault("phase2", {})
-                session["phase2"]["revised_done"] = int(revised_done)
-                session["last_error"] = None
-                save_session()
-                safe_progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
-                if not sleep_with_cancel(2):
-                    print("   [*] Operazione annullata dall'utente.")
-                    return
-                continue
+            blocco_for_ai = (blocco_local or blocco_src).strip()
+            if removed_exact or removed_adj:
+                print(f"   -> Pre-clean locale Macro-blocco {i}/{macro_total}: duplicati rimossi={removed_exact+removed_adj} (sospetti={near_adj}).")
 
             print(f"   -> Revisione Macro-blocco {i} di {macro_total}...")
             successo_revisione = False
@@ -993,7 +953,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 try:
                     risposta_rev = client.models.generate_content(
                         model='gemini-2.5-flash',
-                        contents=[blocco, prompt_revisione],
+                        contents=[blocco_for_ai, prompt_revisione],
                         config=types.GenerateContentConfig(
                             temperature=0.1 
                         )
