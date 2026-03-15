@@ -1766,23 +1766,23 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
 
         header_left = ctk.CTkFrame(self.header, fg_color="transparent")
         header_left.grid(row=0, column=0, sticky="w")
-        ctk.CTkLabel(header_left, text="Sbobby", font=(FONT_UI, 26, "bold"), text_color=self.TEXT_BRIGHT).pack(side="left")
-        ctk.CTkLabel(
+        # Usa grid per allineare meglio la baseline tra titolo e sottotitolo.
+        header_left.grid_columnconfigure(2, weight=1)
+        self.lbl_title = ctk.CTkLabel(header_left, text="Sbobby", font=(FONT_UI, 26, "bold"), text_color=self.TEXT_BRIGHT)
+        self.lbl_title.grid(row=0, column=0, sticky="w")
+        self.lbl_subtitle = ctk.CTkLabel(
             header_left,
-            text="  Sbobine automatiche, pronte per Google Docs",
+            text="Sbobine automatiche, pronte per Google Docs",
             font=(FONT_UI, 12),
             text_color=self.TEXT_DIM,
-        ).pack(side="left", padx=(6, 0))
+        )
+        # Piccolo offset visivo per allineare meglio al titolo grande.
+        self.lbl_subtitle.grid(row=0, column=1, sticky="w", padx=(12, 0), pady=(6, 0))
 
         header_right = ctk.CTkFrame(self.header, fg_color="transparent")
         header_right.grid(row=0, column=1, sticky="e")
-        self.lbl_header_hint = ctk.CTkLabel(
-            header_right,
-            text="Output: Desktop • Autosave attivo",
-            font=(FONT_UI, 11),
-            text_color=self.TEXT_DIM,
-        )
-        self.lbl_header_hint.pack(side="right")
+        self.lbl_header_hint = ctk.CTkLabel(header_right, text="Output: Desktop • Autosave attivo", font=(FONT_UI, 11), text_color=self.TEXT_DIM)
+        self.lbl_header_hint.grid(row=0, column=0, sticky="e", pady=(6, 0))
 
         # API KEY CARD
         self.api_card = ctk.CTkFrame(self, fg_color=self.TERMINAL_BG, corner_radius=14, border_width=1, border_color=self.BORDER)
@@ -1825,29 +1825,34 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.console_card = ctk.CTkFrame(self, fg_color=self.CARD_BG, corner_radius=14, border_width=1, border_color=self.BORDER)
         self.console_card.grid(row=4, column=0, padx=30, pady=(0, 15), sticky="nsew")
         self.console_card.grid_columnconfigure(0, weight=1)
-        self.console_card.grid_rowconfigure(3, weight=1)
+        self.console_card.grid_rowconfigure(4, weight=1)
         ctk.CTkLabel(self.console_card, text="⚡ Log Eventi", font=(FONT_UI, 12, "bold"), text_color=self.TEXT_DIM).grid(row=0, column=0, sticky="w", padx=16, pady=(12, 4))
         self.progress_bar = ctk.CTkProgressBar(self.console_card, height=6, corner_radius=3, fg_color=self.TERMINAL_BG, progress_color=self.ACCENT)
-        self.progress_bar.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 4))
+        self.progress_bar.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 10))
         self.progress_bar.set(0)
 
-        # STATUS BAR (fase + ETA + azioni rapide)
-        self.status_bar = ctk.CTkFrame(self.console_card, fg_color="transparent")
-        self.status_bar.grid(row=2, column=0, sticky="ew", padx=16, pady=(0, 8))
-        self.status_bar.grid_columnconfigure(1, weight=1)
+        # META BAR (fase + ETA) separata dai pulsanti: piu' respiro, meno "appiccicato".
+        self.meta_bar = ctk.CTkFrame(self.console_card, fg_color="transparent")
+        self.meta_bar.grid(row=2, column=0, sticky="ew", padx=16, pady=(0, 6))
+        self.meta_bar.grid_columnconfigure(0, weight=1)
 
-        self.lbl_phase = ctk.CTkLabel(self.status_bar, text="Fase: pronto", font=(FONT_UI, 11), text_color=self.TEXT_DIM)
+        self.lbl_phase = ctk.CTkLabel(self.meta_bar, text="Fase: pronto", font=(FONT_UI, 11), text_color=self.TEXT_DIM)
         self.lbl_phase.grid(row=0, column=0, sticky="w")
 
-        self.lbl_eta = ctk.CTkLabel(self.status_bar, text="ETA: —", font=(FONT_UI, 11), text_color=self.TEXT_DIM)
-        self.lbl_eta.grid(row=0, column=1, sticky="e", padx=(8, 0))
+        self.lbl_eta = ctk.CTkLabel(self.meta_bar, text="ETA: —", font=(FONT_UI, 11), text_color=self.TEXT_DIM)
+        self.lbl_eta.grid(row=0, column=1, sticky="e")
+
+        # ACTION BAR (azioni rapide a destra)
+        self.actions_bar = ctk.CTkFrame(self.console_card, fg_color="transparent")
+        self.actions_bar.grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 10))
+        self.actions_bar.grid_columnconfigure(0, weight=1)
 
         self.btn_open_folder = ctk.CTkButton(
-            self.status_bar,
+            self.actions_bar,
             text="Apri cartella",
             width=110,
             height=28,
-            corner_radius=8,
+            corner_radius=10,
             fg_color=self.CARD_BG,
             hover_color=self.BORDER,
             border_color=self.BORDER,
@@ -1856,14 +1861,14 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             command=self.apri_cartella_output,
             state="disabled",
         )
-        self.btn_open_folder.grid(row=0, column=2, padx=(10, 6), sticky="e")
+        self.btn_open_folder.grid(row=0, column=1, padx=(0, 8), sticky="e")
 
         self.btn_open_html = ctk.CTkButton(
-            self.status_bar,
+            self.actions_bar,
             text="Apri HTML",
             width=90,
             height=28,
-            corner_radius=8,
+            corner_radius=10,
             fg_color=self.CARD_BG,
             hover_color=self.BORDER,
             border_color=self.BORDER,
@@ -1872,24 +1877,24 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             command=self.apri_file_html,
             state="disabled",
         )
-        self.btn_open_html.grid(row=0, column=3, padx=(0, 6), sticky="e")
+        self.btn_open_html.grid(row=0, column=2, padx=(0, 8), sticky="e")
 
         self.btn_cancel = ctk.CTkButton(
-            self.status_bar,
+            self.actions_bar,
             text="Stop",
             width=70,
             height=28,
-            corner_radius=8,
+            corner_radius=10,
             fg_color="#B00020",
             hover_color="#8E001A",
             text_color="white",
             command=self.annulla_processo,
             state="disabled",
         )
-        self.btn_cancel.grid(row=0, column=4, sticky="e")
+        self.btn_cancel.grid(row=0, column=3, sticky="e")
 
         self.console = ctk.CTkTextbox(self.console_card, font=(FONT_MONO, 12), fg_color=self.TERMINAL_BG, text_color=self.TERMINAL_FG, corner_radius=8, wrap="word", border_width=0)
-        self.console.grid(row=3, column=0, sticky="nsew", padx=12, pady=(0, 12))
+        self.console.grid(row=4, column=0, sticky="nsew", padx=12, pady=(0, 12))
         self.console.configure(state="disabled")
 
         sys.stdout = PrintRedirector(self.console)
