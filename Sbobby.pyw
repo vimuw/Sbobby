@@ -663,14 +663,16 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 memoria_precedente = str(session.get("phase1", {}).get("memoria_precedente", "") or "")
 
         if stage == "phase1":
-            print("[*] INIZIO FASE 1: Trascrizione a blocchi (Ogni blocco circa 15 min)")
-            safe_phase("Fase 1/3: trascrizione")
+            print("[*] INIZIO FASE 1: Trascrizione a blocchi (circa 15 min per blocco)")
+            print("    - Cosa fa: taglia l'audio in blocchi e genera una sbobina dettagliata per ogni blocco.")
+            print("    - Perche': blocchi piu' piccoli aiutano a mantenere alto il dettaglio e ridurre errori.")
+            safe_phase("Fase 1/3: trascrizione (chunk)")
         else:
             print(f"[*] Ripresa sessione: stage='{stage}'. Salto Fase 1.")
             if stage == "phase2":
                 safe_phase("Fase 2/3: revisione")
             elif stage == "boundary":
-                safe_phase("Fase 3/3: confine")
+                safe_phase("Fase 3/3: confini (anti-doppioni)")
             elif stage == "done":
                 safe_phase("Fase: esportazione HTML")
             else:
@@ -693,7 +695,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             
             print(f"\n======================================")
             print(f"-> LAVORAZIONE BLOCCO AUDIO {blocco_corrente_idx} DI {blocchi_totali} (Da {inizio_sec}s a {int(fine_sec)}s)")
-            safe_phase(f"Fase 1/3: trascrizione ({blocco_corrente_idx}/{blocchi_totali})")
+            safe_phase(f"Fase 1/3: trascrizione (chunk {blocco_corrente_idx}/{blocchi_totali})")
 
             if cancelled():
                 print("   [*] Operazione annullata dall'utente.")
@@ -1005,7 +1007,9 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
         # ==========================================
         print("\n======================================")
         safe_phase("Fase 2/3: revisione")
-        print("[*] INIZIO FASE 2: REVISIONE FINALE (Eliminazione Doppioni, Correzione grammaticale, Miglioramento leggibilità, etc.)")
+        print("[*] INIZIO FASE 2: Revisione e pulizia (macro-blocchi)")
+        print("    - Cosa fa: divide il testo in macro-sezioni e le rivede per togliere doppioni e migliorare la leggibilita'.")
+        print("    - Nota: questa fase usa l'AI su ogni macro-blocco per mantenere coerenza e dettaglio.")
 
         limite_caratteri = int(session.get("settings", {}).get("macro_char_limit", 22000) or 22000)
 
@@ -1251,7 +1255,12 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
         # ------------------------------------------
         if str(session.get("stage", "phase2")).strip().lower() == "phase2":
             session["stage"] = "boundary"
-            safe_phase("Fase 3/3: confine")
+            print("\n======================================")
+            print("[*] INIZIO FASE 3: Revisione dei confini (anti-doppioni tra macro-blocchi)")
+            print("    - 'Confine' = fine del macro-blocco N + inizio del macro-blocco N+1.")
+            print("    - Cosa fa: cerca sovrapposizioni tra i due pezzi e rimuove SOLO le ripetizioni.")
+            print("    - Come: prima controllo locale (0 richieste), poi AI solo se il caso e' ambiguo.")
+            safe_phase("Fase 3/3: confini (anti-doppioni)")
             session.setdefault("boundary", {})
             session["boundary"]["pairs_total"] = int(max(0, macro_total - 1))
             session["boundary"]["next_pair"] = int(session.get("boundary", {}).get("next_pair", 1) or 1)
