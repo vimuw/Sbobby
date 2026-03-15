@@ -1996,6 +1996,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.resume_session = False
         self.is_running = False
         self.cancel_event = threading.Event()
+        self._is_cancelling = False
         self.file_temporanei = []  # Lista file temp condivisa col thread
         self.last_output_html = None
         self.last_output_dir = None
@@ -2759,9 +2760,10 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
             pass
 
     def _ripristina_ui(self):
+        self._is_cancelling = False
         self.btn_avvia.configure(state="normal", fg_color=self.SUCCESS, text="▶  AVVIA GENERAZIONE SBOBINA")
         self.progress_bar.set(0)
-        self.btn_cancel.configure(state="disabled")
+        self.btn_cancel.configure(state="disabled", text="Stop")
         self._run_started_monotonic = None
         self._eta_ema_seconds = None
         if not self.last_output_html:
@@ -2774,6 +2776,41 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         for w in [self.drop_zone, self.drop_icon, self.lbl_file, self.lbl_file_hint]:
             w.bind("<Button-1>", lambda e: self.scegli_file())
         self.entry_api.configure(state="normal")
+
+    def _enter_cancel_state_ui(self, source: str = "Stop"):
+        # Feedback immediato: l'annullamento reale avviene al termine dello step corrente (API/ffmpeg).
+        try:
+            if self._is_cancelling:
+                return
+            self._is_cancelling = True
+        except Exception:
+            pass
+
+        try:
+            self.cancel_event.set()
+        except Exception:
+            pass
+
+        try:
+            self._set_phase_ui("Fase: annullamento in corso... (attendo fine operazione)")
+        except Exception:
+            pass
+
+        try:
+            print(f"[*] Annullamento richiesto ({source}). Attendo la fine dell'operazione corrente per fermarmi in sicurezza...")
+        except Exception:
+            pass
+
+        # Disabilita comandi interattivi: durante annullamento non vogliamo altri click.
+        try:
+            self.btn_cancel.configure(state="disabled", text="Annullamento...")
+        except Exception:
+            pass
+        try:
+            self.btn_open_folder.configure(state="disabled")
+            self.btn_open_html.configure(state="disabled")
+        except Exception:
+            pass
 
     def aggiorna_progresso(self, valore):
         """Aggiorna la barra di progresso in modo thread-safe."""
@@ -2879,9 +2916,7 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         if not self.is_running:
             return
         try:
-            self.cancel_event.set()
-            self.btn_cancel.configure(state="disabled")
-            self._set_phase_ui("Fase: annullamento...")
+            self._enter_cancel_state_ui(source="Stop")
         except Exception:
             pass
 
@@ -2925,10 +2960,8 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
                 "Vuoi chiudere comunque?"
             ):
                 return
-            self.cancel_event.set()
             try:
-                self.btn_cancel.configure(state="disabled")
-                self._set_phase_ui("Fase: annullamento...")
+                self._enter_cancel_state_ui(source="Chiusura finestra")
             except Exception:
                 pass
         # Pulizia sicura di tutti i file temporanei
