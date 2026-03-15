@@ -11,8 +11,8 @@ L'intelligenza artificiale (basata sul modello Gemini 2.5 Flash) ascolterà la t
 ### 1) Come Scaricare il programma
 1. Clicca sulla sezione **Releases** sulla destra di questa pagina GitHub (oppure scarica dai link forniti).
 2. Scarica il programma per il tuo sistema operativo:
-   - **Per Windows:** Scarica il file `Sbobby.exe`
-   - **Per Mac:** Scarica il file `Sbobby_Mac.zip`
+   - **Per Windows:** Scarica il file `Sbobby-Windows.exe`
+   - **Per Mac:** Scarica il file `Sbobby-MacOS.zip`
 3. Salva il file dove preferisci (es. sul Desktop).
 
 ### 2) Creare la tua Chiave API di Gemini (Gratis)
@@ -49,6 +49,15 @@ Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `Sbobby.app` (puoi
 
 ---
 
+## 💾 Autosalvataggio e Ripresa (Importante)
+Sbobby salva automaticamente i progressi mentre lavora, così se chiudi l'app, crasha il PC o finisci la quota giornaliera puoi riprendere senza perdere tutto.
+
+- **Dove salva?** In una cartella locale sul tuo PC, dentro la home utente (es. `C:\Users\TUO_UTENTE\.sbobby_sessions\...` su Windows).
+- **Cosa salva?** Testi parziali (sbobine per chunk), progressi e stati di avanzamento.
+- **Quando riprendi una sessione:** se selezioni lo stesso file audio, Sbobby può proporti di **riutilizzare** i risultati già pronti (rigenera l'HTML senza consumare richieste) oppure di **ricominciare da zero** (cancella la sessione e rifà tutto dall'inizio).
+
+---
+
 ## 🎯 Cosa aspettarsi dai risultati (Disclaimer sull'AI)
 È importante ricordare che l'intelligenza artificiale **non è perfetta**. La sbobina generata potrebbe contenere qualche piccolo errore di trascrizione, parole tecniche interpretate male o, talvolta, piccolissime porzioni di testo sdoppiate (specialmente nel punto di giunzione tra una parte di audio e l'altra). 
 
@@ -66,16 +75,18 @@ Assolutamente sì, è sicuro al 100%. Il codice sorgente dell'applicazione è co
 **Cos'è un falso positivo e perché succede?**
 Un falso positivo avviene quando un antivirus scambia un file innocuo per un virus. Questo succede quasi sempre con i programmi scritti in Python e trasformati in eseguibili `.exe` tramite un tool chiamato *PyInstaller*. Gli antivirus diffidano "di default" dei programmi creati da sviluppatori indipendenti che non possiedono una firma digitale a pagamento (che costa centinaia di euro l'anno).
 
-Per totale trasparenza, ho fatto analizzare il file a **VirusTotal**: [INSERISCI QUI IL LINK DI VIRUSTOTAL]. Come puoi vedere dai risultati, su 64 motori antivirus mondiali, solo 1 lo segnala come sospetto, confermando che si tratta di un banale errore di rilevamento.
+Nota: alcuni antivirus possono segnalare eseguibili creati con PyInstaller come "sospetti" (falsi positivi), soprattutto se il file non e' firmato digitalmente. Se vuoi una verifica in piu', puoi caricare il file su VirusTotal e controllare che le segnalazioni (se presenti) siano poche e di tipo generico/euristico.
 
 **Come risolvere su Windows:**
 - **Se appare la schermata blu di Windows SmartScreen:** Clicca su `"Ulteriori Informazioni"` e poi sul pulsante in basso `"Esegui Comunque"`.
 - **Se l'antivirus lo elimina:** Vai nella Cronologia Protezione di Windows, clicca sulla minaccia rilevata e seleziona `"Consenti nel dispositivo"` o `"Ripristina"`.
 
 ### Quali sono i limiti giornalieri dell'API (Importante!)
-L'intelligenza artificiale di Google non è illimitata: funziona a **"gettoni" (token)**. Il piano gratuito di Gemini 2.5 Flash ti dà un massimo di **20 richieste al giorno** per account.
+L'intelligenza artificiale di Google non è illimitata: esistono limiti/quote di utilizzo (numero di richieste, e altri parametri) che dipendono dal tuo account/progetto e possono cambiare nel tempo.
 
-**Quanto consuma una sbobina?** L'app divide l'audio in blocchi da 15 minuti. Per ogni blocco effettua in media 1.6 richieste (una di trascrizione, e proporzionalmente una di revisione su macro-blocchi di testo uniti). Avendo a disposizione 20 token (richieste) gratuiti al giorno con Gemini 2.5 Flash, **la lunghezza massima consigliata per l'audio in una singola giornata è di circa 3 ore (180 minuti)**. Oltre questa soglia temporale, l'app supererà le 20 richieste e il processo verrà interrotto per esaurimento del limite gratuito giornaliero di Google.
+**Nota importante:** le quote gratuite possono cambiare nel tempo e possono dipendere dal tuo progetto/account. Se hai dubbi, controlla la tua quota su Google AI Studio.
+
+**Quanto consuma una sbobina?** L'app divide l'audio in blocchi da 15 minuti. Per ogni blocco effettua circa 1 richiesta di generazione, più alcune richieste extra per la revisione/merge (dipende dalla lunghezza totale). In generale, più l'audio è lungo, più richieste servono.
 
 **Ho finito i token (Errore: ⛔ LIMITE GIORNALIERO RAGGIUNTO!), cosa faccio?**
 L'app è intelligente e gestirà questo blocco per te:
@@ -115,3 +126,11 @@ Per tutti i dettagli, consulta il file `LICENSE` incluso in questa repository.
 Se scarichi il codice sorgente completo e vuoi compilare tu stesso i file eseguibili nativi (`.exe` o `.app`), usa gli script di automazione inclusi:
 - **Windows:** Fai doppio clic su `Costruisci_EXE_Windows.bat`. Verrà creata la cartella `dist` contenente l'applicativo compilato con PyInstaller.
 - **Mac:** Dal terminale, avvia `Costruisci_APP_Mac.command` per generare l'app macOS nativa.
+
+---
+
+## 🏷️ Pubblicare una nuova Release (per chi mantiene il progetto)
+Il workflow GitHub crea automaticamente gli eseguibili e li carica in **Releases**.
+
+- **Metodo consigliato (tag):** crea e pusha un tag versione `vX.Y.Z` (es. `v1.0.7`). Il workflow parte da solo.
+- **Metodo manuale (Run workflow):** lancia "Run workflow" e inserisci `release_tag` (es. `v1.0.7`). Se lasci `release_tag` vuoto, fa solo build e non pubblica la Release.
