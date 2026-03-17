@@ -54,6 +54,17 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
     def cancelled():
         return cancel_event is not None and cancel_event.is_set()
 
+    def _is_empty_model_response_error(err_txt: str) -> bool:
+        try:
+            low = str(err_txt or "").lower()
+        except Exception:
+            return False
+        return (
+            "risposta vuota dal modello" in low
+            or "text=none" in low
+            or ("nonetype" in low and "has no attribute" in low and "strip" in low)
+        )
+
     def ui_alive():
         try:
             return bool(app_instance.winfo_exists())
@@ -842,7 +853,31 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                                 temperature=0.35
                             )
                         )
-                        testo_generato = risposta.text.strip()
+                        # Alcune risposte possono avere `text=None` (es. output bloccato/struttura diversa).
+                        testo_raw = getattr(risposta, "text", None)
+                        if testo_raw is None:
+                            testo_generato = ""
+                        elif isinstance(testo_raw, str):
+                            testo_generato = testo_raw.strip()
+                        else:
+                            testo_generato = str(testo_raw).strip()
+
+                        if not testo_generato:
+                            # Fallback: prova ad estrarre testo dai candidates/parts se presenti.
+                            try:
+                                cand = getattr(risposta, "candidates", None) or []
+                                for c in cand:
+                                    cont = getattr(c, "content", None)
+                                    parts = getattr(cont, "parts", None) or []
+                                    merged = "\n".join([str(getattr(p, "text", "") or "") for p in parts]).strip()
+                                    if merged:
+                                        testo_generato = merged
+                                        break
+                            except Exception:
+                                pass
+
+                        if not testo_generato:
+                            raise RuntimeError("Risposta vuota dal modello (text=None)")
                         testo_completo_sbobina += f"\n\n{testo_generato}\n\n"
                         memoria_precedente = testo_generato[-1000:]
 
@@ -955,8 +990,12 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                             save_session()
                             return
 
-                        print(f"      [Server occupati o errore: {err_txt}]")
-                        print("      [Riprovo in 30 secondi...]")
+                        if _is_empty_model_response_error(err_txt):
+                            debug_log(f"empty model response: {err_txt}")
+                            print("      [Risposta vuota/filtrata dal modello. Riprovo in 30 secondi...]")
+                        else:
+                            print(f"      [Server occupati o errore: {err_txt}]")
+                            print("      [Riprovo in 30 secondi...]")
                         if not sleep_with_cancel(30):
                             print("   [*] Operazione annullata dall'utente.")
                             return
@@ -1163,7 +1202,11 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                             session["last_error"] = "quota_daily_limit_phase2"
                             save_session()
                             return
-                    print(f"      [Server occupati o errore. Riprovo in 20 secondi...]")
+                    if _is_empty_model_response_error(str(e)):
+                        debug_log(f"empty model response (revision): {e}")
+                        print("      [Risposta vuota/filtrata dal modello in revisione. Riprovo in 20 secondi...]")
+                    else:
+                        print("      [Server occupati o errore. Riprovo in 20 secondi...]")
                     if not sleep_with_cancel(20):
                         print("   [*] Operazione annullata dall'utente.")
                         return
