@@ -142,7 +142,7 @@ def build_html_document(title: str, markdown_text: str) -> str:
       --rule: #e6e6e6;
     }}
     body {{
-      font-family: Georgia, "Times New Roman", serif;
+      font-family: Arial, Helvetica, sans-serif;
       line-height: 1.6;
       color: var(--text);
       background: var(--bg);
