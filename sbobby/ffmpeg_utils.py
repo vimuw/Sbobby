@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import time
 from typing import Optional, Tuple
 
 import imageio_ffmpeg
@@ -23,6 +24,59 @@ def get_ffmpeg_exe() -> str:
 
 def _creation_flags() -> int:
     return subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+
+
+def _is_cancelled(stop_event) -> bool:
+    try:
+        return stop_event is not None and bool(stop_event.is_set())
+    except Exception:
+        return False
+
+
+def _run_cancellable(cmd, *, stop_event=None) -> Tuple[int, str, str, bool]:
+    """
+    Runs a subprocess, periodically checking stop_event.
+    Returns (returncode, stdout, stderr, was_cancelled).
+    """
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        errors="replace",
+        creationflags=_creation_flags(),
+    )
+    cancelled = False
+    try:
+        while proc.poll() is None:
+            if _is_cancelled(stop_event):
+                cancelled = True
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
+                # Give a short grace period then hard kill.
+                t0 = time.time()
+                while proc.poll() is None and (time.time() - t0) < 2.0:
+                    time.sleep(0.05)
+                if proc.poll() is None:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                break
+            time.sleep(0.15)
+        out, err = proc.communicate(timeout=5)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        try:
+            out, err = proc.communicate(timeout=2)
+        except Exception:
+            out, err = "", ""
+    return int(getattr(proc, "returncode", 1) or 0), str(out or ""), str(err or ""), bool(cancelled)
 
 
 def probe_duration_seconds(path: str, ffmpeg_exe: Optional[str] = None) -> Tuple[Optional[float], Optional[str]]:
@@ -71,6 +125,7 @@ def preconvert_to_mono16k_mp3(
     output_path: str,
     bitrate: str = "48k",
     ffmpeg_exe: Optional[str] = None,
+    stop_event=None,
 ) -> Tuple[bool, Optional[str]]:
     exe = ffmpeg_exe or get_ffmpeg_exe()
     cmd = [
@@ -92,15 +147,15 @@ def preconvert_to_mono16k_mp3(
         "a:0",
         output_path,
     ]
-    res = subprocess.run(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        errors="replace",
-        creationflags=_creation_flags(),
-    )
-    if res.returncode == 0:
+    rc, _out, err, was_cancelled = _run_cancellable(cmd, stop_event=stop_event)
+    if was_cancelled:
+        try:
+            if os.path.exists(output_path):
+                os.remove(output_path)
+        except Exception:
+            pass
+        return False, "cancelled"
+    if rc == 0:
         try:
             if os.path.exists(output_path) and os.path.getsize(output_path) > 1024:
                 return True, None
@@ -108,7 +163,7 @@ def preconvert_to_mono16k_mp3(
             pass
         return False, "preconvert_output_missing"
 
-    stderr = (res.stderr or "").strip()
+    stderr = (err or "").strip()
     if stderr:
         stderr = "\n".join(stderr.splitlines()[-12:])
     return False, stderr or "preconvert_failed"
@@ -123,6 +178,7 @@ def cut_chunk_to_mp3(
     ffmpeg_exe: Optional[str] = None,
     stream_copy: bool = False,
     bitrate: str = "48k",
+    stop_event=None,
 ) -> Tuple[bool, Optional[str]]:
     exe = ffmpeg_exe or get_ffmpeg_exe()
     if stream_copy:
@@ -174,15 +230,15 @@ def cut_chunk_to_mp3(
             output_path,
         ]
 
-    res = subprocess.run(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        errors="replace",
-        creationflags=_creation_flags(),
-    )
-    if res.returncode == 0:
+    rc, _out, err, was_cancelled = _run_cancellable(cmd, stop_event=stop_event)
+    if was_cancelled:
+        try:
+            if os.path.exists(output_path):
+                os.remove(output_path)
+        except Exception:
+            pass
+        return False, "cancelled"
+    if rc == 0:
         try:
             if os.path.exists(output_path) and os.path.getsize(output_path) > 1024:
                 return True, None
@@ -190,8 +246,7 @@ def cut_chunk_to_mp3(
             pass
         return False, "chunk_output_missing"
 
-    stderr = (res.stderr or "").strip()
+    stderr = (err or "").strip()
     if stderr:
         stderr = "\n".join(stderr.splitlines()[-12:])
     return False, stderr or "cut_failed"
-

@@ -25,6 +25,7 @@ from sbobby.shared import (
     FONT_MONO,
     FONT_UI,
     FONT_UI_EMOJI,
+    SESSION_ROOT,
     _load_json,
     _session_dir_for_file,
     cleanup_orphan_temp_chunks,
@@ -471,8 +472,13 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
                 print(f"[*] Ripresa sessione: {session_dir}")
             else:
                 try:
-                    shutil.rmtree(session_dir, ignore_errors=True)
-                    print("[*] Sessione precedente eliminata. Riparto da zero.")
+                    root = os.path.abspath(str(SESSION_ROOT or ""))
+                    target = os.path.abspath(str(session_dir or ""))
+                    if root and target and (target == root or target.startswith(root + os.sep)):
+                        shutil.rmtree(session_dir, ignore_errors=True)
+                        print("[*] Sessione precedente eliminata. Riparto da zero.")
+                    else:
+                        print(f"[!] Refusing to delete non-session path: {session_dir}")
                 except Exception as e:
                     print(f"[!] Errore durante reset sessione: {e}")
                 resume = False
@@ -495,6 +501,14 @@ class SbobbyApp(ctk.CTk, TkinterDnD.DnDWrapper):
         self.queue_jobs = jobs[1:]
         self.current_job = jobs[0]
         self._apply_job_to_ui(self.current_job, from_batch=True)
+        try:
+            if self.queue_jobs:
+                print(f"[+] Batch caricato: {1 + len(self.queue_jobs)} file totali. In coda: {len(self.queue_jobs)}")
+                for idx, j in enumerate(self.queue_jobs, start=2):
+                    p = j.get("path") or ""
+                    print(f"    {idx}. {os.path.basename(str(p))}")
+        except Exception:
+            pass
         # Start estimate for whole batch (shows queue count)
         self._start_cost_estimate_async([j["path"] for j in jobs])
 

@@ -573,8 +573,12 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 output_path=preconv_path,
                 bitrate=bitrate,
                 ffmpeg_exe=ffmpeg_exe,
+                stop_event=cancel_event,
             )
             if not ok:
+                if str(err or "").strip().lower() == "cancelled" or cancelled():
+                    print("   [*] Operazione annullata dall'utente.")
+                    return None
                 print("[!] Pre-conversione fallita. Continuo senza pre-conversione.")
                 if err:
                     print(err)
@@ -594,6 +598,8 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             return None
 
         preconv_used_path = _ensure_preconverted()
+        if cancelled():
+            return
 
         # Ripristino (se presente) dai chunk gia' salvati
         existing_chunks = _list_phase1_chunks()
@@ -665,6 +671,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                     ffmpeg_exe=ffmpeg_exe,
                     stream_copy=True,
                     bitrate=bitrate,
+                    stop_event=cancel_event,
                 )
                 if ok:
                     return True, None
@@ -678,6 +685,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 ffmpeg_exe=ffmpeg_exe,
                 stream_copy=False,
                 bitrate=bitrate,
+                stop_event=cancel_event,
             )
 
         def _start_prefetch(next_start_s: int, next_end_s: float, bitrate: str):
@@ -756,6 +764,9 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 if not skip_cut:
                     ok, err = _cut_chunk_to_path(int(inizio_sec), float(fine_sec), nome_chunk, bitrate=bitrate)
                     if not ok:
+                        if str(err or "").strip().lower() == "cancelled" or cancelled():
+                            print("   [*] Operazione annullata dall'utente.")
+                            return
                         if err:
                             raise RuntimeError(f"FFmpeg ha fallito l'estrazione audio:\n{err}")
                         raise RuntimeError("FFmpeg ha fallito l'estrazione audio.")

@@ -53,12 +53,12 @@ jobs:
       - name: Build Windows Executable
         if: runner.os == 'Windows'
         run: |
-          python -m PyInstaller --noconfirm --onefile --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --name "Sbobby" "Sbobby.pyw"
+          python -m PyInstaller --noconfirm --onefile --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --collect-all keyring --name "Sbobby" "Sbobby.pyw"
 
       - name: Build macOS App
         if: runner.os == 'macOS'
         run: |
-          python -m PyInstaller --noconfirm --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --name "Sbobby" "Sbobby.pyw"
+          python -m PyInstaller --noconfirm --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --collect-all keyring --name "Sbobby" "Sbobby.pyw"
           cd dist
           zip -r "Sbobby.zip" "Sbobby.app"
 

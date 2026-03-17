@@ -42,7 +42,8 @@ Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `Sbobby.app` (puoi
 
 ## 📖 Come lo uso una volta aperto?
 1. Aperta la schermata del programma, incolla in alto la **Chiave API** copiata prima. Il programma se la salverà, così non dovrai rimetterla mai più.
-   - La chiave viene salvata localmente nel profilo utente (es. `~/.sbobby_config.json`).
+   - **Windows:** la chiave viene salvata in locale **cifrata** (DPAPI) nel profilo utente (es. `%APPDATA%\\Sbobby\\config.json`).
+   - **macOS/Linux:** la chiave viene salvata nel **Portachiavi/Keyring di sistema** (il file di config non contiene segreti).
 2. Clicca "**Sfoglia / Carica**" e seleziona la registrazione audio della tua lezione.
 3. Clicca il pulsantone verde **AVVIA**.
 4. Niente panico se l'app sembra bloccarsi: nel terminale dentro al programma leggerai esattamente a che punto e'! Ad esempio, se l'audio dura un'ora, fara' **4 estrazioni** da 15 minuti l'una, e ci mettera' all'incirca 3-5 minuti in base al traffico dei server Google e alla tua connessione.

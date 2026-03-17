@@ -29,7 +29,7 @@ echo "Attendi pazientemente, non chiudere la finestra..."
 echo "======================================================="
 echo ""
 
-python -m PyInstaller --noconfirm --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --name "Sbobby" "Sbobby.pyw"
+python -m PyInstaller --noconfirm --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --collect-all keyring --name "Sbobby" "Sbobby.pyw"
 
 echo ""
 echo "======================================================="

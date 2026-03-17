@@ -47,6 +47,45 @@ __all__ = [
     "PROMPT_REVISIONE_CONFINE",
 ]
 
+_KEYRING_SERVICE = "Sbobby"
+_KEYRING_USER_API = "gemini_api_key"
+
+
+def _keyring_get_api_key() -> str:
+    try:
+        if platform.system() == "Windows":
+            return ""
+        import keyring  # type: ignore
+
+        v = keyring.get_password(_KEYRING_SERVICE, _KEYRING_USER_API)
+        return str(v or "").strip()
+    except Exception:
+        return ""
+
+
+def _keyring_set_api_key(api_key: str) -> bool:
+    try:
+        if platform.system() == "Windows":
+            return False
+        import keyring  # type: ignore
+
+        keyring.set_password(_KEYRING_SERVICE, _KEYRING_USER_API, str(api_key or ""))
+        return True
+    except Exception:
+        return False
+
+
+def _keyring_delete_api_key() -> bool:
+    try:
+        if platform.system() == "Windows":
+            return False
+        import keyring  # type: ignore
+
+        keyring.delete_password(_KEYRING_SERVICE, _KEYRING_USER_API)
+        return True
+    except Exception:
+        return False
+
 
 def debug_log(msg: str) -> None:
     # Log opzionale: non sporcare la UI in uso normale.
@@ -157,6 +196,148 @@ CONFIG_FILE = _get_config_file_path(USER_HOME)
 LEGACY_CONFIG_FILE = os.path.join(USER_HOME, ".sbobby_config.json")
 
 
+def _dpapi_protect_text_windows(text: str) -> str:
+    """
+    Best-effort encryption for secrets on Windows using DPAPI (CryptProtectData).
+    Returns base64 string on success, "" on failure.
+    """
+    if platform.system() != "Windows":
+        return ""
+    try:
+        import base64
+        import ctypes
+        from ctypes import wintypes
+
+        class DATA_BLOB(ctypes.Structure):
+            _fields_ = [
+                ("cbData", wintypes.DWORD),
+                ("pbData", ctypes.POINTER(ctypes.c_byte)),
+            ]
+
+        def _bytes_to_blob(data: bytes) -> DATA_BLOB:
+            buf = ctypes.create_string_buffer(data)
+            return DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
+
+        crypt32 = ctypes.windll.crypt32
+        kernel32 = ctypes.windll.kernel32
+
+        crypt32.CryptProtectData.argtypes = [
+            ctypes.POINTER(DATA_BLOB),
+            wintypes.LPCWSTR,
+            ctypes.POINTER(DATA_BLOB),
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+            ctypes.POINTER(DATA_BLOB),
+        ]
+        crypt32.CryptProtectData.restype = wintypes.BOOL
+
+        kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+        kernel32.LocalFree.restype = ctypes.c_void_p
+
+        plain = (text or "").encode("utf-8", errors="strict")
+        if not plain:
+            return ""
+        in_blob = _bytes_to_blob(plain)
+        out_blob = DATA_BLOB()
+        CRYPTPROTECT_UI_FORBIDDEN = 0x1
+        ok = crypt32.CryptProtectData(
+            ctypes.byref(in_blob),
+            None,
+            None,
+            None,
+            None,
+            CRYPTPROTECT_UI_FORBIDDEN,
+            ctypes.byref(out_blob),
+        )
+        if not ok:
+            return ""
+        try:
+            out_bytes = ctypes.string_at(out_blob.pbData, out_blob.cbData)
+        finally:
+            try:
+                kernel32.LocalFree(out_blob.pbData)
+            except Exception:
+                pass
+        return base64.b64encode(out_bytes).decode("ascii")
+    except Exception:
+        return ""
+
+
+def _dpapi_unprotect_text_windows(b64: str) -> str:
+    """
+    Best-effort decryption for secrets on Windows using DPAPI (CryptUnprotectData).
+    Returns plaintext string on success, "" on failure.
+    """
+    if platform.system() != "Windows":
+        return ""
+    try:
+        import base64
+        import ctypes
+        from ctypes import wintypes
+
+        class DATA_BLOB(ctypes.Structure):
+            _fields_ = [
+                ("cbData", wintypes.DWORD),
+                ("pbData", ctypes.POINTER(ctypes.c_byte)),
+            ]
+
+        def _bytes_to_blob(data: bytes) -> DATA_BLOB:
+            buf = ctypes.create_string_buffer(data)
+            return DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
+
+        crypt32 = ctypes.windll.crypt32
+        kernel32 = ctypes.windll.kernel32
+
+        crypt32.CryptUnprotectData.argtypes = [
+            ctypes.POINTER(DATA_BLOB),
+            ctypes.POINTER(wintypes.LPWSTR),
+            ctypes.POINTER(DATA_BLOB),
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+            ctypes.POINTER(DATA_BLOB),
+        ]
+        crypt32.CryptUnprotectData.restype = wintypes.BOOL
+
+        kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+        kernel32.LocalFree.restype = ctypes.c_void_p
+
+        raw = base64.b64decode((b64 or "").encode("ascii", errors="ignore"), validate=False)
+        if not raw:
+            return ""
+        in_blob = _bytes_to_blob(raw)
+        out_blob = DATA_BLOB()
+        desc = wintypes.LPWSTR()
+        CRYPTPROTECT_UI_FORBIDDEN = 0x1
+        ok = crypt32.CryptUnprotectData(
+            ctypes.byref(in_blob),
+            ctypes.byref(desc),
+            None,
+            None,
+            None,
+            CRYPTPROTECT_UI_FORBIDDEN,
+            ctypes.byref(out_blob),
+        )
+        if not ok:
+            return ""
+        try:
+            out_bytes = ctypes.string_at(out_blob.pbData, out_blob.cbData)
+        finally:
+            try:
+                kernel32.LocalFree(out_blob.pbData)
+            except Exception:
+                pass
+            try:
+                if desc:
+                    kernel32.LocalFree(desc)
+            except Exception:
+                pass
+        return out_bytes.decode("utf-8", errors="replace").strip()
+    except Exception:
+        return ""
+
+
 def get_desktop_dir() -> str:
     # Cross-platform Desktop path (Windows/macOS/Linux). Fallback: home directory.
     try:
@@ -198,6 +379,34 @@ def load_config() -> dict:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, dict):
+                # Prefer keyring secret on macOS/Linux (keeps disk config without secrets).
+                try:
+                    if platform.system() != "Windows":
+                        k = _keyring_get_api_key()
+                        if k:
+                            data["api_key"] = k
+                        else:
+                            # One-time migration: if plaintext exists on disk, move to keyring.
+                            plain = str(data.get("api_key") or "").strip()
+                            if plain:
+                                if _keyring_set_api_key(plain):
+                                    try:
+                                        save_config(plain)
+                                    except Exception:
+                                        pass
+                except Exception:
+                    pass
+                # Decrypt best-effort on Windows (do not expose protected value to callers).
+                try:
+                    if platform.system() == "Windows":
+                        if not (str(data.get("api_key") or "").strip()):
+                            protected = str(data.get("api_key_protected") or "").strip()
+                            if protected:
+                                dec = _dpapi_unprotect_text_windows(protected)
+                                if dec:
+                                    data["api_key"] = dec
+                except Exception:
+                    pass
                 # Best-effort migration forward.
                 if path == LEGACY_CONFIG_FILE and data.get("api_key"):
                     try:
@@ -211,7 +420,32 @@ def load_config() -> dict:
 
 
 def save_config(api_key: str) -> None:
-    data = {"api_key": api_key}
+    api_key_norm = str(api_key or "").strip()
+    data = {"api_key": api_key_norm}
+    # Store encrypted secret on Windows if possible (avoid plaintext on disk).
+    try:
+        if platform.system() == "Windows" and api_key_norm:
+            protected = _dpapi_protect_text_windows(api_key_norm)
+            if protected:
+                data = {"api_key": "", "api_key_protected": protected}
+    except Exception:
+        pass
+
+    # Store secret in OS keyring on macOS/Linux if available.
+    try:
+        if platform.system() != "Windows":
+            if api_key_norm:
+                ok = _keyring_set_api_key(api_key_norm)
+                if ok:
+                    data = {"api_key": "", "use_keyring": True}
+                else:
+                    debug_log("keyring: set_password failed; fallback to plaintext config")
+            else:
+                # If user clears the key, also clear from keyring (best-effort).
+                _keyring_delete_api_key()
+                data = {"api_key": "", "use_keyring": True}
+    except Exception:
+        pass
     try:
         os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
     except Exception:
@@ -234,16 +468,18 @@ def save_config(api_key: str) -> None:
         # Best-effort: non bloccare l'app se il config non e' scrivibile.
         return
 
-    # Back-compat: also write legacy file if possible (best-effort).
+    # Back-compat (opt-in): write legacy file only if explicitly requested.
+    # Avoid duplicating secrets (especially on Windows).
     try:
-        with open(LEGACY_CONFIG_FILE + ".tmp", "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-        os.replace(LEGACY_CONFIG_FILE + ".tmp", LEGACY_CONFIG_FILE)
-        if platform.system() != "Windows":
-            try:
-                os.chmod(LEGACY_CONFIG_FILE, 0o600)
-            except Exception:
-                pass
+        if str(os.environ.get("SBOBBY_WRITE_LEGACY_CONFIG", "")).strip() in ("1", "true", "TRUE", "yes", "YES"):
+            with open(LEGACY_CONFIG_FILE + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+            os.replace(LEGACY_CONFIG_FILE + ".tmp", LEGACY_CONFIG_FILE)
+            if platform.system() != "Windows":
+                try:
+                    os.chmod(LEGACY_CONFIG_FILE, 0o600)
+                except Exception:
+                    pass
     except Exception:
         pass
 
