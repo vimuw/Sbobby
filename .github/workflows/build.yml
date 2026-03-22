@@ -1,9 +1,12 @@
-name: Build and Release Sbobby
+name: Build and Release El Sbobinator
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*' # Trigger build only when a new version tag (e.g. v1.0.0) is pushed
+  pull_request:
   workflow_dispatch:
     inputs:
       release_tag:
@@ -15,19 +18,53 @@ permissions:
   contents: write
 
 jobs:
+  checks:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.lock
+            requirements-dev.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: webui/package-lock.json
+
+      - name: Install Dependencies
+        run: |
+          python scripts/build_release.py deps --ui webui --dev
+
+      - name: Run Checks
+        run: |
+          python scripts/build_release.py check --skip-npm-install
+          python scripts/build_release.py validate
+
   build:
+    needs: checks
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
-            artifact_name: Sbobby.exe
-            asset_name: Sbobby-Windows.exe
+            artifact_name: El Sbobinator.exe
+            asset_name: El-Sbobinator-Windows.exe
           - os: macos-latest
-            artifact_name: Sbobby.app
-            asset_name: Sbobby-MacOS.zip
+            artifact_name: El Sbobinator.app
+            asset_name: El-Sbobinator-MacOS.zip
 
     steps:
       - name: Checkout Code
@@ -36,31 +73,36 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11' 
+          python-version: '3.11'
           cache: 'pip'
-          cache-dependency-path: requirements.lock
+          cache-dependency-path: |
+            requirements.lock
+            requirements-dev.txt
 
-      - name: Install System Dependencies (Linux/Mac)
-        if: runner.os == 'macOS'
-        run: |
-          brew install tcl-tk
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: webui/package-lock.json
 
-      - name: Install Python Dependencies
+      - name: Install Dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.lock
+          python scripts/build_release.py deps --ui webui
 
       - name: Build Windows Executable
         if: runner.os == 'Windows'
         run: |
-          python -m PyInstaller --noconfirm --onefile --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --collect-all keyring --name "Sbobby" "Sbobby.pyw"
+          python scripts/build_release.py build --target windows --ui webui --skip-checks --skip-npm-install
+          python scripts/build_release.py smoke --target windows
 
       - name: Build macOS App
         if: runner.os == 'macOS'
         run: |
-          python -m PyInstaller --noconfirm --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --collect-all keyring --name "Sbobby" "Sbobby.pyw"
+          python scripts/build_release.py build --target macos --ui webui --skip-checks --skip-npm-install
+          python scripts/build_release.py smoke --target macos
           cd dist
-          zip -r "Sbobby.zip" "Sbobby.app"
+          zip -r "El-Sbobinator.zip" "El Sbobinator.app"
 
       - name: Upload Build Artifacts (Windows)
         if: runner.os == 'Windows'
@@ -74,7 +116,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: dist/Sbobby.zip
+          path: dist/El-Sbobinator.zip
 
   release:
     name: Create GitHub Release
@@ -91,8 +133,8 @@ jobs:
         run: |
           mkdir release_assets
           # Move artifacts out of their individual folders for clean release upload
-          mv output_files/Sbobby-Windows.exe/Sbobby.exe release_assets/Sbobby-Windows.exe || echo "Win build not found"
-          mv output_files/Sbobby-MacOS.zip/Sbobby.zip release_assets/Sbobby-MacOS.zip || echo "Mac build not found"
+          mv "output_files/El-Sbobinator-Windows.exe/El Sbobinator.exe" "release_assets/El-Sbobinator-Windows.exe" || echo "Win build not found"
+          mv "output_files/El-Sbobinator-MacOS.zip/El-Sbobinator.zip" "release_assets/El-Sbobinator-MacOS.zip" || echo "Mac build not found"
 
       - name: Publish Release to GitHub
         uses: softprops/action-gh-release@v2

@@ -1,7 +1,7 @@
 #!/bin/bash
 clear
 echo "======================================================="
-echo "       COSTRUTTORE APP MAC SBOBBY AI"
+echo "       COSTRUTTORE APP MAC EL SBOBINATOR"
 echo "======================================================="
 
 # Spostati nella cartella d'origine
@@ -13,29 +13,20 @@ if [ ! -f ".venv/bin/python" ]; then
 fi
 source ".venv/bin/activate"
 
-echo "Installazione dei requisiti e PyInstaller in corso..."
-python -m pip install --upgrade pip
-if [ -f requirements.lock ]; then
-  python -m pip install -r requirements.lock
-else
-  python -m pip install -r requirements.txt
-fi
-python -m pip install pyinstaller
-
 echo ""
 echo "======================================================="
-echo "Compilazione in corso... Questo processo richiede 1-2 minuti."
+echo "Compilazione WebUI in corso... Questo processo richiede 1-2 minuti."
 echo "Attendi pazientemente, non chiudere la finestra..."
 echo "======================================================="
 echo ""
 
-python -m PyInstaller --noconfirm --windowed --collect-all customtkinter --collect-all tkinterdnd2 --collect-all imageio_ffmpeg --collect-all keyring --name "Sbobby" "Sbobby.pyw"
+python scripts/build_release.py build --target macos --ui webui --install-deps --dev-deps
 
 echo ""
 echo "======================================================="
 echo "COMPILAZIONE COMPLETATA CON SUCCESSO!"
 echo "======================================================="
-echo "Troverai il tuo programma pronto all'uso 'Sbobby.app'"
+echo "Troverai il tuo programma pronto all'uso 'El Sbobinator.app'"
 echo "all'interno della cartella 'dist'."
 echo "Ora puoi zippare quell'app (tasto destro -> Comprimi)"
 echo "e condividerla o caricarla su GitHub Releases!"

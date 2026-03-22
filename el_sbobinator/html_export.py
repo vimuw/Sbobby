@@ -1,5 +1,5 @@
 """
-Markdown -> HTML export utilities for Sbobby.
+Markdown -> HTML export utilities for El Sbobinator.
 
 Used for local HTML output (copy/paste into Docs) with basic sanitization.
 """

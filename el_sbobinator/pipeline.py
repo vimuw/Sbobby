@@ -1,5 +1,5 @@
 """
-Core pipeline for Sbobby (no UI widgets touched directly).
+Core pipeline for El Sbobinator (no UI widgets touched directly).
 
 This module contains the heavy workflow:
 - FFmpeg duration/probe, optional pre-conversion, chunk cutting
@@ -9,38 +9,58 @@ This module contains the heavy workflow:
 
 from __future__ import annotations
 
-import difflib
-import json
 import os
 import platform
 import re
-import shutil
 import tempfile
 import threading
 import time
+import difflib
 
-import customtkinter as ctk
 from google import genai
 from google.genai import types
 
-from sbobby.dedup_utils import local_macro_cleanup
-from sbobby.ffmpeg_utils import cut_chunk_to_mp3, get_ffmpeg_exe, preconvert_to_mono16k_mp3, probe_duration_seconds
-from sbobby.html_export import build_html_document, normalize_inline_star_lists
-from sbobby.pipeline_settings import load_and_sanitize_settings
-from sbobby.shared import (
-    DEFAULT_MODEL,
-    FONT_UI,
+from el_sbobinator import generation_service
+from el_sbobinator.audio_service import (
+    cut_audio_chunk_to_mp3,
+    probe_media_duration,
+    resolve_ffmpeg,
+)
+from el_sbobinator.dedup_utils import local_macro_cleanup
+from el_sbobinator.export_service import export_final_html_document
+from el_sbobinator.generation_service import (
+    build_chunk_prompt,
+    extract_client_api_key,
+    extract_response_text,
+    load_fallback_keys,
+)
+from el_sbobinator.logging_utils import attach_file_handler, detach_file_handler, get_logger
+from el_sbobinator.pipeline_hooks import PipelineRuntime
+from el_sbobinator.pipeline_session import (
+    ensure_preconverted_audio,
+    initialize_session_context,
+    list_phase1_chunks,
+    normalize_stage,
+    persist_phase1_metadata,
+    phase1_has_progress,
+    read_text_file,
+    record_step_metric,
+    reset_for_regeneration,
+    restore_phase1_progress,
+)
+from el_sbobinator.revision_service import (
+    build_macro_blocks,
+    process_boundary_revision_phase,
+    process_macro_revision_phase,
+)
+from el_sbobinator.shared import (
     PROMPT_REVISIONE,
     PROMPT_REVISIONE_CONFINE,
     PROMPT_SISTEMA,
-    SESSION_SCHEMA_VERSION,
     USER_HOME,
     _atomic_write_json,
     _atomic_write_text,
     _load_json,
-    _now_iso,
-    _safe_mkdir,
-    _session_dir_for_file,
     debug_log,
     get_desktop_dir,
     safe_output_basename,
@@ -48,11 +68,14 @@ from sbobby.shared import (
 
 
 def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, session_dir_hint=None, resume_session=False):
-    app_instance.file_temporanei = []  # Condiviso con l'app per pulizia alla chiusura
-    cancel_event = getattr(app_instance, "cancel_event", None)
+    runtime = PipelineRuntime(app_instance)
+    runtime.reset_temp_files()
+    cancel_event = runtime.cancel_event
+    log_handler = None
+    logger = get_logger("el_sbobinator.pipeline")
 
     def cancelled():
-        return cancel_event is not None and cancel_event.is_set()
+        return runtime.cancelled()
 
     def _is_empty_model_response_error(err_txt: str) -> bool:
         try:
@@ -66,81 +89,64 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
         )
 
     def ui_alive():
-        try:
-            return bool(app_instance.winfo_exists())
-        except Exception:
-            return False
+        return runtime.ui_alive()
 
     def safe_after(delay_ms, callback, *args):
-        if not ui_alive():
-            return False
-        try:
-            app_instance.after(delay_ms, callback, *args)
-            return True
-        except Exception:
-            return False
+        return runtime.schedule(delay_ms, callback, *args)
 
     def safe_progress(value):
-        try:
-            if ui_alive():
-                app_instance.aggiorna_progresso(value)
-        except Exception:
-            pass
+        runtime.progress(value)
 
     def safe_phase(text):
-        try:
-            if ui_alive():
-                app_instance.aggiorna_fase(text)
-        except Exception:
-            pass
+        runtime.phase(text)
 
     def safe_output_html(path):
-        try:
-            if ui_alive():
-                app_instance.imposta_output_html(path)
-        except Exception:
-            pass
+        runtime.output_html(path)
 
     def safe_process_done():
-        try:
-            if ui_alive():
-                app_instance.processo_terminato()
-        except Exception:
-            pass
+        runtime.process_done()
 
     # ---- ETA step-based (thread-safe hooks) ----
     def safe_set_work_totals(chunks_total=None, macro_total=None, boundary_total=None):
-        try:
-            if ui_alive() and hasattr(app_instance, "set_work_totals"):
-                app_instance.set_work_totals(
-                    chunks_total=chunks_total,
-                    macro_total=macro_total,
-                    boundary_total=boundary_total,
-                )
-        except Exception:
-            pass
+        runtime.set_work_totals(
+            chunks_total=chunks_total,
+            macro_total=macro_total,
+            boundary_total=boundary_total,
+        )
 
     def safe_update_work_done(kind: str, done: int, total: int = None):
-        try:
-            if ui_alive() and hasattr(app_instance, "update_work_done"):
-                app_instance.update_work_done(kind, done, total=total)
-        except Exception:
-            pass
+        runtime.update_work_done(kind, done, total=total)
 
     def safe_register_step_time(kind: str, seconds: float, done: int = None, total: int = None):
-        try:
-            if ui_alive() and hasattr(app_instance, "register_step_time"):
-                app_instance.register_step_time(kind, seconds, done=done, total=total)
-        except Exception:
-            pass
+        runtime.register_step_time(kind, seconds, done=done, total=total)
+        record_step_metric(session, kind, seconds, done=done, total=total)
 
-    def sleep_with_cancel(seconds, step=0.2):
-        deadline = time.monotonic() + seconds
-        while time.monotonic() < deadline:
-            if cancelled():
-                return False
-            time.sleep(min(step, deadline - time.monotonic()))
-        return True
+    def safe_set_run_result(status: str, error: str | None = None):
+        runtime.set_run_result(status, error)
+
+    def safe_set_effective_api_key(api_key: str | None):
+        runtime.set_effective_api_key(api_key)
+
+    # ---- Fallback API keys rotation ----
+    fallback_keys = load_fallback_keys()
+
+    def _try_rotate_key(current_client, model_name_val):
+        """Prova a ruotare alla prossima chiave di riserva.
+        Ritorna (nuovo_client, True, key) se successo, (current_client, False, None) altrimenti.
+        """
+        nonlocal fallback_keys
+        while fallback_keys:
+            key = fallback_keys.pop(0).strip()
+            if not key:
+                continue
+            try:
+                new_client = genai.Client(api_key=key)
+                new_client.models.get(model=model_name_val)
+                print(f"   ✅ Chiave di riserva valida! ({len(fallback_keys)} rimanenti)")
+                return new_client, True, key
+            except Exception as err:
+                print(f"   [!] Chiave di riserva non valida: {err}")
+        return current_client, False, None
 
     def wait_for_file_ready(client_for_file, file_obj, max_wait_seconds=900, poll_seconds=3):
         start_time = time.monotonic()
@@ -151,7 +157,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             if "ACTIVE" not in state and "FAILED" not in state:
                 if time.monotonic() - start_time > max_wait_seconds:
                     raise TimeoutError("Timeout durante l'elaborazione del file audio sui server Google.")
-                if not sleep_with_cancel(poll_seconds):
+                if not generation_service.sleep_with_cancel(cancelled, poll_seconds):
                     return None
                 file_obj = client_for_file.files.get(name=file_obj.name)
                 continue
@@ -186,454 +192,143 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             return types.Part.from_bytes(data=data, mime_type="audio/mpeg")
         except Exception:
             return None
+    session = None
+    session_ctx = None
+    client = None
     try:
         if not api_key_value or api_key_value.strip() == "":
+            safe_set_run_result("failed", "api_key_mancante")
             print("Errore: Formato API Key non valido o assente.")
+            logger.error("API key mancante o non valida.", extra={"stage": "startup"})
             return
 
         client = genai.Client(api_key=api_key_value.strip())
+        safe_set_run_result("failed")
+        safe_set_effective_api_key(api_key_value.strip())
         
         def richiedi_chiave_riserva():
-            evento = threading.Event()
-            esito = {"nuova_chiave": None}
-
-            def mostra_popup():
-                # CTkInputDialog tende a essere "topmost" e non sempre minimizzabile.
-                # Usiamo un CTkToplevel standard: non topmost (non resta sopra al browser) e minimizzabile.
-                win = None
-                try:
-                    if not ui_alive():
-                        return
-
-                    win = ctk.CTkToplevel(app_instance)
-                    try:
-                        win.configure(fg_color=getattr(app_instance, "CARD_BG", "#1C2432"))
-                    except Exception:
-                        pass
-                    try:
-                        win.title("🔌 Esaurimento Quota")
-                    except Exception:
-                        pass
-
-                    try:
-                        # Larghezza fissa, altezza dinamica: la calcoliamo dopo aver creato i widget
-                        # cosi' non rimane spazio vuoto e cresce se aggiungi testo.
-                        win.geometry("440x200")
-                    except Exception:
-                        pass
-                    try:
-                        win.resizable(False, False)
-                    except Exception:
-                        pass
-
-                    # Mantieni la finestra "legata" all'app (modal solo per l'app), ma NON topmost globale.
-                    try:
-                        win.transient(app_instance)
-                    except Exception:
-                        pass
-                    try:
-                        win.attributes("-topmost", False)
-                    except Exception:
-                        pass
-
-                    msg = (
-                        "La quota del tuo account Google per le API Gemini sembra esaurita (o temporaneamente limitata).\n\n"
-                        "Se hai un'altra API Key con quota disponibile, incollala qui per continuare da dove eri rimasto, "
-                        "senza perdere i progressi.\n\n"
-                        "In alternativa, premi Annulla: i progressi restano salvati e potrai riprendere piu' tardi."
-                    )
-                    ctk.CTkLabel(
-                        win,
-                        text=msg,
-                        font=(FONT_UI, 12),
-                        text_color=getattr(app_instance, "TEXT_BRIGHT", "#E7ECF4"),
-                        justify="left",
-                        wraplength=400,
-                    ).pack(padx=18, pady=(18, 10), anchor="w")
-
-                    entry = ctk.CTkEntry(
-                        win,
-                        placeholder_text="Incolla qui la nuova API Key...",
-                        show="*",
-                        font=(FONT_UI, 13),
-                        height=34,
-                    )
-                    try:
-                        entry.configure(
-                            fg_color=getattr(app_instance, "TERMINAL_BG", "#111824"),
-                            border_color=getattr(app_instance, "BORDER", "#2B3444"),
-                            text_color=getattr(app_instance, "TEXT_BRIGHT", "#E7ECF4"),
-                            placeholder_text_color=getattr(app_instance, "TEXT_DIM", "#A6B0C0"),
-                        )
-                    except Exception:
-                        pass
-                    entry.pack(fill="x", padx=18, pady=(0, 12))
-
-                    btns = ctk.CTkFrame(win, fg_color="transparent")
-                    btns.pack(fill="x", padx=18, pady=(0, 14))
-
-                    def _close_and_set(value):
-                        try:
-                            esito["nuova_chiave"] = value
-                        except Exception:
-                            pass
-                        try:
-                            if win is not None and win.winfo_exists():
-                                try:
-                                    win.grab_release()
-                                except Exception:
-                                    pass
-                                win.destroy()
-                        finally:
-                            evento.set()
-
-                    def on_ok():
-                        v = None
-                        try:
-                            v = (entry.get() or "").strip() or None
-                        except Exception:
-                            v = None
-                        _close_and_set(v)
-
-                    def on_cancel():
-                        _close_and_set(None)
-
-                    b_cancel = ctk.CTkButton(
-                        btns,
-                        text="Annulla",
-                        width=110,
-                        height=30,
-                        corner_radius=10,
-                        fg_color=getattr(app_instance, "BTN_SECONDARY_BG", "#253043"),
-                        hover_color=getattr(app_instance, "BTN_SECONDARY_HOVER", "#2D3A52"),
-                        border_width=1,
-                        border_color=getattr(app_instance, "BORDER", "#2B3444"),
-                        text_color=getattr(app_instance, "TEXT_BRIGHT", "#E7ECF4"),
-                        command=on_cancel,
-                    )
-                    b_cancel.pack(side="left")
-                    b_ok = ctk.CTkButton(
-                        btns,
-                        text="Continua",
-                        width=110,
-                        height=30,
-                        corner_radius=10,
-                        fg_color=getattr(app_instance, "SUCCESS", "#16A34A"),
-                        hover_color=getattr(app_instance, "SUCCESS_HOVER", "#15803D"),
-                        text_color="white",
-                        command=on_ok,
-                    )
-                    b_ok.pack(side="right")
-
-                    try:
-                        win.protocol("WM_DELETE_WINDOW", on_cancel)
-                    except Exception:
-                        pass
-
-                    # Auto-size: usa l'altezza "richiesta" dai widget, evitando spazio vuoto.
-                    # Facciamo 2 passate (subito e dopo un attimo) perche' su alcuni sistemi
-                    # la reqheight si stabilizza solo dopo che Tk ha disegnato tutto.
-                    def _apply_autosize():
-                        try:
-                            target_w = 440
-                            win.update_idletasks()
-                            req_h = int(win.winfo_reqheight())
-                            # clamp per evitare finestre troppo grandi su schermi piccoli
-                            max_h = int(max(260, win.winfo_screenheight() * 0.80))
-                            # piccolo margine per safety (evita tagli ai bottoni), ma non aggiunge "vuoto" evidente.
-                            target_h = min(req_h + 6, max_h)
-                            # Se per qualche motivo la reqheight e' zero/strana, non stringere troppo.
-                            if target_h < 240:
-                                target_h = 240
-                            win.geometry(f"{target_w}x{target_h}")
-                        except Exception:
-                            pass
-
-                    _apply_autosize()
-                    try:
-                        win.after(120, _apply_autosize)
-                    except Exception:
-                        pass
-
-                    # Modal solo per l'app: blocca click sulla UI finche' non rispondi, ma non forza topmost sul sistema.
-                    try:
-                        win.grab_set()
-                    except Exception:
-                        pass
-
-                    try:
-                        entry.focus_set()
-                    except Exception:
-                        pass
-
-                    # Centra grossolanamente rispetto alla finestra principale.
-                    try:
-                        win.update_idletasks()
-                        px = int(app_instance.winfo_rootx())
-                        py = int(app_instance.winfo_rooty())
-                        pw = int(app_instance.winfo_width())
-                        ph = int(app_instance.winfo_height())
-                        w = int(win.winfo_width())
-                        h = int(win.winfo_height())
-                        x = max(0, px + (pw // 2) - (w // 2))
-                        y = max(0, py + (ph // 2) - (h // 2))
-                        # Sposta soltanto: non riscrivere w/h, altrimenti rischiamo di perdere l'auto-size.
-                        win.geometry(f"+{x}+{y}")
-                    except Exception:
-                        pass
-                except Exception:
-                    # In caso di problemi, non bloccare il worker thread.
-                    evento.set()
-
-            if not safe_after(0, mostra_popup):
-                evento.set()
-
-            print("   [In attesa di una nuova chiave API dall'utente nel popup...]")
-            while not evento.is_set():
-                if cancelled():
-                    return None
-                evento.wait(0.2)
-            return esito["nuova_chiave"]
+            return generation_service.request_new_api_key(runtime, cancelled)
 
         # ------------------------------
         # SESSIONE (AUTOSAVE / RIPRESA)
         # ------------------------------
-        try:
-            _safe_mkdir(SESSION_ROOT)
-        except Exception:
-            pass
-
-        try:
-            session_dir = os.path.abspath(session_dir_hint) if session_dir_hint else _session_dir_for_file(nome_file_video)
-        except Exception:
-            session_dir = os.path.join(tempfile.gettempdir(), "sbobby_session_fallback")
-
-        session_path = os.path.join(session_dir, "session.json")
-        phase1_chunks_dir = os.path.join(session_dir, "phase1_chunks")
-        phase2_revised_dir = os.path.join(session_dir, "phase2_revised")
-        boundary_dir = os.path.join(session_dir, "phase2_boundary")
-        macro_path = os.path.join(session_dir, "phase2_macro_blocks.json")
-
-        try:
-            _safe_mkdir(session_dir)
-            _safe_mkdir(phase1_chunks_dir)
-            _safe_mkdir(phase2_revised_dir)
-            _safe_mkdir(boundary_dir)
-        except Exception:
-            pass
-
-        session = None
-        if resume_session and os.path.exists(session_path):
-            try:
-                session = _load_json(session_path)
-            except Exception:
-                session = None
-
-        if session is None:
-            try:
-                fp = _file_fingerprint(nome_file_video)
-            except Exception:
-                fp = {"path": os.path.abspath(nome_file_video), "size": None, "mtime": None}
-
-            session = {
-                "schema_version": SESSION_SCHEMA_VERSION,
-                "created_at": _now_iso(),
-                "updated_at": _now_iso(),
-                "stage": "phase1",
-                "input": fp,
-                "settings": {
-                    "model": DEFAULT_MODEL,
-                    "chunk_minutes": 15,
-                    "overlap_seconds": 30,
-                    # Macro-blocchi piu' grandi = meno chiamate di revisione (senza riassumere).
-                    "macro_char_limit": 22000,
-                    # Pre-conversione unica dell'audio per velocizzare taglio/upload dei chunk.
-                    "preconvert_audio": True,
-                    # Unico setting effettivamente usato oggi: bitrate MP3 dei chunk/preconvert.
-                    "audio": {"bitrate": "48k"},
-                },
-                "phase1": {"next_start_sec": 0, "chunks_done": 0, "memoria_precedente": ""},
-                "phase2": {"macro_total": 0, "revised_done": 0},
-                "boundary": {"pairs_total": 0, "next_pair": 1},
-                "outputs": {},
-                "last_error": None,
-            }
-            try:
-                _atomic_write_json(session_path, session)
-            except Exception:
-                pass
-        else:
-            session.setdefault("schema_version", SESSION_SCHEMA_VERSION)
-            session.setdefault("stage", "phase1")
-            session.setdefault("phase1", {})
-            session.setdefault("phase2", {})
-            session.setdefault("boundary", {})
-            session.setdefault("outputs", {})
+        session_ctx = initialize_session_context(
+            nome_file_video,
+            session_dir_hint=session_dir_hint,
+            resume_session=resume_session,
+        )
+        session = session_ctx.session
+        logger = get_logger(
+            "el_sbobinator.pipeline",
+            run_id=os.path.basename(session_ctx.session_dir),
+            session_dir=session_ctx.session_dir,
+            input_file=os.path.basename(nome_file_video),
+        )
+        log_handler = attach_file_handler(os.path.join(session_ctx.session_dir, "run.log"))
+        phase1_chunks_dir = session_ctx.phase1_chunks_dir
+        phase2_revised_dir = session_ctx.phase2_revised_dir
+        boundary_dir = session_ctx.boundary_dir
+        macro_path = session_ctx.macro_path
 
         def save_session():
-            try:
-                session["updated_at"] = _now_iso()
-                _atomic_write_json(session_path, session)
-                return True
-            except Exception as e:
-                print(f"   [!] Autosave sessione fallito: {e}")
-                return False
+            return session_ctx.save()
 
-        print(f"[*] Autosalvataggio attivo. Sessione: {session_dir}")
+        print(f"[*] Autosalvataggio attivo. Sessione: {session_ctx.session_dir}")
+        logger.info("Sessione inizializzata.", extra={"stage": "startup"})
 
         # Settings (con fallback per sessioni vecchie) + validazione (resiliente a valori strani).
-        settings, settings_changed = load_and_sanitize_settings(session)
-        if settings_changed:
-            save_session()
+        settings = session_ctx.settings
 
         model_name = settings.model
-        blocco_minuti = settings.chunk_minutes
         blocco_secondi = settings.chunk_seconds
-        sovrapposizione_secondi = settings.overlap_seconds
         passo_secondi = settings.step_seconds
         memoria_precedente = ""
         testo_completo_sbobina = ""
 
         istruzioni_sistema = PROMPT_SISTEMA
-
-        CHUNK_MD_RE = re.compile(r"^chunk_(\d{3})_(\d+)_(\d+)\.md$", re.IGNORECASE)
-
-        def _list_phase1_chunks():
-            items = []
-            try:
-                for name in os.listdir(phase1_chunks_dir):
-                    m = CHUNK_MD_RE.match(name)
-                    if not m:
-                        continue
-                    idx = int(m.group(1))
-                    start_sec = int(m.group(2))
-                    end_sec = int(m.group(3))
-                    items.append((idx, start_sec, end_sec, os.path.join(phase1_chunks_dir, name)))
-            except Exception:
-                return []
-            return sorted(items, key=lambda t: (t[0], t[1], t[2]))
-
-        def _read_text(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return f.read()
-
-        def _load_phase1_text():
-            chunks = _list_phase1_chunks()
-            parts = []
-            for _, _, _, p in chunks:
-                try:
-                    txt = _read_text(p).strip()
-                    if txt:
-                        parts.append(txt)
-                except Exception:
-                    continue
-            return "\n\n".join(parts).strip()
  
         print(f"[*] Analisi del file originale in corso:\n{os.path.basename(nome_file_video)}")
         safe_phase("Fase: analisi file")
         try:
             # Probe robusto della durata (gestisce path non-ASCII e "Duration: N/A").
-            ffmpeg_exe = get_ffmpeg_exe()
-            durata_totale_secondi, reason = probe_duration_seconds(nome_file_video, ffmpeg_exe=ffmpeg_exe)
+            ffmpeg_exe = resolve_ffmpeg()
+            durata_totale_secondi, reason = probe_media_duration(nome_file_video, ffmpeg_exe=ffmpeg_exe)
             if durata_totale_secondi is None:
                 raise ValueError(str(reason or "Impossibile leggere la durata dal file usando FFmpeg."))
         except Exception as e:
             print(f"Errore caricamento audio. File corrotto o formato non supportato.\n{e}")
+            logger.exception("Analisi file fallita.", extra={"stage": "probe"})
             return
 
         print(f"[*] Durata totale rilevata: {int(durata_totale_secondi / 60)} minuti.")
 
         # Persisti metadati fase1 nella sessione
-        session.setdefault("phase1", {})
-        session["phase1"]["duration_seconds"] = float(durata_totale_secondi)
-        session["phase1"]["step_seconds"] = int(passo_secondi)
-        save_session()
+        persist_phase1_metadata(session_ctx, durata_totale_secondi, passo_secondi)
 
-        stage = str(session.get("stage", "phase1")).strip().lower()
-        if stage not in ("phase1", "phase2", "boundary", "done"):
-            stage = "phase1"
-            session["stage"] = "phase1"
+        previous_stage = str(session.get("stage", "phase1")).strip().lower()
+        stage = normalize_stage(session)
+        if stage != previous_stage:
             save_session()
+
+        existing_chunks = list_phase1_chunks(phase1_chunks_dir)
+        has_progress = phase1_has_progress(session, stage, existing_chunks)
+
+        if has_progress and resume_session:
+            def chiedi_se_rigenerare():
+                if callable(getattr(app_instance, "ask_regenerate", None)):
+                    evento = threading.Event()
+                    esito = {"rigenera": False}
+                    def on_answer(payload):
+                        esito["rigenera"] = payload.get("regenerate", False)
+                        evento.set()
+                    
+                    regenerate_mode = "completed" if stage == "done" else "resume"
+                    if runtime.ask_regenerate(os.path.basename(nome_file_video), on_answer, regenerate_mode):
+                        evento.wait()
+                        return esito["rigenera"]
+
+                ans = runtime.ask_confirmation(
+                    "File gia' completato",
+                    f"Il file '{os.path.basename(nome_file_video)}' e' gia' completato.\n"
+                    "Vuoi usare il salvataggio vecchio o ricominciare da zero perdendo tutti i progressi pregressi?\n\n"
+                    "- Scegli 'OK'/'Si' per RIGENERARE da capo.\n"
+                    "- Scegli 'Annulla'/'No' per usare la versione gia' pronta.",
+                )
+                if ans is not None:
+                    return bool(ans)
+
+                return False
+
+            _is_regen = chiedi_se_rigenerare()
+            print(f"[*] Risposta Rigenerare dal JS: {_is_regen}")
+            if _is_regen:
+                print(f"[*] L'utente ha scelto di rigenerare il file {os.path.basename(nome_file_video)}. Pulizia sessione precedente...")
+                reset_for_regeneration(session_ctx)
+                session = session_ctx.session
+                stage = "phase1"
+                logger.info("Sessione rigenerata su richiesta utente.", extra={"stage": "resume"})
 
         # ------------------------------------------
         # PRE-CONVERSIONE UNICA (piu' veloce)
         # ------------------------------------------
-        preconv_enabled = bool(settings.preconvert_audio)
-        preconv_path = os.path.join(session_dir, "sbobby_preconverted_mono16k.mp3")
-
-        def _ensure_preconverted():
-            nonlocal preconv_enabled
-            if not preconv_enabled:
-                return None
-            # Se siamo gia' oltre la fase 1, non serve.
-            if stage != "phase1":
-                return None
-            try:
-                if os.path.exists(preconv_path) and os.path.getsize(preconv_path) > 1024:
-                    print("[*] Pre-conversione: file gia' presente. Riutilizzo.")
-                    return preconv_path
-            except Exception:
-                pass
-
-            safe_phase("Fase 0/3: pre-conversione audio")
-            print("[*] Pre-conversione unica dell'audio (mono, 16kHz) in corso...")
-            bitrate = str(settings.audio_bitrate or "48k")
-
-            ok, err = preconvert_to_mono16k_mp3(
-                input_path=nome_file_video,
-                output_path=preconv_path,
-                bitrate=bitrate,
-                ffmpeg_exe=ffmpeg_exe,
-                stop_event=cancel_event,
-            )
-            if not ok:
-                if str(err or "").strip().lower() == "cancelled" or cancelled():
-                    print("   [*] Operazione annullata dall'utente.")
-                    return None
-                print("[!] Pre-conversione fallita. Continuo senza pre-conversione.")
-                if err:
-                    print(err)
-                preconv_enabled = False
-                return None
-            try:
-                if os.path.exists(preconv_path) and os.path.getsize(preconv_path) > 1024:
-                    print("[*] Pre-conversione completata.")
-                    session.setdefault("phase1", {})
-                    session["phase1"]["preconverted_path"] = preconv_path
-                    session["phase1"]["preconverted_done"] = True
-                    save_session()
-                    return preconv_path
-            except Exception:
-                pass
-            preconv_enabled = False
-            return None
-
-        preconv_used_path = _ensure_preconverted()
+        _, preconv_used_path = ensure_preconverted_audio(
+            session_ctx,
+            input_path=nome_file_video,
+            stage=stage,
+            ffmpeg_exe=ffmpeg_exe,
+            cancel_event=cancel_event,
+            cancelled=cancelled,
+            phase_callback=safe_phase,
+        )
         if cancelled():
             return
 
         # Ripristino (se presente) dai chunk gia' salvati
-        existing_chunks = _list_phase1_chunks()
-        start_sec = int(session.get("phase1", {}).get("next_start_sec", 0) or 0)
-        if existing_chunks:
-            try:
-                last_start = max(s for _, s, _, _ in existing_chunks)
-                start_sec = max(start_sec, int(last_start + passo_secondi))
-            except Exception:
-                pass
-            testo_completo_sbobina = _load_phase1_text()
-            try:
-                _, _, _, last_path = existing_chunks[-1]
-                memoria_precedente = _read_text(last_path).strip()[-1000:]
-            except Exception:
-                memoria_precedente = (testo_completo_sbobina or "")[-1000:]
-        else:
-            # Se stiamo riprendendo direttamente dalla fase2 (o oltre), carica comunque il testo
-            if stage != "phase1":
-                testo_completo_sbobina = _load_phase1_text()
-                memoria_precedente = (testo_completo_sbobina or "")[-1000:]
-            else:
-                memoria_precedente = str(session.get("phase1", {}).get("memoria_precedente", "") or "")
+        restored_phase1 = restore_phase1_progress(session_ctx, stage=stage, step_seconds=passo_secondi)
+        existing_chunks = restored_phase1.existing_chunks
+        start_sec = restored_phase1.start_sec
+        testo_completo_sbobina = restored_phase1.testo_completo_sbobina
+        memoria_precedente = restored_phase1.memoria_precedente
 
         if stage == "phase1":
             print("[*] INIZIO FASE 1: Trascrizione a blocchi (circa 15 min per blocco)")
@@ -674,7 +369,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 return False, "durata_chunk_non_valida"
             # Preferisci taglio dal file preconvertito (piu' veloce) usando stream copy.
             if preconv_used_path and os.path.exists(preconv_used_path):
-                ok, err = cut_chunk_to_mp3(
+                ok, err = cut_audio_chunk_to_mp3(
                     input_path=preconv_used_path,
                     output_path=out_path,
                     start_sec=start_s,
@@ -688,7 +383,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                     return True, None
                 debug_log(f"cut(stream_copy) failed; fallback reencode: {err}")
 
-            return cut_chunk_to_mp3(
+            return cut_audio_chunk_to_mp3(
                 input_path=nome_file_video,
                 output_path=out_path,
                 start_sec=start_s,
@@ -708,10 +403,10 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             if next_cut is not None:
                 return
             try:
-                path_next = os.path.join(tempfile.gettempdir(), f"sbobby_temp_{int(next_start_s)}_{int(next_end_s)}.mp3")
+                path_next = os.path.join(tempfile.gettempdir(), f"el_sbobinator_temp_{int(next_start_s)}_{int(next_end_s)}.mp3")
             except Exception:
                 return
-            app_instance.file_temporanei.append(path_next)
+            runtime.track_temp_file(path_next)
             result = {"ok": False, "err": None}
 
             def worker():
@@ -739,8 +434,8 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             chunk_step_t0 = time.monotonic()
 
             # Salva i pezzi temporanei nella cartella TEMP del sistema operativo
-            nome_chunk = os.path.join(tempfile.gettempdir(), f"sbobby_temp_{inizio_sec}_{int(fine_sec)}.mp3")
-            app_instance.file_temporanei.append(nome_chunk)
+            nome_chunk = os.path.join(tempfile.gettempdir(), f"el_sbobinator_temp_{inizio_sec}_{int(fine_sec)}.mp3")
+            runtime.track_temp_file(nome_chunk)
 
             audio_file = None
             file_client = None
@@ -783,7 +478,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                         raise RuntimeError("FFmpeg ha fallito l'estrazione audio.")
 
                 # 2. Preparazione input audio (preferisci inline bytes, fallback a upload se serve)
-                audio_inline = _make_inline_audio_part(nome_chunk, max_bytes=inline_max_bytes)
+                audio_inline = generation_service.make_inline_audio_part(nome_chunk, max_bytes=inline_max_bytes)
                 audio_mode = "inline" if audio_inline is not None else "upload"
                 tried_upload_fallback = False
                 if audio_mode == "inline":
@@ -794,6 +489,8 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 prompt_dinamico = "Ascolta questo blocco di lezione e crea la sbobina seguendo rigorosamente le istruzioni di sistema."
                 if memoria_precedente:
                     prompt_dinamico += f"\n\nATTENZIONE: Stai continuando una stesura. Questo è l'ultimo paragrafo che hai generato nel blocco precedente:\n\"...{memoria_precedente}\"\n\nRiprendi il discorso da qui IN MODO FLUIDO. Usa la stessa grandezza per i titoli. Se all'inizio di questo blocco c'e' sovrapposizione, NON ripetere testualmente le frasi gia' dette, ma se compare anche solo un dettaglio nuovo includilo."
+
+                prompt_dinamico = build_chunk_prompt(memoria_precedente)
 
                 def _ensure_uploaded_audio_input():
                     nonlocal audio_file, file_client
@@ -810,9 +507,9 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                         return audio_file
 
                     print("   -> (2/3) Caricamento sicuro nei server di google...")
-                    audio_file = upload_audio_path(client, nome_chunk)
+                    audio_file = generation_service.upload_audio_path(client, nome_chunk)
                     file_client = client  # il file e' legato alla chiave che l'ha caricato
-                    audio_file = wait_for_file_ready(client, audio_file)
+                    audio_file = generation_service.wait_for_file_ready(client, audio_file, cancelled)
                     if audio_file is None:
                         print("   [*] Operazione annullata dall'utente.")
                         return None
@@ -853,29 +550,8 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                                 temperature=0.35
                             )
                         )
+                        testo_generato = extract_response_text(risposta)
                         # Alcune risposte possono avere `text=None` (es. output bloccato/struttura diversa).
-                        testo_raw = getattr(risposta, "text", None)
-                        if testo_raw is None:
-                            testo_generato = ""
-                        elif isinstance(testo_raw, str):
-                            testo_generato = testo_raw.strip()
-                        else:
-                            testo_generato = str(testo_raw).strip()
-
-                        if not testo_generato:
-                            # Fallback: prova ad estrarre testo dai candidates/parts se presenti.
-                            try:
-                                cand = getattr(risposta, "candidates", None) or []
-                                for c in cand:
-                                    cont = getattr(c, "content", None)
-                                    parts = getattr(cont, "parts", None) or []
-                                    merged = "\n".join([str(getattr(p, "text", "") or "") for p in parts]).strip()
-                                    if merged:
-                                        testo_generato = merged
-                                        break
-                            except Exception:
-                                pass
-
                         if not testo_generato:
                             raise RuntimeError("Risposta vuota dal modello (text=None)")
                         testo_completo_sbobina += f"\n\n{testo_generato}\n\n"
@@ -938,15 +614,39 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                             # Rate limit temporaneo (al minuto)
                             if not is_daily_limit and tent < 3:
                                 print("      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]")
-                                if not sleep_with_cancel(65):
+                                if not generation_service.sleep_with_cancel(cancelled, 65):
                                     print("   [*] Operazione annullata dall'utente.")
                                     return
                                 tent += 1
                                 continue
 
-                            # Daily limit: prova cambio chiave
+                            # Daily limit: prova cambio chiave automatico
                             print("\n" + "="*50)
                             print("⛔ LIMITE GIORNALIERO RAGGIUNTO!")
+                            new_c, rotated, rotated_key = generation_service.try_rotate_key(
+                                client,
+                                fallback_keys,
+                                model_name,
+                                logger=logger,
+                            )
+                            if rotated:
+                                client = new_c
+                                safe_set_effective_api_key(rotated_key)
+                                if audio_mode == "upload":
+                                    if audio_file is not None and file_client is not None:
+                                        try:
+                                            file_client.files.delete(name=audio_file.name)
+                                        except Exception:
+                                            pass
+                                    audio_file = None
+                                    file_client = None
+                                    print("   Ricarico questo blocco con la nuova chiave...")
+                                else:
+                                    print("   Ripresa automatica (inline audio).")
+                                tent = 0
+                                continue
+
+                            # Nessuna chiave automatica: popup manuale.
                             nuova_api = richiedi_chiave_riserva()
                             if nuova_api and nuova_api.strip():
                                 try:
@@ -956,8 +656,8 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                                     print(f"   [!] Chiave non valida fornita: {err}")
                                 else:
                                     client = test_c
+                                    safe_set_effective_api_key(nuova_api.strip())
                                     if audio_mode == "upload":
-                                        # Best-effort: elimina il file caricato con la chiave vecchia, poi ricarica con la nuova.
                                         if audio_file is not None and file_client is not None:
                                             try:
                                                 file_client.files.delete(name=audio_file.name)
@@ -966,15 +666,9 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                                         audio_file = None
                                         file_client = None
                                         print("   ✅ Nuova API Key valida! Ricarico questo blocco con la nuova chiave...")
-                                        try:
-                                            # il nuovo upload verra' eseguito al prossimo tentativo (_ensure_uploaded_audio_input)
-                                            pass
-                                        except Exception:
-                                            pass
                                     else:
                                         print("   ✅ Nuova API Key valida! Ripresa automatica (inline audio).")
-
-                                    tent = 0  # reset tentativi
+                                    tent = 0
                                     continue
 
                             print("="*50)
@@ -996,7 +690,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                         else:
                             print(f"      [Server occupati o errore: {err_txt}]")
                             print("      [Riprovo in 30 secondi...]")
-                        if not sleep_with_cancel(30):
+                        if not generation_service.sleep_with_cancel(cancelled, 30):
                             print("   [*] Operazione annullata dall'utente.")
                             return
                         tent += 1
@@ -1029,7 +723,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 return
 
             # Piccola pausa tra chiamate per evitare rate limit
-            if not sleep_with_cancel(5):
+            if not generation_service.sleep_with_cancel(cancelled, 5):
                 print("   [*] Operazione annullata dall'utente.")
                 return
 
@@ -1059,19 +753,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 macro_blocchi = None
 
         if not macro_blocchi:
-            paragrafi = testo_completo_sbobina.split("\n\n")
-            macro_blocchi = []
-            blocco_corrente = ""
-
-            for p in paragrafi:
-                if len(blocco_corrente) + len(p) > limite_caratteri:
-                    if blocco_corrente.strip():
-                        macro_blocchi.append(blocco_corrente)
-                    blocco_corrente = p + "\n\n"
-                else:
-                    blocco_corrente += p + "\n\n"
-            if blocco_corrente.strip():
-                macro_blocchi.append(blocco_corrente)
+            macro_blocchi = build_macro_blocks(testo_completo_sbobina, limite_caratteri)
 
             try:
                 _atomic_write_json(macro_path, {"limit_chars": limite_caratteri, "blocks": macro_blocchi})
@@ -1084,6 +766,31 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
         save_session()
 
         testo_finale_revisionato = ""
+        skip_inline_phase2 = False
+        if macro_blocchi:
+            client, testo_finale_revisionato = process_macro_revision_phase(
+                client=client,
+                model_name=model_name,
+                macro_blocks=macro_blocchi,
+                phase2_revised_dir=phase2_revised_dir,
+                session=session,
+                save_session=save_session,
+                safe_phase=safe_phase,
+                safe_progress=safe_progress,
+                safe_set_work_totals=safe_set_work_totals,
+                safe_update_work_done=safe_update_work_done,
+                safe_register_step_time=safe_register_step_time,
+                safe_set_effective_api_key=safe_set_effective_api_key,
+                cancelled=cancelled,
+                fallback_keys=fallback_keys,
+                richiedi_chiave_riserva=richiedi_chiave_riserva,
+                is_empty_model_response_error=_is_empty_model_response_error,
+                prompt_revisione=PROMPT_REVISIONE,
+                logger=logger,
+            )
+            if cancelled() or session.get("last_error") == "quota_daily_limit_phase2":
+                return
+            skip_inline_phase2 = True
 
         prompt_revisione = PROMPT_REVISIONE
         macro_total = len(macro_blocchi)
@@ -1100,7 +807,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
         except Exception:
             pass
 
-        for i, blocco in enumerate(macro_blocchi, 1):
+        for i, blocco in enumerate([] if skip_inline_phase2 else macro_blocchi, 1):
             if cancelled():
                 print("   [*] Operazione annullata dall'utente.")
                 return
@@ -1110,7 +817,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             rev_path = os.path.join(phase2_revised_dir, f"rev_{i:03}.md")
             if os.path.exists(rev_path):
                 try:
-                    testo_rev_esistente = _read_text(rev_path).strip()
+                    testo_rev_esistente = read_text_file(rev_path).strip()
                     if testo_rev_esistente:
                         testo_finale_revisionato += f"\n\n{testo_rev_esistente}\n\n"
                         revised_done += 1
@@ -1179,13 +886,27 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                         is_daily_limit = 'per day' in errore or 'quota_exceeded' in errore or 'daily' in errore or ('429' in errore and 'minute' not in errore and 'rpm' not in errore)
                         if not is_daily_limit and tent < 3:
                             print(f"      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]")
-                            if not sleep_with_cancel(65):
+                            if not generation_service.sleep_with_cancel(cancelled, 65):
                                 print("   [*] Operazione annullata dall'utente.")
                                 return
                             tent += 1
                             continue
                         else:
                             print("\n⛔ LIMITE GIORNALIERO RAGGIUNTO durante la revisione!")
+                            new_c, rotated, rotated_key = generation_service.try_rotate_key(
+                                client,
+                                fallback_keys,
+                                model_name,
+                                logger=logger,
+                            )
+                            if rotated:
+                                client = new_c
+                                safe_set_effective_api_key(rotated_key)
+                                print("   Ripresa automatica della revisione...")
+                                tent = 0
+                                continue
+
+                            # Nessuna chiave automatica: popup manuale.
                             nuova_api = richiedi_chiave_riserva()
                             if nuova_api and nuova_api.strip():
                                 try:
@@ -1207,7 +928,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                         print("      [Risposta vuota/filtrata dal modello in revisione. Riprovo in 20 secondi...]")
                     else:
                         print("      [Server occupati o errore. Riprovo in 20 secondi...]")
-                    if not sleep_with_cancel(20):
+                    if not generation_service.sleep_with_cancel(cancelled, 20):
                         print("   [*] Operazione annullata dall'utente.")
                         return
                     tent += 1
@@ -1235,7 +956,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                     total=macro_total,
                 )
             safe_progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
-            if not sleep_with_cancel(5):
+            if not generation_service.sleep_with_cancel(cancelled, 5):
                 print("   [*] Operazione annullata dall'utente.")
                 return
 
@@ -1257,7 +978,33 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             save_session()
 
         stage2 = str(session.get("stage", "phase1")).strip().lower()
+        skip_inline_boundary = False
         if stage2 == "boundary":
+            client = process_boundary_revision_phase(
+                client=client,
+                model_name=model_name,
+                boundary_dir=boundary_dir,
+                phase2_revised_dir=phase2_revised_dir,
+                session=session,
+                save_session=save_session,
+                safe_phase=safe_phase,
+                safe_progress=safe_progress,
+                safe_set_work_totals=safe_set_work_totals,
+                safe_update_work_done=safe_update_work_done,
+                safe_register_step_time=safe_register_step_time,
+                safe_set_effective_api_key=safe_set_effective_api_key,
+                cancelled=cancelled,
+                fallback_keys=fallback_keys,
+                richiedi_chiave_riserva=richiedi_chiave_riserva,
+                logger=logger,
+            )
+            if cancelled() or session.get("last_error") == "quota_daily_limit_boundary":
+                return
+            session["stage"] = "done"
+            session["last_error"] = None
+            save_session()
+            skip_inline_boundary = True
+        if stage2 == "boundary" and not skip_inline_boundary:
             pairs_total = int(session.get("boundary", {}).get("pairs_total", max(0, macro_total - 1)) or 0)
             if pairs_total > 0:
                 try:
@@ -1354,8 +1101,8 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                         continue
 
                     try:
-                        a = _read_text(os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md")).strip()
-                        b = _read_text(os.path.join(phase2_revised_dir, f"rev_{pair_idx+1:03}.md")).strip()
+                        a = read_text_file(os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md")).strip()
+                        b = read_text_file(os.path.join(phase2_revised_dir, f"rev_{pair_idx+1:03}.md")).strip()
                     except Exception:
                         a = ""
                         b = ""
@@ -1454,7 +1201,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                     payload = (
                         "FINE BLOCCO N:\n"
                         + tail
-                        + "\n\n<<<SBOBBY_SPLIT>>>\n\n"
+                        + "\n\n<<<EL_SBOBINATOR_SPLIT>>>\n\n"
                         + "INIZIO BLOCCO N+1:\n"
                         + head
                     )
@@ -1468,10 +1215,10 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                                 config=types.GenerateContentConfig(temperature=0.1),
                             )
                             out = (resp.text or "").strip()
-                            if "<<<SBOBBY_SPLIT>>>" not in out:
+                            if "<<<EL_SBOBINATOR_SPLIT>>>" not in out:
                                 raise RuntimeError("Marker non trovato nell'output di revisione confine.")
 
-                            left, right = out.split("<<<SBOBBY_SPLIT>>>", 1)
+                            left, right = out.split("<<<EL_SBOBINATOR_SPLIT>>>", 1)
                             new_tail = left.strip()
                             new_head = right.strip()
                             if not new_tail or not new_head:
@@ -1517,13 +1264,27 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                                 )
                                 if not is_daily_limit and tent < 3:
                                     print("      [Limite temporaneo. Attesa di 65s...]")
-                                    if not sleep_with_cancel(65):
+                                    if not generation_service.sleep_with_cancel(cancelled, 65):
                                         print("   [*] Operazione annullata dall'utente.")
                                         return
                                     tent += 1
                                     continue
 
                                 print("\n[!] LIMITE GIORNALIERO durante revisione confine!")
+                                new_c, rotated, rotated_key = generation_service.try_rotate_key(
+                                    client,
+                                    fallback_keys,
+                                    model_name,
+                                    logger=logger,
+                                )
+                                if rotated:
+                                    client = new_c
+                                    safe_set_effective_api_key(rotated_key)
+                                    print("   Ripresa automatica...")
+                                    tent = 0
+                                    continue
+
+                                # Nessuna chiave automatica: popup manuale.
                                 nuova_api = richiedi_chiave_riserva()
                                 if nuova_api and nuova_api.strip():
                                     try:
@@ -1533,6 +1294,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                                         print(f"   [!] Chiave non valida fornita: {err}")
                                     else:
                                         client = test_c
+                                        safe_set_effective_api_key(nuova_api.strip())
                                         print("   [*] Nuova API Key valida! Ripresa automatica...")
                                         tent = 0
                                         continue
@@ -1543,7 +1305,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                                 return
 
                             print("      [Errore confine. Riprovo in 20 secondi...]")
-                            if not sleep_with_cancel(20):
+                            if not generation_service.sleep_with_cancel(cancelled, 20):
                                 print("   [*] Operazione annullata dall'utente.")
                                 return
                             tent += 1
@@ -1556,68 +1318,39 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
         # 3. SALVATAGGIO FINALE (MARKDOWN + HTML)
         # ==========================================
         safe_phase("Fase: esportazione HTML")
-        base_name = os.path.basename(nome_file_video)
-        nome_puro = os.path.splitext(base_name)[0] if base_name else ""
-        titolo = safe_output_basename(nome_puro) if nome_puro else "Sbobina"
-
-        # Salva SEMPRE sul Desktop (cross-platform). Fallback: home.
         cartella_origine = get_desktop_dir()
         try:
             os.makedirs(cartella_origine, exist_ok=True)
         except Exception:
             cartella_origine = USER_HOME
 
-        nome_file_html = os.path.join(cartella_origine, f"{titolo}_Sbobina.html")
-        if not base_name:
-            nome_file_html = os.path.join(cartella_origine, "Sbobina_Definitiva.html")
-
-        # Ricostruisci il testo finale dai file revisionati (include la revisione di confine).
-        blocchi_finali = []
         try:
-            if os.path.isdir(phase2_revised_dir):
-                rev_files = []
-                for fn in os.listdir(phase2_revised_dir):
-                    if re.match(r"^rev_\\d{3}\\.md$", fn):
-                        rev_files.append(os.path.join(phase2_revised_dir, fn))
-                for p in sorted(rev_files):
-                    blocchi_finali.append(_read_text(p))
-        except Exception:
-            blocchi_finali = []
-        if not blocchi_finali:
-            blocchi_finali = [testo_finale_revisionato]
-
-        body_md = "\n\n".join([b.strip() for b in blocchi_finali if b and b.strip()]).strip()
-
-        # Indice semplice: elenca le sezioni "## ..." se presenti
-        headings = []
-        seen = set()
-        for line in body_md.splitlines():
-            m = re.match(r"^##\\s+(.+?)\\s*$", line.strip())
-            if not m:
-                continue
-            h = re.sub(r"\\s+#.*$", "", m.group(1)).strip()
-            if h and h not in seen:
-                headings.append(h)
-                seen.add(h)
-
-        if headings:
-            index_md = "## Indice\n" + "\n".join([f"- {h}" for h in headings]) + "\n\n"
-        else:
-            index_md = ""
-
-        final_md = f"# {titolo}\n\n{index_md}{body_md}\n"
-        final_md = normalize_inline_star_lists(final_md)
-        html_doc = build_html_document(titolo, final_md)
-        try:
-            _atomic_write_text(nome_file_html, html_doc)
+            titolo, nome_file_html = export_final_html_document(
+                input_path=nome_file_video,
+                phase2_revised_dir=phase2_revised_dir,
+                fallback_body=testo_finale_revisionato,
+                read_text=read_text_file,
+                output_dir=cartella_origine,
+                fallback_output_dir=cartella_origine,
+                safe_output_basename=safe_output_basename,
+            )
         except Exception as e:
             print(f"[!] Errore salvataggio HTML: {e}")
+            session["last_error"] = "html_export_failed"
+            save_session()
+            return
 
         try:
             if os.path.exists(nome_file_html):
                 safe_output_html(nome_file_html)
         except Exception:
             pass
+
+        if not os.path.exists(nome_file_html):
+            print("[!] Errore salvataggio HTML: file finale non trovato dopo la scrittura.")
+            session["last_error"] = "html_export_missing"
+            save_session()
+            return
 
         try:
             session.setdefault("outputs", {})
@@ -1630,6 +1363,8 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
         print("SBOBINATURA COMPLETATA CON SUCCESSO!")
         print(f"File salvato in: {cartella_origine}")
         safe_phase("Fase: completato")
+        safe_set_run_result("completed")
+        logger.info("Pipeline completata con successo.", extra={"stage": "done"})
 
         # Pulizia: rimuovi il file preconvertito (grande) se presente. I progressi testuali restano nella sessione.
         try:
@@ -1647,17 +1382,25 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 pass
     
     except Exception as e:
+        safe_set_run_result("failed", str(e))
+        logger.exception("Errore imprevisto nella pipeline.", extra={"stage": "fatal"})
         print(f"\n[X] ERRORE IMPREVISTO DURANTE L'ESECUZIONE:\n{e}")
     finally:
-        for f in app_instance.file_temporanei:
-            try:
-                if os.path.exists(f): os.remove(f)
-            except: pass
-        app_instance.file_temporanei = []
+        safe_set_effective_api_key(extract_client_api_key(locals().get("client")) or getattr(app_instance, "effective_api_key", None))
+        runtime.cleanup_temp_files()
         if cancelled():
             safe_phase("Fase: annullato")
+            safe_set_run_result("cancelled", getattr(app_instance, "last_run_error", None) or "cancelled")
         else:
             safe_progress(1.0)
+            if getattr(app_instance, "last_run_status", None) != "completed":
+                safe_set_run_result(
+                    "failed",
+                    getattr(app_instance, "last_run_error", None)
+                    or (session.get("last_error") if isinstance(session, dict) else None)
+                    or "processing_failed",
+                )
+        detach_file_handler(log_handler)
         safe_process_done()
 
 
@@ -1670,8 +1413,3 @@ def esegui_sbobinatura(nome_file_video, api_key_value, app_instance, session_dir
         session_dir_hint=session_dir_hint,
         resume_session=resume_session,
     )
-
-
-# ==========================================
-# INTERFACCIA GRAFICA CUSTOM-TKINTER
-# ==========================================

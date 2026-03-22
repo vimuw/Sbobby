@@ -1,9 +1,9 @@
 """
-Offline smoke test for Sbobby.
+Offline smoke test for El Sbobinator.
 
 Runs the full pipeline end-to-end without calling real Gemini:
 - Generates a short synthetic MP3 via FFmpeg (imageio-ffmpeg)
-- Monkeypatches sbobby.pipeline.genai.Client with a fake client
+- Monkeypatches el_sbobinator.pipeline.genai.Client with a fake client
 - Verifies autosave artifacts and final HTML output
 
 Usage:
@@ -30,7 +30,7 @@ import sys
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-import sbobby.pipeline as pipe
+import el_sbobinator.pipeline as pipe
 
 
 class DummyResponse:
@@ -102,7 +102,7 @@ def make_test_mp3(path: str, seconds: int = 65) -> None:
 
 
 def main() -> int:
-    root = tempfile.mkdtemp(prefix="sbobby_smoke_")
+    root = tempfile.mkdtemp(prefix="el_sbobinator_smoke_")
     try:
         mp3_path = os.path.join(root, "test_audio.mp3")
         make_test_mp3(mp3_path, seconds=130)

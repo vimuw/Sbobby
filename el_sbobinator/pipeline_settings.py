@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Tuple
 
-from sbobby.shared import DEFAULT_MODEL
+from el_sbobinator.shared import DEFAULT_MODEL
 
 
 @dataclass(frozen=True)

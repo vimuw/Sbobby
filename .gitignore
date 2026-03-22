@@ -1,12 +1,14 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.ruff_cache/
+.pytest_cache/
 
 # Local config (API key saved in user home dir)
 config.json
 .sbobinatore_config.json
-.sbobby_config.json
-.sbobby_sessions/
+.el_sbobinator_config.json
+.el_sbobinator_sessions/
 
 # Audio/Video processing temp
 sbobinatore_temp_*.mp3
@@ -21,6 +23,7 @@ pdf_output.txt
 build/
 dist/
 build_new/
+test_dist/
 
 # Local dev artifacts
 _smoke/
@@ -43,3 +46,8 @@ venv/
 env/
 .env
 .venv/
+
+# WebUI artifacts
+webui/node_modules/
+webui/dist/
+webui/.env.local

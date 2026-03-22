@@ -1,4 +1,4 @@
-# Sbobby 🤖
+# El Sbobinator 🤖
 
 Un'applicazione gratuita e open-source che trasforma le registrazioni audio delle tue lezioni in vere e proprie **sbobine** dettagliate.
 
@@ -11,8 +11,8 @@ L'intelligenza artificiale (basata sul modello Gemini 2.5 Flash) ascolterà la t
 ### 1) Come Scaricare il programma
 1. Clicca sulla sezione **Releases** sulla destra di questa pagina GitHub (oppure scarica dai link forniti).
 2. Scarica il programma per il tuo sistema operativo:
-   - **Per Windows:** Scarica il file `Sbobby-Windows.exe`
-   - **Per Mac:** Scarica il file `Sbobby-MacOS.zip`
+   - **Per Windows:** Scarica il file `El-Sbobinator-Windows.exe`
+   - **Per Mac:** Scarica il file `El-Sbobinator-MacOS.zip`
 3. Salva il file dove preferisci (es. sul Desktop).
 
 ### 2) Creare la tua Chiave API di Gemini (Gratis)
@@ -29,20 +29,20 @@ Essendo Google Gemini il cervello del programma, ti serve una password unica (AP
 È un programma "plug & play", non devi installare nulla sul PC.
 
 ### 💻 Se usi Windows:
-Fai semplicemente **doppio clic** sul file `Sbobby-Windows.exe` (se vuoi, puoi rinominarlo in `Sbobby.exe`).
+Fai semplicemente **doppio clic** sul file `El-Sbobinator-Windows.exe` (se vuoi, puoi rinominarlo in `El Sbobinator.exe`).
 *(Nota: Se l'antivirus o Windows blocca l'applicazione al primo avvio, non preoccuparti! Consulta la sezione FAQ qui sotto per capire come fare e perché succede).*
 
-> ⏳ **Pazienza all'avvio (Non cliccare mille volte!)**: Sbobby pesa circa 65 MB perché contiene al suo interno tutto il "motore" necessario per funzionare senza farti installare Python. Ogni volta che lo apri, il tuo computer deve "scompattare" questo motore in background. Per questo motivo, **l'avvio richiederà sempre qualche secondo (il tempo esatto dipende dalla velocità e dalla potenza del tuo PC)**. Dagli quindi un attimo di tempo per caricarsi.
+> ⏳ **Pazienza all'avvio (Non cliccare mille volte!)**: El Sbobinator pesa circa 65 MB perché contiene al suo interno tutto il "motore" necessario per funzionare senza farti installare Python. Ogni volta che lo apri, il tuo computer deve "scompattare" questo motore in background. Per questo motivo, **l'avvio richiederà sempre qualche secondo (il tempo esatto dipende dalla velocità e dalla potenza del tuo PC)**. Dagli quindi un attimo di tempo per caricarsi.
 
 ### 🍎 Se usi Mac:
-Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `Sbobby.app` (puoi trascinarla nella cartella Applicazioni).
+Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `El Sbobinator.app` (puoi trascinarla nella cartella Applicazioni).
 *(Nota: Al primissimo avvio, se il Mac dovesse bloccarti dicendo "proveniente da uno sviluppatore non identificato", ti basta fare **clic col tasto destro** — o Control+Clic — sull'icona, e scegliere **Apri** dal menu).*
 
 ---
 
 ## 📖 Come lo uso una volta aperto?
 1. Aperta la schermata del programma, incolla in alto la **Chiave API** copiata prima. Il programma se la salverà, così non dovrai rimetterla mai più.
-   - **Windows:** la chiave viene salvata in locale **cifrata** (DPAPI) nel profilo utente (es. `%APPDATA%\\Sbobby\\config.json`).
+   - **Windows:** la chiave viene salvata in locale **cifrata** (DPAPI) nel profilo utente (es. `%APPDATA%\\El Sbobinator\\config.json`).
    - **macOS/Linux:** la chiave viene salvata nel **Portachiavi/Keyring di sistema** (il file di config non contiene segreti).
 2. Clicca "**Sfoglia / Carica**" e seleziona la registrazione audio della tua lezione.
 3. Clicca il pulsantone verde **AVVIA**.
@@ -52,11 +52,11 @@ Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `Sbobby.app` (puoi
 ---
 
 ## 💾 Autosalvataggio e Ripresa (Importante)
-Sbobby salva automaticamente i progressi mentre lavora, così se chiudi l'app, crasha il PC o finisci la quota giornaliera puoi riprendere senza perdere tutto.
+El Sbobinator salva automaticamente i progressi mentre lavora, così se chiudi l'app, crasha il PC o finisci la quota giornaliera puoi riprendere senza perdere tutto.
 
-- **Dove salva?** In una cartella locale sul tuo PC, dentro la home utente (es. `C:\Users\TUO_UTENTE\.sbobby_sessions\...` su Windows o `~/.sbobby_sessions/...` su macOS).
+- **Dove salva?** In una cartella locale sul tuo PC, dentro la home utente (es. `C:\Users\TUO_UTENTE\.el_sbobinator_sessions\...` su Windows o `~/.el_sbobinator_sessions/...` su macOS).
 - **Cosa salva?** Testi parziali (sbobine per chunk), progressi e stati di avanzamento.
-- **Quando riprendi una sessione:** se selezioni lo stesso file audio, Sbobby può proporti di **riutilizzare** i risultati già pronti (rigenera l'HTML senza consumare richieste) oppure di **ricominciare da zero** (cancella la sessione e rifà tutto dall'inizio).
+- **Quando riprendi una sessione:** se selezioni lo stesso file audio, El Sbobinator può proporti di **riutilizzare** i risultati già pronti (rigenera l'HTML senza consumare richieste) oppure di **ricominciare da zero** (cancella la sessione e rifà tutto dall'inizio).
 
 ---
 
@@ -92,13 +92,13 @@ L'intelligenza artificiale di Google non è illimitata: esistono limiti/quote di
 
 **Ho finito i token (Errore: ⛔ LIMITE GIORNALIERO RAGGIUNTO!), cosa faccio?**
 L'app è intelligente e gestirà questo blocco per te:
-- **Opzione 1 (Inserire una nuova chiave a caldo):** L'applicazione metterà in pausa il processo (senza farti perdere la sbobina generata finora) e aprirà un popup a schermo. Ti basterà generare una nuova chiave API da un **account Google diverso** (es. una seconda email Gmail), incollarla nel popup e premere OK. Sbobby riprenderà automaticamente a sbobinare l'audio dal punto esatto in cui si era interrotto!
+- **Opzione 1 (Inserire una nuova chiave a caldo):** L'applicazione metterà in pausa il processo (senza farti perdere la sbobina generata finora) e aprirà un popup a schermo. Ti basterà generare una nuova chiave API da un **account Google diverso** (es. una seconda email Gmail), incollarla nel popup e premere OK. El Sbobinator riprenderà automaticamente a sbobinare l'audio dal punto esatto in cui si era interrotto!
 - **Opzione 2 (Aspettare l'indomani):** Se non hai altre email o vuoi fermarti, premi "Annulla" nel popup. L'app salverà su file la porzione di lezione sbobinata fino a quel punto e si chiuderà. I limiti gratuiti si resettano ogni giorno a mezzanotte ora del Pacifico, che corrisponde circa alle **ore 9:00 di mattina in Italia**.
 
 ---
 
 ## ☕ Supporta il progetto!
-Sbobby 🤖 è e sarà sempre **100% gratuito e open-source**.
+El Sbobinator 🤖 è e sarà sempre **100% gratuito e open-source**.
 
 Tuttavia, se questa app ti ha svoltato la sessione d'esami, ti ha fatto risparmiare decine (o centinaia) di ore di noiosissima sbobinatura manuale e vuoi supportare il mio lavoro, puoi offrirmi un caffè!
 
@@ -109,12 +109,12 @@ Grazie e in bocca al lupo per gli esami! 🎉
 ---
 
 ## ⚖️ Disclaimer Etico e Legale (Importante)
-Sbobby 🤖 è esclusivamente uno **strumento software locale** che facilita l'interazione tra l'utente e le API pubbliche di Google Gemini.
+El Sbobinator 🤖 è esclusivamente uno **strumento software locale** che facilita l'interazione tra l'utente e le API pubbliche di Google Gemini.
 
 Scaricando e utilizzando questa applicazione, accetti e comprendi che:
 * **Diritto d'autore e Uso Personale:** Le lezioni universitarie sono proprietà intellettuale dei rispettivi docenti. L'uso di questo strumento è inteso **esclusivamente per scopi di studio personale**. La diffusione pubblica, la pubblicazione online o la vendita a terzi delle sbobine generate senza il consenso esplicito del docente è una violazione del diritto d'autore. L'autore di questo software declina ogni responsabilità per l'uso improprio o illecito dei testi generati.
-* **Privacy e Gestione dei Dati:** Inserendo la tua chiave API personale (BYOK), stabilisci una connessione diretta tra il tuo computer e i server di Google, accettando i [Termini di Servizio di Google](https://policies.google.com/terms). Sbobby 🤖 non ha server propri: non intercetta, non salva in cloud e non condivide con nessuno (nemmeno con il creatore dell'app) i tuoi file audio, le tue sbobine o la tua chiave API. Tutto avviene e rimane sul tuo dispositivo.
-* **Tassativo Divieto per Dati Clinici Sensibili (Privacy e GDPR):** Sbobby elabora i file audio inviandoli tramite API per la trascrizione. Per questo motivo, è assolutamente vietato dare in pasto all'app registrazioni effettuate in ambiente clinico, durante i tirocini in reparto o che contengono conversazioni con pazienti reali. L'elaborazione di dati sanitari sensibili o informazioni che possano identificare un paziente tramite API esterne è una grave violazione della privacy. Usa l'app **solo per trascrivere le lezioni frontali in aula**.
+* **Privacy e Gestione dei Dati:** Inserendo la tua chiave API personale (BYOK), stabilisci una connessione diretta tra il tuo computer e i server di Google, accettando i [Termini di Servizio di Google](https://policies.google.com/terms). El Sbobinator 🤖 non ha server propri: non intercetta, non salva in cloud e non condivide con nessuno (nemmeno con il creatore dell'app) i tuoi file audio, le tue sbobine o la tua chiave API. Tutto avviene e rimane sul tuo dispositivo.
+* **Tassativo Divieto per Dati Clinici Sensibili (Privacy e GDPR):** El Sbobinator elabora i file audio inviandoli tramite API per la trascrizione. Per questo motivo, è assolutamente vietato dare in pasto all'app registrazioni effettuate in ambiente clinico, durante i tirocini in reparto o che contengono conversazioni con pazienti reali. L'elaborazione di dati sanitari sensibili o informazioni che possano identificare un paziente tramite API esterne è una grave violazione della privacy. Usa l'app **solo per trascrivere le lezioni frontali in aula**.
 * **Nessuna Garanzia:** Come specificato dalla Licenza MIT allegata al progetto, il software è fornito "così com'è", senza alcuna garanzia.
 
 ---
@@ -127,6 +127,24 @@ Per tutti i dettagli, consulta il file `LICENSE` incluso in questa repository.
 
 ## 🛠️ Costruire l'App dai sorgenti
 Se scarichi il codice sorgente completo e vuoi compilare tu stesso i file eseguibili nativi (`.exe` o `.app`), usa gli script di automazione inclusi:
-- **Windows:** Fai doppio clic su `Costruisci_EXE_Windows.bat`. Verrà creata la cartella `dist` contenente l'applicativo compilato con PyInstaller.
-- **Mac:** Dal terminale, avvia `Costruisci_APP_Mac.command` per generare l'app macOS nativa.
+- **Windows:** fai doppio clic su `Costruisci_EXE_Windows.bat`. La build predefinita ora usa la **WebUI** e crea `dist/El Sbobinator.exe`.
+- **Mac:** dal terminale, avvia `Costruisci_APP_Mac.command` per generare l'app macOS nativa con **WebUI**.
+
+### Verifiche locali consigliate
+Per controllare il progetto prima di una release:
+
+```bash
+python scripts/build_release.py deps --ui webui --dev
+python scripts/build_release.py check --skip-npm-install
+```
+
+Per creare una build locale:
+
+```bash
+python scripts/build_release.py build --target windows --ui webui --install-deps --dev-deps
+python scripts/build_release.py build --target macos --ui webui --install-deps --dev-deps
+```
+
+### Nota sulla UI
+La **WebUI è l'unica UI supportata** per build, CI e sviluppo corrente. Il vecchio entrypoint desktop resta solo come alias compatibile verso la WebUI.
 

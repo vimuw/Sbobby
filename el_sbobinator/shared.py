@@ -1,5 +1,5 @@
 """
-Shared utilities/constants for Sbobby.
+Shared utilities/constants for El Sbobinator.
 
 Questo modulo raccoglie configurazione, sessioni/autosave, prompt e helper di I/O
 che vengono usati sia dalla pipeline che dalla UI.
@@ -47,7 +47,7 @@ __all__ = [
     "PROMPT_REVISIONE_CONFINE",
 ]
 
-_KEYRING_SERVICE = "Sbobby"
+_KEYRING_SERVICE = "El Sbobinator"
 _KEYRING_USER_API = "gemini_api_key"
 
 
@@ -89,9 +89,9 @@ def _keyring_delete_api_key() -> bool:
 
 def debug_log(msg: str) -> None:
     # Log opzionale: non sporcare la UI in uso normale.
-    # Abilita con: setx SBOBBY_DEBUG 1 (Windows) / export SBOBBY_DEBUG=1 (macOS/Linux)
+    # Abilita con: setx EL_SBOBINATOR_DEBUG 1 (Windows) / export EL_SBOBINATOR_DEBUG=1 (macOS/Linux)
     try:
-        if str(os.environ.get("SBOBBY_DEBUG", "")).strip() not in ("1", "true", "TRUE", "yes", "YES"):
+        if str(os.environ.get("EL_SBOBINATOR_DEBUG", "")).strip() not in ("1", "true", "TRUE", "yes", "YES"):
             return
     except Exception:
         return
@@ -112,7 +112,7 @@ def cleanup_orphan_temp_chunks(max_age_seconds: int = 12 * 3600) -> int:
         now = time.time()
         for name in os.listdir(tmpdir):
             low = name.lower()
-            if not low.startswith("sbobby_temp_"):
+            if not low.startswith("el_sbobinator_temp_"):
                 continue
             if not (low.endswith(".mp3") or low.endswith(".wav") or low.endswith(".m4a")):
                 continue
@@ -174,26 +174,26 @@ def _resolve_user_home() -> str:
 def _get_config_file_path(user_home: str) -> str:
     """
     Pick an OS-appropriate, persistent config path.
-    - macOS: ~/Library/Application Support/Sbobby/config.json
-    - Windows: %APPDATA%\\Sbobby\\config.json
-    - Linux: $XDG_CONFIG_HOME/sbobby/config.json or ~/.config/sbobby/config.json
+    - macOS: ~/Library/Application Support/El Sbobinator/config.json
+    - Windows: %APPDATA%\\El Sbobinator\\config.json
+    - Linux: $XDG_CONFIG_HOME/el_sbobinator/config.json or ~/.config/el_sbobinator/config.json
     """
     system = platform.system()
     if system == "Darwin":
-        base = os.path.join(user_home, "Library", "Application Support", "Sbobby")
+        base = os.path.join(user_home, "Library", "Application Support", "El Sbobinator")
     elif system == "Windows":
         appdata = os.environ.get("APPDATA") or os.path.join(user_home, "AppData", "Roaming")
-        base = os.path.join(appdata, "Sbobby")
+        base = os.path.join(appdata, "El Sbobinator")
     else:
         xdg = os.environ.get("XDG_CONFIG_HOME") or os.path.join(user_home, ".config")
-        base = os.path.join(xdg, "sbobby")
+        base = os.path.join(xdg, "el_sbobinator")
     return os.path.join(base, "config.json")
 
 
 # Usa il profilo utente per salvare la configurazione in modo persistente anche quando è un .exe creato con PyInstaller.
 USER_HOME = _resolve_user_home()
 CONFIG_FILE = _get_config_file_path(USER_HOME)
-LEGACY_CONFIG_FILE = os.path.join(USER_HOME, ".sbobby_config.json")
+LEGACY_CONFIG_FILE = os.path.join(USER_HOME, ".el_sbobinator_config.json")
 
 
 def _dpapi_protect_text_windows(text: str) -> str:
@@ -419,15 +419,28 @@ def load_config() -> dict:
     return {"api_key": ""}
 
 
-def save_config(api_key: str) -> None:
+def save_config(api_key: str, fallback_keys: list | None = None) -> None:
     api_key_norm = str(api_key or "").strip()
-    data = {"api_key": api_key_norm}
+    data: dict = {"api_key": api_key_norm}
+    # Persist fallback keys (array of riserva) if provided.
+    if fallback_keys is not None:
+        data["fallback_keys"] = [str(k or "").strip() for k in fallback_keys if str(k or "").strip()]
+    else:
+        # Preserve existing fallback keys from current config.
+        try:
+            existing = load_config()
+            fk = existing.get("fallback_keys")
+            if isinstance(fk, list) and fk:
+                data["fallback_keys"] = fk
+        except Exception:
+            pass
     # Store encrypted secret on Windows if possible (avoid plaintext on disk).
     try:
         if platform.system() == "Windows" and api_key_norm:
             protected = _dpapi_protect_text_windows(api_key_norm)
             if protected:
-                data = {"api_key": "", "api_key_protected": protected}
+                data["api_key"] = ""
+                data["api_key_protected"] = protected
     except Exception:
         pass
 
@@ -437,13 +450,15 @@ def save_config(api_key: str) -> None:
             if api_key_norm:
                 ok = _keyring_set_api_key(api_key_norm)
                 if ok:
-                    data = {"api_key": "", "use_keyring": True}
+                    data["api_key"] = ""
+                    data["use_keyring"] = True
                 else:
                     debug_log("keyring: set_password failed; fallback to plaintext config")
             else:
                 # If user clears the key, also clear from keyring (best-effort).
                 _keyring_delete_api_key()
-                data = {"api_key": "", "use_keyring": True}
+                data["api_key"] = ""
+                data["use_keyring"] = True
     except Exception:
         pass
     try:
@@ -471,7 +486,7 @@ def save_config(api_key: str) -> None:
     # Back-compat (opt-in): write legacy file only if explicitly requested.
     # Avoid duplicating secrets (especially on Windows).
     try:
-        if str(os.environ.get("SBOBBY_WRITE_LEGACY_CONFIG", "")).strip() in ("1", "true", "TRUE", "yes", "YES"):
+        if str(os.environ.get("EL_SBOBINATOR_WRITE_LEGACY_CONFIG", "")).strip() in ("1", "true", "TRUE", "yes", "YES"):
             with open(LEGACY_CONFIG_FILE + ".tmp", "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False)
             os.replace(LEGACY_CONFIG_FILE + ".tmp", LEGACY_CONFIG_FILE)
@@ -488,7 +503,7 @@ def save_config(api_key: str) -> None:
 # SESSIONI (AUTOSAVE / RIPRESA)
 # ==========================================
 SESSION_SCHEMA_VERSION = 1
-SESSION_ROOT = os.path.join(USER_HOME, ".sbobby_sessions")
+SESSION_ROOT = os.path.join(USER_HOME, ".el_sbobinator_sessions")
 
 
 def _now_iso() -> str:
@@ -561,8 +576,7 @@ else:
 # ==========================================
 # PROMPT AI (estratti per facilità di modifica)
 # ==========================================
-PROMPT_SISTEMA = """
-Agisci come un 'Autore di Libri di Testo Universitari'. Trasforma l'audio della lezione in un MANUALE DI STUDIO formale, strutturato e pronto per la stampa.
+PROMPT_SISTEMA = """Agisci come un 'Autore di Libri di Testo Universitari'. Trasforma l'audio della lezione in un MANUALE DI STUDIO formale, strutturato e pronto per la stampa.
 
 REGOLA 1 — ZERO RIPETIZIONI (PRIORITÀ MASSIMA)
 1. DIVIETO ASSOLUTO DI RIDONDANZA: Se un concetto, una definizione o un esempio compare più volte nell'audio (perché il docente lo riformula, lo ripete o ci ritorna sopra), scrivi quel concetto UNA SOLA VOLTA, nella posizione più logica del testo, fondendo tutte le formulazioni in un unico paragrafo completo e definitivo. IMPORTANTISSIMO: quando fondi, conserva e integra la SOMMA di tutti i dettagli unici comparsi nelle ripetizioni. Non perdere mai un dettaglio che appare una sola volta.
@@ -611,13 +625,13 @@ REGOLE INVIOLABILI:
 PROMPT_REVISIONE_CONFINE = """
 Sei un revisore editoriale accademico.
 Ti passo DUE estratti in Markdown: la FINE del blocco N e l'INIZIO del blocco N+1, separati dal marker:
-<<<SBOBBY_SPLIT>>>
+<<<EL_SBOBINATOR_SPLIT>>>
 
 IL TUO UNICO OBIETTIVO: eliminare ripetizioni e ridondanze che stanno tra i due estratti (doppioni che scappano tra macro-blocchi).
 
 REGOLE INVIOLABILI:
 1. SILENZIO ASSOLUTO: Rispondi SOLO con i due estratti revisionati.
-2. OUTPUT OBBLIGATORIO: Mantieni ESATTAMENTE lo stesso marker <<<SBOBBY_SPLIT>>> tra i due testi revisionati.
+2. OUTPUT OBBLIGATORIO: Mantieni ESATTAMENTE lo stesso marker <<<EL_SBOBINATOR_SPLIT>>> tra i due testi revisionati.
 3. NON RIASSUMERE MAI: Elimina solo i doppioni. Tutto il resto resta.
 4. MANTIENI LA FORMATTAZIONE Markdown: titoli (## / ###), elenchi, grassetti, ecc.
 5. FORMULE MATEMATICHE: niente LaTeX, solo testo lineare.
