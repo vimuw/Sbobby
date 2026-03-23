@@ -2,7 +2,9 @@
 
 Un'applicazione gratuita e open-source che trasforma le registrazioni audio delle tue lezioni in vere e proprie **sbobine** dettagliate, ordinate e pronte da studiare.
 
-L'intelligenza artificiale (basata sul modello Gemini 2.5 Flash) ascolterà la tua registrazione e scriverà una dispensa eliminando i difetti tipici del parlato (es. ripetizioni, retorica, esitazioni) e strutturando il discorso con paragrafi chiari, elenchi puntati a dizionario e definizioni in grassetto. L'obiettivo non è una trascrizione "grezza", ma una vera e propria dispensa leggibile!
+L'intelligenza artificiale (basata sul modello Gemini 2.5 Flash) ascolterà la tua registrazione e scriverà una dispensa eliminando i difetti tipici del parlato (es. ripetizioni, retorica, esitazioni) e strutturando il discorso con paragrafi chiari, elenchi puntati a dizionario e definizioni in grassetto. 
+
+L'obiettivo non è una trascrizione "grezza", ma una vera e propria dispensa leggibile!
 
 ---
 
@@ -32,7 +34,7 @@ Essendo Google Gemini il cervello del programma, ti serve una password unica (AP
 Fai semplicemente **doppio clic** sul file `El Sbobinator.exe`.
 *(Nota: Se l'antivirus o la schermata blu di Windows ti bloccano al primo avvio, o se vedi una schermata nera, consulta la sezione FAQ qui sotto per risolvere in un clic).*
 
-> ⏳ **Pazienza all'avvio (Non cliccare mille volte!)**: El Sbobinator pesa circa 50 MB perché contiene al suo interno tutto il "motore" necessario per funzionare. Ogni volta che lo apri, il tuo computer deve "scompattare" questo motore in background. Per questo motivo, **l'avvio richiederà sempre qualche secondo (il tempo esatto dipende dalla velocità del tuo PC)**. Dagli un attimo di tempo per caricarsi!
+> ⏳ **Pazienza all'avvio (Non cliccare mille volte!)**: El Sbobinator 🤠 pesa circa 50 MB perché contiene al suo interno tutto il "motore" necessario per funzionare. Ogni volta che lo apri, il tuo computer deve "scompattare" questo motore in background. Per questo motivo, **l'avvio richiederà sempre qualche secondo (il tempo esatto dipende dalla velocità del tuo PC)**. Dagli un attimo di tempo per caricarsi!
 
 ### 🍎 Se usi Mac:
 Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `El Sbobinator.app` (puoi trascinarla nella cartella Applicazioni).
@@ -45,16 +47,16 @@ Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `El Sbobinator.app
 1. **Inserisci la chiave:** Nelle impostazioni, incolla la tua Chiave API di Gemini. L'app la salverà in modo sicuro (tramite protezione del profilo su Windows o Portachiavi su macOS), così non dovrai rimetterla mai più. Puoi anche inserire chiavi extra e usare la funzione *Validazione ambiente* per controllare che tutto funzioni.
 2. **Carica l'audio:** Seleziona uno o più file audio. L'app li aggiungerà alla **Coda di elaborazione** scartando in automatico eventuali duplicati.
 3. **Avvia:** Clicca sul pulsantone "Avvia sbobinatura". L'app ti mostrerà in tempo reale la fase corrente e il progresso. Ad esempio, se l'audio dura un'ora, farà circa 4 estrazioni da 15 minuti l'una.
-4. **Rifinisci nell'Anteprima:** A fine processo si aprirà la schermata di anteprima. Qui puoi rileggere il testo, modificarlo, aggiungere titoli (`H1`, `H2...`), inserire immagini (allineate a destra, sinistra o in linea) e riascoltare l'audio col player integrato! (Se l'audio originale è stato spostato nel PC, usa il tasto "Ricollega audio").
+4. **Rifinisci nell'Anteprima:** A fine processo si aprirà la schermata di anteprima. Qui puoi rileggere il testo, modificarlo, aggiungere titoli (`H1`, `H2...`), inserire immagini e riascoltare l'audio col player integrato! (Se l'audio originale è stato spostato nel PC, usa il tasto "Ricollega audio").
 5. **Esporta:** Una volta perfetto, usa il tasto "Copia testo" per incollarlo su Google Docs (la formattazione rimarrà intatta!), esportalo in Word o stampalo in PDF. Per sicurezza, una copia `.html` viene sempre salvata in automatico sul tuo Desktop.
 
 ---
 
 ## 💾 Autosalvataggio e Ripresa (Niente panico!)
-El Sbobinator salva automaticamente i progressi mentre lavora e le modifiche che fai nell'editor di anteprima.
+El Sbobinator 🤠 salva automaticamente i progressi mentre lavora e le modifiche che fai nell'editor di anteprima.
 
 Se chiudi l'app per sbaglio, se il PC si spegne, o se finisci la quota giornaliera dell'API, **non perdi quasi nulla**.
-Quando riaprirai l'app e ricaricherai lo stesso file audio, El Sbobinator ti chiederà se vuoi "riutilizzare" i risultati salvati per riprendere esattamente da dove si era interrotto, o se vuoi ricominciare da capo. I file temporanei vengono salvati in una cartella nascosta nella tua directory utente (es. `~/.el_sbobinator_sessions/`).
+Quando riaprirai l'app e ricaricherai lo stesso file audio, El Sbobinator 🤠 ti chiederà se vuoi "riutilizzare" i risultati salvati per riprendere esattamente da dove si era interrotto, o se vuoi ricominciare da capo. I file temporanei vengono salvati in una cartella nascosta nella tua directory utente (es. `~/.el_sbobinator_sessions/`).
 
 ---
 
