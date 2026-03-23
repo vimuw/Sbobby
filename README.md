@@ -118,7 +118,7 @@ Per tutti i dettagli, consulta il file `LICENSE` incluso in questa repository.
 
 ---
 
-## 🛠️ Costruire l'App dai sorgenti (Per sviluppatori)
+## 🛠️ Costruire l'App dai sorgenti
 
 Se scarichi il codice sorgente completo e vuoi compilare tu stesso i pacchetti nativi, usa gli script di automazione inclusi. La WebUI è l'unica interfaccia supportata per lo sviluppo e le release (i vecchi entrypoint desktop restano solo come alias di compatibilità).
 - **Windows:** usa `Costruisci_EXE_Windows.bat` (oppure `Costruisci_EXE_WebUI.bat`).
@@ -134,6 +134,3 @@ python scripts/build_release.py check --skip-npm-install
 python scripts/build_release.py build --target windows --ui webui --install-deps --dev-deps
 python scripts/build_release.py build --target macos --ui webui --install-deps --dev-deps
 ```
-
-**Nota sulla UI**: La **WebUI** è oggi l'unica interfaccia supportata per sviluppo, build e release.
-I vecchi entrypoint desktop restano solo come alias compatibili verso la WebUI.
