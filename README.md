@@ -1,4 +1,4 @@
-# El Sbobinator
+# El Sbobinator 🤠
 
 Un'applicazione gratuita e open-source che trasforma le registrazioni audio delle tue lezioni in vere e proprie **sbobine** dettagliate, ordinate e pronte da studiare.
 
@@ -38,10 +38,7 @@ El Sbobinator oggi include queste funzioni:
 - **Coda di elaborazione** con più file, riordinamento e gestione degli elementi completati.
 - **Anteprima integrata** del risultato finale direttamente dentro l'app.
 - **Editor di testo integrato** per correggere e rifinire la sbobina prima dell'uso.
-- **Inserimento immagini nell'editor**, con layout stabile:
-  - in linea
-  - a sinistra con testo
-  - a destra con testo
+- **Inserimento immagini nell'editor** (WIP)
 - **Player audio integrato** nella schermata anteprima, se il file originale è ancora disponibile.
 - **Ricollegamento dell'audio** se il file è stato spostato dopo l'elaborazione.
 - **Autosalvataggio** delle modifiche nell'anteprima.
