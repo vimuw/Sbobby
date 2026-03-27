@@ -90,6 +90,18 @@ jobs:
         run: |
           python scripts/build_release.py deps --ui webui
 
+      - name: Verify package.json version matches git tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          PKG_VERSION="v$(node -p "require('./webui/package.json').version")"
+          GIT_TAG="${GITHUB_REF_NAME}"
+          if [ "$PKG_VERSION" != "$GIT_TAG" ]; then
+            echo "::error::Version mismatch: package.json=$PKG_VERSION tag=$GIT_TAG"
+            exit 1
+          fi
+          echo "Version check passed: $PKG_VERSION"
+
       - name: Build Windows Executable
         if: runner.os == 'Windows'
         run: |

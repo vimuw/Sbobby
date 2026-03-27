@@ -46,6 +46,33 @@ class AppWebviewTests(unittest.TestCase):
         self.assertIn("<style>body{color:red}</style>", saved)
         self.assertIn("<body>\n<p>New</p>\n</body>", saved)
 
+    def test_open_url_rejects_non_allowlisted_url(self):
+        api = ElSbobinatorApi()
+        result = api.open_url("https://evil.example.com/payload")
+        self.assertFalse(result["ok"])
+
+    def test_open_url_rejects_filesystem_path(self):
+        api = ElSbobinatorApi()
+        result = api.open_url("C:\\Windows\\System32\\cmd.exe")
+        self.assertFalse(result["ok"])
+
+    @patch("el_sbobinator.app_webview.open_path_with_default_app")
+    def test_open_url_accepts_allowed_github_url(self, mock_open):
+        api = ElSbobinatorApi()
+        result = api.open_url("https://github.com/vimuw/El-Sbobinator/releases/latest")
+        self.assertTrue(result["ok"])
+        mock_open.assert_called_once()
+
+    def test_save_html_content_rejects_non_html_path(self):
+        api = ElSbobinatorApi()
+        result = api.save_html_content("/etc/passwd", "<p>hack</p>")
+        self.assertFalse(result["ok"])
+
+    def test_save_html_content_rejects_missing_file(self):
+        api = ElSbobinatorApi()
+        result = api.save_html_content("/tmp/nonexistent_file_xyz.html", "<p>x</p>")
+        self.assertFalse(result["ok"])
+
     @patch("el_sbobinator.app_webview.validate_environment")
     def test_validate_environment_returns_backend_result(self, mock_validate):
         api = ElSbobinatorApi()

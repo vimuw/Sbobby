@@ -197,8 +197,8 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         ...state,
         appState: 'processing',
         currentPhase: '',
-        files: state.files.map((file, idx) =>
-          file.id === action.data.id || idx === action.data.index
+        files: state.files.map(file =>
+          file.id === action.data.id
             ? { ...file, status: 'processing', progress: 0, phase: 1, phaseText: undefined, errorText: undefined }
             : file,
         ),
@@ -224,8 +224,8 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
     case 'bridge/file_failed':
       return {
         ...state,
-        files: state.files.map((file, idx) =>
-          file.id === action.data.id || idx === action.data.index
+        files: state.files.map(file =>
+          file.id === action.data.id
             ? {
                 ...file,
                 status: 'error',

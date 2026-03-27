@@ -30,7 +30,6 @@ PYTHON_CHECK_TARGETS = [
     "el_sbobinator",
     "tests",
     "scripts",
-    "El_Sbobinator.pyw",
     "El_Sbobinator_WebUI.pyw",
     "profile_imports.py",
 ]
@@ -143,6 +142,8 @@ def pyinstaller_command(target: str, ui: str) -> list[str]:
             "imageio_ffmpeg",
             "--collect-all",
             "keyring",
+            "--collect-all",
+            "html2docx",
             "--hidden-import",
             "webview",
             "--hidden-import",

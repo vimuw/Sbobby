@@ -2,13 +2,122 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Bold, Clipboard, Copy, FileText, Heading1, Heading2, Heading3, Heading4, Heading5, ImagePlus, Italic, List, ListOrdered, Printer, Quote, Redo, Scissors, Undo } from 'lucide-react';
+import { Color } from '@tiptap/extension-color';
+import { TextStyle } from '@tiptap/extension-text-style';
+import { Bold, ChevronDown, Clipboard, Copy, Heading1, Heading2, Heading3, Heading4, Heading5, ImagePlus, Italic, List, ListOrdered, Quote, Redo, Scissors, Undo } from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
 
 interface RichTextEditorProps {
   initialContent: string;
   onChange: (html: string) => void;
+  initialScrollTop?: number;
+  onScrollTopChange?: (scrollTop: number) => void;
 }
+
+const COLOR_PALETTE: string[][] = [
+  ['#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#cccccc', '#d9d9d9', '#ffffff'],
+  ['#ff0000', '#ff4500', '#ff9900', '#ffff00', '#00ff00', '#00ffff', '#4a86e8', '#9900ff'],
+  ['#f4cccc', '#fce5cd', '#fff2cc', '#d9ead3', '#c9daf8', '#cfe2f3', '#d9d2e9', '#ead1dc'],
+  ['#ea9999', '#f9cb9c', '#ffe599', '#b6d7a8', '#a4c2f4', '#9fc5e8', '#b4a7d6', '#d5a6bd'],
+  ['#e06666', '#f6b26b', '#ffd966', '#93c47d', '#6d9eeb', '#6fa8dc', '#8e7cc3', '#c27ba0'],
+  ['#cc0000', '#e69138', '#f1c232', '#6aa84f', '#3c78d8', '#3d85c8', '#674ea7', '#a64d79'],
+  ['#990000', '#b45f06', '#bf9000', '#38761d', '#1155cc', '#0b5394', '#20124d', '#4c1130'],
+];
+
+const ColorPickerButton = ({ editor }: { editor: any }) => {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const currentColor: string | undefined = editor.getAttributes('textStyle').color;
+
+  const toggleOpen = () => {
+    if (!isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setPanelPos({ top: rect.bottom + 6, left: rect.left });
+    }
+    setIsOpen(prev => !prev);
+  };
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setIsOpen(false);
+    };
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
+  }, [isOpen]);
+
+  const applyColor = (color: string, close = true) => {
+    editor.chain().focus().setColor(color).run();
+    if (close) setIsOpen(false);
+  };
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={toggleOpen}
+        className={`editor-button color-picker-btn${isOpen ? ' is-active' : ''}`}
+        title="Colore testo"
+      >
+        <span className="color-picker-label">
+          <span style={{ fontWeight: 700, fontSize: '0.8rem', lineHeight: 1, fontFamily: 'serif' }}>A</span>
+          <span
+            className="color-indicator"
+            style={{ background: currentColor ?? 'var(--text-primary)', opacity: currentColor ? 1 : 0.55 }}
+          />
+        </span>
+        <ChevronDown style={{ width: 9, height: 9, opacity: 0.55, flexShrink: 0 }} />
+      </button>
+      {isOpen && createPortal(
+        <div
+          ref={panelRef}
+          className="color-picker-panel"
+          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999 }}
+        >
+          {COLOR_PALETTE.map((row, ri) => (
+            <div key={ri} className="color-row">
+              {row.map(color => (
+                <button
+                  key={color}
+                  type="button"
+                  onPointerDown={e => { e.preventDefault(); applyColor(color); }}
+                  className={`color-swatch${currentColor === color ? ' is-selected' : ''}`}
+                  style={{ background: color }}
+                  title={color}
+                />
+              ))}
+            </div>
+          ))}
+          <div className="color-footer">
+            <button
+              type="button"
+              onPointerDown={e => { e.preventDefault(); editor.chain().focus().unsetColor().run(); setIsOpen(false); }}
+              className="color-reset"
+            >
+              ✕ Rimuovi colore
+            </button>
+            <label className="color-custom" title="Colore personalizzato">
+              <span className="color-custom-preview" style={{ background: currentColor || '#888' }} />
+              Personalizzato
+              <input
+                type="color"
+                value={currentColor || '#888888'}
+                onChange={e => applyColor(e.target.value, false)}
+                style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+              />
+            </label>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+};
 
 const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -35,83 +144,6 @@ const MenuBar = ({ editor, onInsertImages }: { editor: any; onInsertImages: (fil
     editor.chain().focus().toggleHeading({ level }).run();
   };
 
-  const handlePrint = () => {
-    const html = editor.getHTML();
-    const printWindow = document.createElement('iframe');
-    printWindow.style.position = 'fixed';
-    printWindow.style.top = '5vh';
-    printWindow.style.left = '5vw';
-    printWindow.style.width = '90vw';
-    printWindow.style.height = '90vh';
-    printWindow.style.opacity = '0';
-    printWindow.style.pointerEvents = 'none';
-    printWindow.style.zIndex = '-1';
-    document.body.appendChild(printWindow);
-
-    const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"], style')).map(el => el.outerHTML).join('\n');
-    const doc = printWindow.contentWindow?.document;
-
-    if (!doc) return;
-
-    doc.open();
-    doc.write(`
-      <html>
-        <head>
-          <title>Sbobina</title>
-          <meta charset="utf-8">
-          ${styleLinks}
-          <style>
-            body { padding: 40px !important; background: white !important; color: black !important; }
-            @media print { body { padding: 0 !important; } }
-          </style>
-        </head>
-        <body>
-          <div class="prose prose-sm sm:prose-base max-w-none tiptap-editor">
-            ${html}
-          </div>
-          <script>
-            window.onload = () => {
-              setTimeout(() => {
-                window.print();
-                setTimeout(() => {
-                  window.parent.document.body.removeChild(window.frameElement);
-                }, 1000);
-              }, 750);
-            };
-          </script>
-        </body>
-      </html>
-    `);
-    doc.close();
-  };
-
-  const handleExportWord = async () => {
-    const html = editor.getHTML();
-    const docxTemplate = `
-      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-      <head><meta charset='utf-8'><title>Esporta Sbobina</title></head><body>
-      ${html}
-      </body></html>
-    `;
-
-    if (window.pywebview?.api?.export_docx) {
-      const res = await window.pywebview.api.export_docx('Sbobina.doc', docxTemplate);
-      if (!res.ok && res.error !== "Annullato dall'utente") {
-        alert(`Errore salvataggio Word: ${res.error}`);
-      }
-    } else {
-      const blob = new Blob(['\ufeff', docxTemplate], { type: 'application/msword;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'Sbobina.doc';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
-  };
-
   const btnClass = (isActive: boolean) => `editor-button ${isActive ? 'is-active' : ''}`;
 
   return (
@@ -122,6 +154,7 @@ const MenuBar = ({ editor, onInsertImages }: { editor: any; onInsertImages: (fil
       <button type="button" onClick={() => editor.chain().focus().toggleItalic().run()} className={btnClass(editor.isActive('italic'))} title="Corsivo">
         <Italic className="h-4 w-4" />
       </button>
+      <ColorPickerButton editor={editor} />
       <div className="editor-separator" />
       <button type="button" onClick={() => toggleHeading(1)} className={btnClass(editor.isActive('heading', { level: 1 }))} title="Titolo 1">
         <Heading1 className="h-4 w-4" />
@@ -159,15 +192,6 @@ const MenuBar = ({ editor, onInsertImages }: { editor: any; onInsertImages: (fil
         <Redo className="h-4 w-4" />
       </button>
 
-      <div className="ml-auto flex items-center gap-2">
-        <button type="button" onClick={handleExportWord} className="editor-button" title="Esporta in Word (.doc)">
-          <FileText className="h-4 w-4" />
-        </button>
-        <button type="button" onClick={handlePrint} className="editor-button" title="Stampa / Esporta in PDF">
-          <Printer className="h-4 w-4" />
-        </button>
-      </div>
-
       <input
         ref={imageInputRef}
         type="file"
@@ -185,10 +209,14 @@ const MenuBar = ({ editor, onInsertImages }: { editor: any; onInsertImages: (fil
   );
 };
 
-export function RichTextEditor({ initialContent, onChange }: RichTextEditorProps) {
+export function RichTextEditor({ initialContent, onChange, initialScrollTop, onScrollTopChange }: RichTextEditorProps) {
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<any>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const hasRestoredScrollRef = useRef(false);
+  const onScrollTopChangeRef = useRef(onScrollTopChange);
+  useEffect(() => { onScrollTopChangeRef.current = onScrollTopChange; }, [onScrollTopChange]);
 
   const insertImageFiles = useCallback(async (inputFiles: FileList | File[]) => {
     const activeEditor = editorRef.current;
@@ -210,7 +238,6 @@ export function RichTextEditor({ initialContent, onChange }: RichTextEditorProps
               alt: file.name,
               title: file.name,
               width: 56,
-              layout: 'inline',
             },
           },
           {
@@ -247,7 +274,7 @@ export function RichTextEditor({ initialContent, onChange }: RichTextEditorProps
   };
 
   const editor = useEditor({
-    extensions: [StarterKit, FloatingImage],
+    extensions: [StarterKit, FloatingImage, TextStyle, Color],
     content: initialContent,
     onCreate: ({ editor }) => {
       editorRef.current = editor;
@@ -291,10 +318,28 @@ export function RichTextEditor({ initialContent, onChange }: RichTextEditorProps
     }
   }, [initialContent, editor]);
 
+  useEffect(() => {
+    if (hasRestoredScrollRef.current || !scrollContainerRef.current || !editor || !initialScrollTop) return;
+    hasRestoredScrollRef.current = true;
+    requestAnimationFrame(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = initialScrollTop;
+      }
+    });
+  }, [editor, initialScrollTop]);
+
   return (
     <div className="editor-shell flex flex-1 min-h-0 w-full flex-col relative" onContextMenu={handleContextMenu}>
       <MenuBar editor={editor} onInsertImages={insertImageFiles} />
-      <div className="flex-1 overflow-y-auto">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto"
+        onScroll={() => {
+          if (scrollContainerRef.current) {
+            onScrollTopChangeRef.current?.(scrollContainerRef.current.scrollTop);
+          }
+        }}
+      >
         <EditorContent editor={editor} />
       </div>
 

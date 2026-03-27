@@ -1,7 +1,7 @@
 {
   "name": "el-sbobinator-webui",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -14,7 +14,9 @@
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.1.14",
+    "@tiptap/extension-color": "^3.21.0",
     "@tiptap/extension-image": "^3.20.4",
+    "@tiptap/extension-text-style": "^3.21.0",
     "@tiptap/pm": "^3.20.4",
     "@tiptap/react": "^3.20.4",
     "@tiptap/starter-kit": "^3.20.4",

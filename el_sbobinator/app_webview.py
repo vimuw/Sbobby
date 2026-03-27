@@ -22,6 +22,12 @@ warnings.filterwarnings("ignore", message="Unable to find acceptable character d
 
 import webview
 
+_ALLOWED_URL_PREFIXES: tuple[str, ...] = (
+    "https://github.com/",
+    "https://ko-fi.com/",
+    "https://go.microsoft.com/",
+)
+
 # Lazy imports to avoid loading customtkinter/pipeline at startup
 # from el_sbobinator.pipeline import esegui_sbobinatura  -- imported lazily in start_processing
 # from el_sbobinator.audio_service import probe_media_duration -- imported lazily in ask_files
@@ -378,6 +384,41 @@ class ElSbobinatorApi:
             "exists": bool(normalized_path and os.path.exists(normalized_path)),
         }
 
+    _ALLOWED_DROP_EXTS = {'.mp3', '.m4a', '.wav', '.mp4', '.mkv', '.webm', '.ogg', '.flac', '.aac'}
+
+    def collect_dropped_files(self, names: list) -> dict:
+        """Called by JS after postMessageWithAdditionalObjects('FilesDropped') to retrieve OS paths."""
+        try:
+            from webview.dom import _dnd_state
+        except Exception:
+            return {"ok": False}
+
+        name_set = set(str(n) for n in (names or []))
+        descriptors = []
+        remaining = []
+        for item in list(_dnd_state.get('paths', [])):
+            basename, fullpath = item
+            if basename in name_set:
+                ext = os.path.splitext(fullpath)[1].lower()
+                if ext in self._ALLOWED_DROP_EXTS and os.path.isfile(fullpath):
+                    try:
+                        size = os.path.getsize(fullpath)
+                    except Exception:
+                        size = 0
+                    descriptors.append({
+                        "path": fullpath,
+                        "name": basename,
+                        "size": size,
+                        "duration": 0,
+                    })
+            else:
+                remaining.append(item)
+        _dnd_state['paths'] = remaining
+
+        if descriptors:
+            self._adapter.emit("filesDropped", descriptors, batched=False)
+        return {"ok": True}
+
     # ---- Processing ----
 
     def start_processing(self, files: list[BridgeFileItem], api_key: str, resume_session: bool = True) -> dict:
@@ -525,9 +566,21 @@ class ElSbobinatorApi:
             return {"ok": False, "error": str(e)}
 
     def open_file(self, path: str) -> dict:
-        """Open a file/folder with the system default handler."""
+        """Open a local file/folder with the system default handler."""
+        if isinstance(path, str) and (path.startswith("http://") or path.startswith("https://")):
+            return {"ok": False, "error": "Usa open_url per aprire URL."}
         try:
             open_path_with_default_app(path)
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def open_url(self, url: str) -> dict:
+        """Open an external URL in the system browser (allowlist only)."""
+        if not isinstance(url, str) or not any(url.startswith(p) for p in _ALLOWED_URL_PREFIXES):
+            return {"ok": False, "error": "URL non consentito."}
+        try:
+            open_path_with_default_app(url)
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -542,6 +595,10 @@ class ElSbobinatorApi:
 
     def save_html_content(self, path: str, content: str) -> dict:
         """Aggiorna solo il contenuto del <body>, preservando head, stile e CSP dell'export originale."""
+        if not isinstance(path, str) or not path.lower().endswith(".html"):
+            return {"ok": False, "error": "Path non valido: deve essere un file .html."}
+        if not os.path.isfile(path):
+            return {"ok": False, "error": "File non trovato."}
         try:
             save_html_body_content(path, content)
             return {"ok": True}
@@ -556,7 +613,7 @@ class ElSbobinatorApi:
             save_path = self._window.create_file_dialog(
                 webview.SAVE_DIALOG,
                 save_filename=filename,
-                file_types=('Word Document (*.doc)', 'All files (*.*)')
+                file_types=('Word Document (*.docx)', 'All files (*.*)')
             )
             if not save_path or len(save_path) == 0:
                 return {"ok": False, "error": "Annullato dall'utente"}
@@ -583,7 +640,10 @@ class ElSbobinatorApi:
             # Fallback a legacy OS script
             if sys.platform == "darwin":
                 import subprocess
-                subprocess.Popen(['osascript', '-e', f'display notification "{message}" with title "{title}"'])
+                safe_msg = (message or "").replace('\\', '\\\\').replace('"', '\\"')
+                safe_title = (title or "").replace('\\', '\\\\').replace('"', '\\"')
+                subprocess.Popen(['osascript', '-e', f'display notification "{safe_msg}" with title "{safe_title}"'])
+                return {"ok": True}
             return {"ok": False, "error": str(e)}
 
     def stream_media_file(self, file_path: str) -> dict:
@@ -845,6 +905,12 @@ def main():
             hidden=False,
         )
     api.set_window(window)
+
+    try:
+        from webview.dom import _dnd_state
+        _dnd_state['num_listeners'] += 1
+    except Exception:
+        pass
 
     if webview2_available:
         window_shown = threading.Event()

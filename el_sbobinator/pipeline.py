@@ -11,12 +11,9 @@ from __future__ import annotations
 
 import os
 import platform
-import re
 import tempfile
 import threading
 import time
-import difflib
-
 from google import genai
 from google.genai import types
 
@@ -55,7 +52,6 @@ from el_sbobinator.revision_service import (
 )
 from el_sbobinator.shared import (
     PROMPT_REVISIONE,
-    PROMPT_REVISIONE_CONFINE,
     PROMPT_SISTEMA,
     USER_HOME,
     _atomic_write_json,
@@ -130,68 +126,6 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
     # ---- Fallback API keys rotation ----
     fallback_keys = load_fallback_keys()
 
-    def _try_rotate_key(current_client, model_name_val):
-        """Prova a ruotare alla prossima chiave di riserva.
-        Ritorna (nuovo_client, True, key) se successo, (current_client, False, None) altrimenti.
-        """
-        nonlocal fallback_keys
-        while fallback_keys:
-            key = fallback_keys.pop(0).strip()
-            if not key:
-                continue
-            try:
-                new_client = genai.Client(api_key=key)
-                new_client.models.get(model=model_name_val)
-                print(f"   ✅ Chiave di riserva valida! ({len(fallback_keys)} rimanenti)")
-                return new_client, True, key
-            except Exception as err:
-                print(f"   [!] Chiave di riserva non valida: {err}")
-        return current_client, False, None
-
-    def wait_for_file_ready(client_for_file, file_obj, max_wait_seconds=900, poll_seconds=3):
-        start_time = time.monotonic()
-        while True:
-            state = str(getattr(file_obj, "state", "")).upper()
-            # Alcune versioni SDK ritornano state vuoto/STATE_UNSPECIFIED subito dopo l'upload.
-            # Aspettiamo finche' non diventa ACTIVE (o FAILED).
-            if "ACTIVE" not in state and "FAILED" not in state:
-                if time.monotonic() - start_time > max_wait_seconds:
-                    raise TimeoutError("Timeout durante l'elaborazione del file audio sui server Google.")
-                if not generation_service.sleep_with_cancel(cancelled, poll_seconds):
-                    return None
-                file_obj = client_for_file.files.get(name=file_obj.name)
-                continue
-            if "FAILED" in state:
-                raise RuntimeError(f"Caricamento fallito (state={state}).")
-            return file_obj
-
-    def upload_audio_path(client_for_upload, path_str):
-        # Compatibilita' tra versioni diverse di google-genai:
-        # alcune usano upload(path=...), altre upload(file=...).
-        try:
-            return client_for_upload.files.upload(path=path_str)
-        except TypeError:
-            return client_for_upload.files.upload(file=path_str)
-
-    def _make_inline_audio_part(path_str: str, max_bytes: int | None = None):
-        # Prova a inviare l'audio inline (bytes) per evitare upload+polling.
-        # Fallback automatico a files.upload se fallisce.
-        try:
-            if max_bytes is not None:
-                try:
-                    size = int(os.path.getsize(path_str))
-                    if size > int(max_bytes):
-                        debug_log(f"inline_audio skip: size={size} > max_bytes={int(max_bytes)} ({os.path.basename(path_str)})")
-                        return None
-                except Exception:
-                    # Se non riusciamo a stimare la size, proviamo comunque.
-                    pass
-            with open(path_str, "rb") as f:
-                data = f.read()
-            # I chunk sono esportati in MP3 (vedi ffmpeg -b:a 48k)
-            return types.Part.from_bytes(data=data, mime_type="audio/mpeg")
-        except Exception:
-            return None
     session = None
     session_ctx = None
     client = None
@@ -307,6 +241,13 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
                 session = session_ctx.session
                 stage = "phase1"
                 logger.info("Sessione rigenerata su richiesta utente.", extra={"stage": "resume"})
+            elif stage == "done":
+                existing_html = session.get("outputs", {}).get("html", "") if isinstance(session, dict) else ""
+                if existing_html and os.path.exists(str(existing_html)):
+                    print(f"[*] File gia' completato, l'utente ha scelto di usare la versione pronta.")
+                    safe_output_html(str(existing_html))
+                    safe_set_run_result("completed")
+                    return
 
         # ------------------------------------------
         # PRE-CONVERSIONE UNICA (piu' veloce)
@@ -486,10 +427,6 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
 
                 # 3. Generazione testuale
                 print("   -> (3/3) Generazione sbobina in corso...")
-                prompt_dinamico = "Ascolta questo blocco di lezione e crea la sbobina seguendo rigorosamente le istruzioni di sistema."
-                if memoria_precedente:
-                    prompt_dinamico += f"\n\nATTENZIONE: Stai continuando una stesura. Questo è l'ultimo paragrafo che hai generato nel blocco precedente:\n\"...{memoria_precedente}\"\n\nRiprendi il discorso da qui IN MODO FLUIDO. Usa la stessa grandezza per i titoli. Se all'inizio di questo blocco c'e' sovrapposizione, NON ripetere testualmente le frasi gia' dette, ma se compare anche solo un dettaglio nuovo includilo."
-
                 prompt_dinamico = build_chunk_prompt(memoria_precedente)
 
                 def _ensure_uploaded_audio_input():
@@ -766,7 +703,6 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
         save_session()
 
         testo_finale_revisionato = ""
-        skip_inline_phase2 = False
         if macro_blocchi:
             client, testo_finale_revisionato = process_macro_revision_phase(
                 client=client,
@@ -790,11 +726,8 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             )
             if cancelled() or session.get("last_error") == "quota_daily_limit_phase2":
                 return
-            skip_inline_phase2 = True
 
-        prompt_revisione = PROMPT_REVISIONE
         macro_total = len(macro_blocchi)
-        revised_done = 0
 
         # ETA step-based: totali fase 2 + confini (macro_total-1). Imposta anche il done attuale da sessione.
         safe_set_work_totals(macro_total=macro_total, boundary_total=max(0, macro_total - 1))
@@ -806,159 +739,6 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             )
         except Exception:
             pass
-
-        for i, blocco in enumerate([] if skip_inline_phase2 else macro_blocchi, 1):
-            if cancelled():
-                print("   [*] Operazione annullata dall'utente.")
-                return
-            safe_phase(f"Fase 2/3: revisione ({i}/{macro_total})")
-
-            # Ripresa: se il macro-blocco e' gia' stato revisionato e salvato, lo ri-usa
-            rev_path = os.path.join(phase2_revised_dir, f"rev_{i:03}.md")
-            if os.path.exists(rev_path):
-                try:
-                    testo_rev_esistente = read_text_file(rev_path).strip()
-                    if testo_rev_esistente:
-                        testo_finale_revisionato += f"\n\n{testo_rev_esistente}\n\n"
-                        revised_done += 1
-                        safe_update_work_done("macro", revised_done, total=macro_total)
-                        session["stage"] = "phase2"
-                        session.setdefault("phase2", {})
-                        session["phase2"]["revised_done"] = int(revised_done)
-                        session["last_error"] = None
-                        save_session()
-                        safe_progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
-                        continue
-                except Exception:
-                    pass
-
-            blocco_src = (blocco or "").strip()
-            blocco_local, removed_exact, removed_adj, near_adj, total_paras = local_macro_cleanup(blocco_src)
-            blocco_for_ai = (blocco_local or blocco_src).strip()
-            if removed_exact or removed_adj:
-                print(f"   -> Pre-clean locale Macro-blocco {i}/{macro_total}: duplicati rimossi={removed_exact+removed_adj} (sospetti={near_adj}).")
-
-            macro_step_t0 = time.monotonic()
-            print(f"   -> Revisione Macro-blocco {i} di {macro_total}...")
-            successo_revisione = False
-            tent = 0
-            while tent < 4:
-                try:
-                    risposta_rev = client.models.generate_content(
-                        model=model_name,
-                        contents=[blocco_for_ai, prompt_revisione],
-                        config=types.GenerateContentConfig(
-                            temperature=0.1 
-                        )
-                    )
-                    testo_rev = (risposta_rev.text or "").strip()
-                    if not testo_rev:
-                        raise RuntimeError("Risposta vuota dal modello in revisione.")
-
-                    testo_finale_revisionato += f"\n\n{testo_rev}\n\n"
-
-                    # Autosave: salva la revisione su disco e aggiorna la sessione
-                    try:
-                        _atomic_write_text(rev_path, testo_rev + "\n")
-                        print(f"   [autosave] Revisione salvata: {os.path.basename(rev_path)}")
-                    except Exception as save_err:
-                        print(f"   [!] Autosave revisione fallito: {save_err}")
-
-                    revised_done += 1
-                    session["stage"] = "phase2"
-                    session.setdefault("phase2", {})
-                    session["phase2"]["revised_done"] = int(revised_done)
-                    session["last_error"] = None
-                    save_session()
-
-                    successo_revisione = True
-                    safe_progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
-                    safe_register_step_time(
-                        "macro",
-                        max(0.0, time.monotonic() - float(macro_step_t0)),
-                        done=revised_done,
-                        total=macro_total,
-                    )
-                    break
-                except Exception as e:
-                    errore = str(e).lower()
-                    if '429' in errore or 'resource_exhausted' in errore or 'quota' in errore:
-                        is_daily_limit = 'per day' in errore or 'quota_exceeded' in errore or 'daily' in errore or ('429' in errore and 'minute' not in errore and 'rpm' not in errore)
-                        if not is_daily_limit and tent < 3:
-                            print(f"      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]")
-                            if not generation_service.sleep_with_cancel(cancelled, 65):
-                                print("   [*] Operazione annullata dall'utente.")
-                                return
-                            tent += 1
-                            continue
-                        else:
-                            print("\n⛔ LIMITE GIORNALIERO RAGGIUNTO durante la revisione!")
-                            new_c, rotated, rotated_key = generation_service.try_rotate_key(
-                                client,
-                                fallback_keys,
-                                model_name,
-                                logger=logger,
-                            )
-                            if rotated:
-                                client = new_c
-                                safe_set_effective_api_key(rotated_key)
-                                print("   Ripresa automatica della revisione...")
-                                tent = 0
-                                continue
-
-                            # Nessuna chiave automatica: popup manuale.
-                            nuova_api = richiedi_chiave_riserva()
-                            if nuova_api and nuova_api.strip():
-                                try:
-                                    test_c = genai.Client(api_key=nuova_api.strip())
-                                    test_c.models.get(model=model_name)
-                                    client = test_c
-                                    print("   ✅ Nuova API Key valida! Ripresa automatica della revisione...")
-                                    tent = 0
-                                    continue
-                                except Exception as err:
-                                    print(f"   [!] Chiave non valida fornita: {err}")
-                            
-                            print("   Interruzione: progressi salvati. Potrai riprendere piu' tardi.")
-                            session["last_error"] = "quota_daily_limit_phase2"
-                            save_session()
-                            return
-                    if _is_empty_model_response_error(str(e)):
-                        debug_log(f"empty model response (revision): {e}")
-                        print("      [Risposta vuota/filtrata dal modello in revisione. Riprovo in 20 secondi...]")
-                    else:
-                        print("      [Server occupati o errore. Riprovo in 20 secondi...]")
-                    if not generation_service.sleep_with_cancel(cancelled, 20):
-                        print("   [*] Operazione annullata dall'utente.")
-                        return
-                    tent += 1
-                    
-            if not successo_revisione:
-                print(f"   [!] Errore prolungato nella revisione. Salvo il blocco {i} cosi' com'e' per evitare perdite di dati.")
-                testo_rev_fallback = (blocco or "").strip()
-                testo_finale_revisionato += f"\n\n{testo_rev_fallback}\n\n"
-                try:
-                    _atomic_write_text(rev_path, testo_rev_fallback + "\n")
-                    print(f"   [autosave] Revisione (fallback) salvata: {os.path.basename(rev_path)}")
-                except Exception as save_err:
-                    print(f"   [!] Autosave revisione fallito: {save_err}")
-
-                revised_done += 1
-                session["stage"] = "phase2"
-                session.setdefault("phase2", {})
-                session["phase2"]["revised_done"] = int(revised_done)
-                session["last_error"] = None
-                save_session()
-                safe_register_step_time(
-                    "macro",
-                    max(0.0, time.monotonic() - float(macro_step_t0)),
-                    done=revised_done,
-                    total=macro_total,
-                )
-            safe_progress(0.7 + 0.2 * (revised_done / max(1, macro_total)))
-            if not generation_service.sleep_with_cancel(cancelled, 5):
-                print("   [*] Operazione annullata dall'utente.")
-                return
 
         # ------------------------------------------
         # FASE 2B: REVISIONE DI CONFINE (AUTOSAVE)
@@ -978,7 +758,6 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             save_session()
 
         stage2 = str(session.get("stage", "phase1")).strip().lower()
-        skip_inline_boundary = False
         if stage2 == "boundary":
             client = process_boundary_revision_phase(
                 client=client,
@@ -1003,316 +782,7 @@ def _esegui_sbobinatura_legacy(nome_file_video, api_key_value, app_instance, ses
             session["stage"] = "done"
             session["last_error"] = None
             save_session()
-            skip_inline_boundary = True
-        if stage2 == "boundary" and not skip_inline_boundary:
-            pairs_total = int(session.get("boundary", {}).get("pairs_total", max(0, macro_total - 1)) or 0)
-            if pairs_total > 0:
-                try:
-                    done_files = [n for n in os.listdir(boundary_dir) if n.lower().startswith("boundary_") and n.lower().endswith(".done")]
-                except Exception:
-                    done_files = []
 
-                done_idxs = set()
-                for n in done_files:
-                    m = re.match(r"^boundary_(\d{3})\.done$", n, flags=re.IGNORECASE)
-                    if m:
-                        try:
-                            done_idxs.add(int(m.group(1)))
-                        except Exception:
-                            pass
-
-                next_pair = int(session.get("boundary", {}).get("next_pair", 1) or 1)
-                if done_idxs:
-                    next_pair = max(next_pair, max(done_idxs) + 1)
-
-                # ETA step-based: totali e progresso attuale (utile in ripresa).
-                safe_set_work_totals(boundary_total=pairs_total)
-                safe_update_work_done("boundary", max(0, int(next_pair) - 1), total=pairs_total)
-
-                def _split_paras(t):
-                    return [p for p in (t or "").split("\n\n") if p.strip()]
-
-                def _join_paras(parts):
-                    return "\n\n".join([p.strip() for p in parts if p and p.strip()]).strip()
-
-                k_par = 6
-                MIN_NORM_CHARS_STRICT = 80
-                MIN_NORM_CHARS_SUSPECT = 120
-                SUSPECT_RATIO = 0.975
-
-                def _is_heading_para(p: str) -> bool:
-                    first = (p or "").lstrip()
-                    return bool(re.match(r"^#{1,6}\s+\\S", first))
-
-                def _norm_para(p: str) -> str:
-                    s = (p or "").strip()
-                    # Rimuovi marker Markdown comuni per confronti piu' stabili
-                    s = s.replace("**", "")
-                    s = re.sub(r"(?m)^\\s*([*+-]|\\d+\\.)\\s+", "", s)  # bullet/numero a inizio riga
-                    s = re.sub(r"[^\\w\\s]", " ", s, flags=re.UNICODE)  # rimuove punteggiatura, preserva lettere accentate
-                    s = re.sub(r"\\s+", " ", s).strip().lower()
-                    return s
-
-                def _strict_dup(tail_p: str, head_p: str) -> bool:
-                    # Conservativo: elimina solo duplicati certi (uguali o quasi uguali per contenimento forte).
-                    if _is_heading_para(head_p):
-                        return False
-                    a = _norm_para(tail_p)
-                    b = _norm_para(head_p)
-                    if len(b) < MIN_NORM_CHARS_STRICT or len(a) < MIN_NORM_CHARS_STRICT:
-                        return False
-                    if a == b:
-                        return True
-                    # Se la testa del blocco N+1 e' praticamente contenuta nella coda del blocco N (stesso contenuto),
-                    # possiamo rimuovere il duplicato nel blocco N+1 senza perdere dettaglio.
-                    if b in a and (len(b) / max(1, len(a))) >= 0.92:
-                        return True
-                    return False
-
-                def _max_similarity(tail_list, head_list) -> float:
-                    best = 0.0
-                    for tp in tail_list:
-                        na = _norm_para(tp)
-                        if len(na) < MIN_NORM_CHARS_SUSPECT:
-                            continue
-                        for hp in head_list:
-                            if _is_heading_para(hp):
-                                continue
-                            nb = _norm_para(hp)
-                            if len(nb) < MIN_NORM_CHARS_SUSPECT:
-                                continue
-                            r = difflib.SequenceMatcher(a=na, b=nb).ratio()
-                            if r > best:
-                                best = r
-                    return best
-
-                for pair_idx in range(next_pair, pairs_total + 1):
-                    if cancelled():
-                        print("   [*] Operazione annullata dall'utente.")
-                        return
-                    safe_phase(f"Fase 3/3: confine ({pair_idx}/{pairs_total})")
-
-                    boundary_step_t0 = time.monotonic()
-                    done_path = os.path.join(boundary_dir, f"boundary_{pair_idx:03}.done")
-                    if os.path.exists(done_path):
-                        session["boundary"]["next_pair"] = int(pair_idx + 1)
-                        save_session()
-                        safe_register_step_time("boundary", 0.0, done=pair_idx, total=pairs_total)
-                        continue
-
-                    try:
-                        a = read_text_file(os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md")).strip()
-                        b = read_text_file(os.path.join(phase2_revised_dir, f"rev_{pair_idx+1:03}.md")).strip()
-                    except Exception:
-                        a = ""
-                        b = ""
-
-                    a_parts = _split_paras(a)
-                    b_parts = _split_paras(b)
-                    if not a_parts or not b_parts:
-                        done_path = os.path.join(boundary_dir, f"boundary_{pair_idx:03}.done")
-                        try:
-                            _atomic_write_text(done_path, "")
-                        except Exception:
-                            pass
-                        session["boundary"]["next_pair"] = int(pair_idx + 1)
-                        save_session()
-                        safe_register_step_time(
-                            "boundary",
-                            max(0.0, time.monotonic() - float(boundary_step_t0)),
-                            done=pair_idx,
-                            total=pairs_total,
-                        )
-                        continue
-
-                    tail_count = min(k_par, len(a_parts))
-                    head_count = min(k_par, len(b_parts))
-                    tail_list = a_parts[-tail_count:]
-                    head_list = b_parts[:head_count]
-
-                    # ------------------------------------------
-                    # Confine "intelligente" (locale + AI fallback)
-                    # ------------------------------------------
-                    # 1) Deduplica locale (solo duplicati certi, per non perdere dettaglio)
-                    overlap = 0
-                    max_try = min(len(tail_list), len(head_list))
-                    for L in range(max_try, 0, -1):
-                        ok = True
-                        for j in range(L):
-                            if not _strict_dup(tail_list[-L + j], head_list[j]):
-                                ok = False
-                                break
-                        if ok:
-                            overlap = L
-                            break
-
-                    if overlap > 0:
-                        print(f"   -> Confine {pair_idx}/{pairs_total}: duplicati certi trovati (locale). Rimuovo {overlap} paragrafo/i duplicati dal blocco N+1.")
-                        new_b_parts = b_parts[overlap:]
-                        new_b = _join_paras(new_b_parts)
-                        path_b = os.path.join(phase2_revised_dir, f"rev_{pair_idx+1:03}.md")
-                        try:
-                            _atomic_write_text(path_b, (new_b + "\n") if new_b else "")
-                        except Exception:
-                            pass
-                        done_path = os.path.join(boundary_dir, f"boundary_{pair_idx:03}.done")
-                        try:
-                            _atomic_write_text(done_path, "")
-                        except Exception:
-                            pass
-                        session["boundary"]["next_pair"] = int(pair_idx + 1)
-                        session["last_error"] = None
-                        save_session()
-                        safe_progress(0.9 + 0.08 * (pair_idx / max(1, pairs_total)))
-                        safe_register_step_time(
-                            "boundary",
-                            max(0.0, time.monotonic() - float(boundary_step_t0)),
-                            done=pair_idx,
-                            total=pairs_total,
-                        )
-                        continue
-
-                    # 2) Se non ci sono segnali di sovrapposizione, salta la chiamata AI
-                    sim = _max_similarity(tail_list, head_list)
-                    if sim < SUSPECT_RATIO:
-                        print(f"   -> Confine {pair_idx}/{pairs_total}: nessuna sovrapposizione evidente (locale). Skip AI.")
-                        done_path = os.path.join(boundary_dir, f"boundary_{pair_idx:03}.done")
-                        try:
-                            _atomic_write_text(done_path, "")
-                        except Exception:
-                            pass
-                        session["boundary"]["next_pair"] = int(pair_idx + 1)
-                        session["last_error"] = None
-                        save_session()
-                        safe_progress(0.9 + 0.08 * (pair_idx / max(1, pairs_total)))
-                        safe_register_step_time(
-                            "boundary",
-                            max(0.0, time.monotonic() - float(boundary_step_t0)),
-                            done=pair_idx,
-                            total=pairs_total,
-                        )
-                        continue
-
-                    # 3) Caso ambiguo: fallback all'AI (manteniamo dettaglio, ma consumiamo richieste solo quando serve)
-                    tail = _join_paras(tail_list)
-                    head = _join_paras(head_list)
-                    print(f"   -> Confine {pair_idx}/{pairs_total}: sovrapposizione sospetta (sim={sim:.3f}). Fallback AI...")
-
-                    payload = (
-                        "FINE BLOCCO N:\n"
-                        + tail
-                        + "\n\n<<<EL_SBOBINATOR_SPLIT>>>\n\n"
-                        + "INIZIO BLOCCO N+1:\n"
-                        + head
-                    )
-
-                    tent = 0
-                    while tent < 4:
-                        try:
-                            resp = client.models.generate_content(
-                                model=model_name,
-                                contents=[payload, PROMPT_REVISIONE_CONFINE],
-                                config=types.GenerateContentConfig(temperature=0.1),
-                            )
-                            out = (resp.text or "").strip()
-                            if "<<<EL_SBOBINATOR_SPLIT>>>" not in out:
-                                raise RuntimeError("Marker non trovato nell'output di revisione confine.")
-
-                            left, right = out.split("<<<EL_SBOBINATOR_SPLIT>>>", 1)
-                            new_tail = left.strip()
-                            new_head = right.strip()
-                            if not new_tail or not new_head:
-                                raise RuntimeError("Output confine vuoto.")
-
-                            a_prefix = _join_paras(a_parts[:-tail_count])
-                            b_suffix = _join_paras(b_parts[head_count:])
-
-                            new_a = (a_prefix + "\n\n" + new_tail).strip() if a_prefix else new_tail
-                            new_b = (new_head + "\n\n" + b_suffix).strip() if b_suffix else new_head
-
-                            path_a = os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md")
-                            path_b = os.path.join(phase2_revised_dir, f"rev_{pair_idx+1:03}.md")
-                            _atomic_write_text(path_a, new_a + "\n")
-                            _atomic_write_text(path_b, new_b + "\n")
-
-                            done_path = os.path.join(boundary_dir, f"boundary_{pair_idx:03}.done")
-                            try:
-                                _atomic_write_text(done_path, "")
-                            except Exception:
-                                pass
-
-                            session["boundary"]["next_pair"] = int(pair_idx + 1)
-                            session["last_error"] = None
-                            save_session()
-
-                            safe_progress(0.9 + 0.08 * (pair_idx / max(1, pairs_total)))
-                            safe_register_step_time(
-                                "boundary",
-                                max(0.0, time.monotonic() - float(boundary_step_t0)),
-                                done=pair_idx,
-                                total=pairs_total,
-                            )
-                            break
-                        except Exception as e:
-                            errore = str(e).lower()
-                            if "429" in errore or "resource_exhausted" in errore or "quota" in errore:
-                                is_daily_limit = (
-                                    "per day" in errore
-                                    or "quota_exceeded" in errore
-                                    or "daily" in errore
-                                    or ("429" in errore and "minute" not in errore and "rpm" not in errore)
-                                )
-                                if not is_daily_limit and tent < 3:
-                                    print("      [Limite temporaneo. Attesa di 65s...]")
-                                    if not generation_service.sleep_with_cancel(cancelled, 65):
-                                        print("   [*] Operazione annullata dall'utente.")
-                                        return
-                                    tent += 1
-                                    continue
-
-                                print("\n[!] LIMITE GIORNALIERO durante revisione confine!")
-                                new_c, rotated, rotated_key = generation_service.try_rotate_key(
-                                    client,
-                                    fallback_keys,
-                                    model_name,
-                                    logger=logger,
-                                )
-                                if rotated:
-                                    client = new_c
-                                    safe_set_effective_api_key(rotated_key)
-                                    print("   Ripresa automatica...")
-                                    tent = 0
-                                    continue
-
-                                # Nessuna chiave automatica: popup manuale.
-                                nuova_api = richiedi_chiave_riserva()
-                                if nuova_api and nuova_api.strip():
-                                    try:
-                                        test_c = genai.Client(api_key=nuova_api.strip())
-                                        test_c.models.get(model=model_name)
-                                    except Exception as err:
-                                        print(f"   [!] Chiave non valida fornita: {err}")
-                                    else:
-                                        client = test_c
-                                        safe_set_effective_api_key(nuova_api.strip())
-                                        print("   [*] Nuova API Key valida! Ripresa automatica...")
-                                        tent = 0
-                                        continue
-
-                                print("[*] Interruzione: progressi salvati. Potrai riprendere piu' tardi.")
-                                session["last_error"] = "quota_daily_limit_boundary"
-                                save_session()
-                                return
-
-                            print("      [Errore confine. Riprovo in 20 secondi...]")
-                            if not generation_service.sleep_with_cancel(cancelled, 20):
-                                print("   [*] Operazione annullata dall'utente.")
-                                return
-                            tent += 1
-
-            session["stage"] = "done"
-            session["last_error"] = None
-            save_session()
 
         # ==========================================
         # 3. SALVATAGGIO FINALE (MARKDOWN + HTML)

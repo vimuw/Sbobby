@@ -24,6 +24,7 @@ describe('createBridge', () => {
       onAskNewKey,
       onBatchDone,
       onFileDone,
+      onFilesDropped: vi.fn(),
     });
 
     dispatch({
@@ -65,6 +66,7 @@ describe('createBridge', () => {
       onAskNewKey,
       onBatchDone: vi.fn(),
       onFileDone: vi.fn(),
+      onFilesDropped: vi.fn(),
     });
 
     bridge.askRegenerate({ filename: 'lesson.mp3' });

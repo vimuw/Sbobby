@@ -39,9 +39,6 @@ __all__ = [
     "_file_fingerprint",
     "_session_id_for_file",
     "_session_dir_for_file",
-    "FONT_UI",
-    "FONT_UI_EMOJI",
-    "FONT_MONO",
     "PROMPT_SISTEMA",
     "PROMPT_REVISIONE",
     "PROMPT_REVISIONE_CONFINE",
@@ -551,26 +548,6 @@ def _session_id_for_file(path: str) -> str:
 
 def _session_dir_for_file(path: str) -> str:
     return os.path.join(SESSION_ROOT, _session_id_for_file(path))
-
-
-# ==========================================
-# FONT CROSS-PLATFORM
-# ==========================================
-if platform.system() == "Darwin":  # macOS
-    FONT_UI = "Helvetica"
-    FONT_UI_EMOJI = "Apple Color Emoji"
-    FONT_MONO = "Menlo"
-else:
-    FONT_UI = "Segoe UI"
-    # Windows: font dedicato agli emoji. Linux: fallback ragionevole.
-    FONT_UI_EMOJI = "Segoe UI Emoji" if platform.system() == "Windows" else "Noto Color Emoji"
-    FONT_MONO = "Cascadia Code"
-
-# Font che include emoji senza sballare l'allineamento con il testo (soprattutto su Windows).
-if platform.system() == "Windows":
-    FONT_UI_EMOJI = "Segoe UI Emoji"
-else:
-    FONT_UI_EMOJI = FONT_UI
 
 
 # ==========================================

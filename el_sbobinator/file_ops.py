@@ -5,7 +5,6 @@ File-system helpers shared by the WebView backend.
 from __future__ import annotations
 
 import os
-import re
 import sys
 
 
@@ -37,13 +36,16 @@ def save_html_body_content(path: str, content: str) -> None:
         original_html = handle.read()
 
     body_inner = str(content or "")
-    body_re = re.compile(r"(?is)(<body\b[^>]*>)(.*?)(</body>)")
-    if body_re.search(original_html):
-        updated_html = body_re.sub(
-            lambda match: f"{match.group(1)}\n{body_inner}\n{match.group(3)}",
-            original_html,
-            count=1,
-        )
+    html_lower = original_html.lower()
+    body_open_end = html_lower.find("<body")
+    body_close = -1
+    if body_open_end != -1:
+        body_open_end = html_lower.find(">", body_open_end)
+        body_close = html_lower.rfind("</body>")
+    if body_open_end != -1 and body_close != -1 and body_close > body_open_end:
+        open_tag = original_html[: body_open_end + 1]
+        close_tag = original_html[body_close:]
+        updated_html = f"{open_tag}\n{body_inner}\n{close_tag}"
     else:
         updated_html = (
             "<!DOCTYPE html>\n"
@@ -57,9 +59,14 @@ def save_html_body_content(path: str, content: str) -> None:
 
 def export_doc_html(path: str, doc_html: str) -> str:
     target_path = path
-    if not target_path.lower().endswith(".doc") and not target_path.lower().endswith(".docx"):
-        target_path += ".doc"
+    if not target_path.lower().endswith(".docx"):
+        if target_path.lower().endswith(".doc"):
+            target_path += "x"
+        else:
+            target_path += ".docx"
 
-    with open(target_path, "w", encoding="utf-8") as handle:
-        handle.write(doc_html)
+    from html2docx import html2docx
+    buf = html2docx(doc_html, title="Sbobina")
+    with open(target_path, "wb") as handle:
+        handle.write(buf.getvalue())
     return target_path

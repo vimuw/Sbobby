@@ -39,6 +39,7 @@ export interface BridgeCallbacks {
   fileFailed: (data: FileFailedPayload) => void;
   askRegenerate: (data: { filename: string; mode?: 'completed' | 'resume' }) => void;
   askNewKey: () => void;
+  filesDropped: (files: FileDescriptor[]) => void;
 }
 
 export interface PywebviewApi {
@@ -47,11 +48,13 @@ export interface PywebviewApi {
   ask_files?: () => Promise<FileDescriptor[]>;
   ask_media_file?: () => Promise<FileDescriptor | null>;
   check_path_exists?: (path: string) => Promise<{ ok: boolean; exists: boolean }>;
+  collect_dropped_files?: (names: string[]) => Promise<{ ok: boolean }>;
   start_processing?: (files: FileDescriptor[], apiKey: string, resumeSession: boolean) => Promise<{ ok: boolean; error?: string }>;
   stop_processing?: () => Promise<{ ok: boolean }>;
   answer_regenerate?: (regenerate: boolean) => Promise<{ ok: boolean }>;
   answer_new_key?: (key: string) => Promise<{ ok: boolean }>;
   open_file?: (path: string) => Promise<{ ok: boolean; error?: string }>;
+  open_url?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   read_html_content?: (path: string) => Promise<{ ok: boolean; content?: string; error?: string }>;
   save_html_content?: (path: string, content: string) => Promise<{ ok: boolean; error?: string }>;
   stream_media_file?: (path: string) => Promise<{ ok: boolean; url?: string; error?: string }>;
@@ -67,8 +70,9 @@ export function createBridge(options: {
   onAskNewKey: () => void;
   onBatchDone: (data: ProcessDonePayload) => void;
   onFileDone: (data: FileDonePayload) => void;
+  onFilesDropped: (files: FileDescriptor[]) => void;
 }): BridgeCallbacks {
-  const { dispatch, appendConsole, onRegenerate, onAskNewKey, onBatchDone, onFileDone } = options;
+  const { dispatch, appendConsole, onRegenerate, onAskNewKey, onBatchDone, onFileDone, onFilesDropped } = options;
 
   return {
     appendConsole,
@@ -90,5 +94,6 @@ export function createBridge(options: {
     fileFailed: data => dispatch({ type: 'bridge/file_failed', data }),
     askRegenerate: onRegenerate,
     askNewKey: onAskNewKey,
+    filesDropped: onFilesDropped,
   };
 }

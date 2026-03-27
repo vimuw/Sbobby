@@ -18,21 +18,53 @@ import {
   Key,
   Moon,
   Play,
+  Printer,
   Settings,
   Square,
   Sun,
   Trash2,
   UploadCloud,
   X,
+  Zap,
 } from 'lucide-react';
-import { APP_NAME, APP_SHORT } from './branding';
+import { APP_NAME, APP_SHORT, APP_VERSION, GITHUB_API_RELEASES_URL, GITHUB_RELEASES_URL, GITHUB_URL, KOFI_URL } from './branding';
 import { createBridge, type BridgeCallbacks, type PywebviewApi, type ValidationResult } from './bridge';
-import { initialProcessingState, processingReducer, type FileDescriptor, type FileItem } from './appState';
+import { initialProcessingState, processingReducer, type AppStatus, type FileDescriptor, type FileItem } from './appState';
 
 const LazyAudioPlayer = React.lazy(() => import('./AudioPlayer').then(module => ({ default: module.AudioPlayer })));
 const LazyRichTextEditor = React.lazy(() => import('./RichTextEditor').then(module => ({ default: module.RichTextEditor })));
 const QUEUE_STORAGE_KEY = 'el-sbobinator.queue.v1';
 const THEME_STORAGE_KEY = 'el-sbobinator.theme.v1';
+const EDITOR_SESSION_STORAGE_KEY = 'el-sbobinator.editor-sessions.v1';
+const UPDATE_DISMISSED_KEY = 'el-sbobinator.dismissed-update.v1';
+const UPDATE_LAST_CHECK_KEY = 'el-sbobinator.last-update-check.v1';
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+type EditorSession = {
+  audioTime?: number;
+  playbackRate?: number;
+  volume?: number;
+  scrollTop?: number;
+};
+
+const loadEditorSession = (key: string): EditorSession => {
+  try {
+    const raw = window.localStorage.getItem(EDITOR_SESSION_STORAGE_KEY);
+    if (!raw) return {};
+    const sessions = JSON.parse(raw) as Record<string, EditorSession>;
+    return sessions[key] ?? {};
+  } catch (_) { return {}; }
+};
+
+const saveEditorSession = (key: string, session: EditorSession) => {
+  try {
+    const raw = window.localStorage.getItem(EDITOR_SESSION_STORAGE_KEY) ?? '{}';
+    const sessions = JSON.parse(raw) as Record<string, EditorSession>;
+    sessions[key] = session;
+    window.localStorage.setItem(EDITOR_SESSION_STORAGE_KEY, JSON.stringify(sessions));
+  } catch (_) {}
+};
+
 const SUPPORTED_FORMATS = ['MP3', 'M4A', 'WAV', 'MP4', 'MKV', 'WEBM', 'OGG', 'FLAC', 'AAC'];
 const GEMINI_KEY_PATTERN = /^AIza[0-9A-Za-z_-]{20,}$/;
 const EDITOR_IMAGE_ALLOWED_DATA_ATTRS = new Set(['data-editor-image', 'data-layout', 'data-align', 'data-width']);
@@ -99,6 +131,7 @@ export default function App() {
   const [previewSourcePath, setPreviewSourcePath] = useState<string>('');
   const [audioRelinkNeeded, setAudioRelinkNeeded] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isValidatingEnvironment, setIsValidatingEnvironment] = useState(false);
@@ -108,19 +141,34 @@ export default function App() {
   ]);
   const [showApiKeys, setShowApiKeys] = useState(false);
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
+  const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
   
+  const [previewInitAudio, setPreviewInitAudio] = useState<{ time?: number; playbackRate?: number; volume?: number }>({});
+  const [previewInitScrollTop, setPreviewInitScrollTop] = useState<number | undefined>(undefined);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const consoleEndRef = useRef<HTMLDivElement>(null);
   const filesRef = useRef<FileItem[]>([]);
+  const appStateRef = useRef<AppStatus>('idle');
   const hasRestoredQueueRef = useRef(false);
   const lastPersistedPreviewRef = useRef('');
+  const currentEditorSessionRef = useRef<EditorSession>({});
+  const currentPreviewSessionKeyRef = useRef<string | null>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
   const appendConsole = useCallback((msg: string) => {
-    setConsoleLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+    setConsoleLogs(prev => {
+      const next = [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`];
+      return next.length > 300 ? next.slice(-300) : next;
+    });
   }, []);
 
   useEffect(() => {
     filesRef.current = files;
   }, [files]);
+
+  useEffect(() => {
+    appStateRef.current = appState;
+  }, [appState]);
 
   useEffect(() => {
     try {
@@ -148,6 +196,36 @@ export default function App() {
       window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
     } catch (_) {}
   }, [themeMode]);
+
+  useEffect(() => {
+    const compareVersions = (a: string, b: string): number => {
+      const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number);
+      const [aMaj, aMin, aPatch] = parse(a);
+      const [bMaj, bMin, bPatch] = parse(b);
+      return aMaj !== bMaj ? aMaj - bMaj : aMin !== bMin ? aMin - bMin : aPatch - bPatch;
+    };
+
+    try {
+      const lastCheck = Number(window.localStorage.getItem(UPDATE_LAST_CHECK_KEY) || 0);
+      if (Date.now() - lastCheck < UPDATE_CHECK_INTERVAL_MS) return;
+      window.localStorage.setItem(UPDATE_LAST_CHECK_KEY, String(Date.now()));
+    } catch (_) {}
+
+    fetch(GITHUB_API_RELEASES_URL)
+      .then(r => r.json())
+      .then(data => {
+        const latest: string = data?.tag_name;
+        if (!latest) return;
+        try {
+          const dismissed = window.localStorage.getItem(UPDATE_DISMISSED_KEY);
+          if (dismissed === latest) return;
+        } catch (_) {}
+        if (compareVersions(latest, APP_VERSION) > 0) {
+          setUpdateAvailable(latest);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (hasRestoredQueueRef.current) return;
@@ -236,19 +314,33 @@ export default function App() {
       dispatch,
       appendConsole,
       onRegenerate: data => setRegeneratePrompt(data),
+      onFilesDropped: (droppedFiles) => {
+        if (appStateRef.current !== 'idle') return;
+        const filesToAdd = droppedFiles.map(f => ({
+          id: Math.random().toString(36).substring(2, 9),
+          name: f.name,
+          size: f.size,
+          duration: f.duration || 0,
+          path: f.path,
+          status: 'queued' as const,
+          progress: 0,
+          phase: 0,
+        }));
+        enqueueUniqueFiles(filesToAdd);
+      },
       onAskNewKey: () => {
         setNewKeyInput('');
         setAskNewKeyPrompt(true);
       },
       onBatchDone: data => {
-        if (!data?.cancelled && data?.total && data.completed === data.total && window.pywebview?.api?.show_notification) {
+        if (!data?.cancelled && data?.total && data.completed === data.total && window.pywebview?.api?.show_notification && !document.hasFocus()) {
           window.pywebview.api.show_notification('Elaborazione completata', 'Tutti i file in coda sono stati sbobinati con successo.');
         }
       },
       onFileDone: data => {
         const currentFile = filesRef.current.find(file => file.id === data.id);
-        if (currentFile && window.pywebview?.api?.show_notification) {
-          window.pywebview.api.show_notification("File Completato!", `âœ… ${currentFile.name} pronto.`);
+        if (currentFile && window.pywebview?.api?.show_notification && !document.hasFocus()) {
+          window.pywebview.api.show_notification('File Completato!', `✅ ${currentFile.name} pronto.`);
         }
       },
     });
@@ -285,9 +377,12 @@ export default function App() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    if (appState !== 'idle') return;
-    if (e.dataTransfer.files?.length > 0) {
-      appendConsole('âš  Usa "Sfoglia" per selezionare i file (il drag&drop dal desktop non fornisce il percorso completo).');
+    if (appStateRef.current !== 'idle' || !e.dataTransfer.files.length) return;
+    const w = window as any;
+    if (w.chrome?.webview?.postMessageWithAdditionalObjects) {
+      const names = Array.from(e.dataTransfer.files).map((f: File) => f.name);
+      w.chrome.webview.postMessageWithAdditionalObjects('FilesDropped', e.dataTransfer.files);
+      window.pywebview?.api?.collect_dropped_files?.(names);
     }
   };
 
@@ -295,7 +390,7 @@ export default function App() {
     if (appState !== 'idle') return;
     // Aggiunto controllo più robusto per l'API Python
     if (!apiReady || !window.pywebview || !window.pywebview.api) {
-      appendConsole('âš  In attesa della connessione con Python... riprova tra un momento.');
+      appendConsole('⚠ In attesa della connessione con Python... riprova tra un momento.');
       return;
     }
 
@@ -310,7 +405,7 @@ export default function App() {
         enqueueUniqueFiles(filesToAdd);
       }
     } catch (e) {
-      appendConsole(`âŒ Errore selezione file: ${e}`);
+      appendConsole(`❌ Errore selezione file: ${e}`);
     }
   };
 
@@ -392,7 +487,7 @@ export default function App() {
     if (skippedDuplicates > 0) {
       appendConsole(`${skippedDuplicates} file ${skippedDuplicates === 1 ? 'gia presente in coda ignorato.' : 'gia presenti in coda ignorati.'}`);
     }
-  }, [appendConsole, getFileFingerprint]);
+  }, [appendConsole]);
 
   const getProcessingDetails = (phaseText?: string) => {
     const rawPhase = String(phaseText || '').trim();
@@ -417,7 +512,7 @@ export default function App() {
 
   const resolveQueuedFilesForProcessing = useCallback(async () => {
     const api = window.pywebview?.api;
-    const queuedFiles = filesRef.current.filter(file => file.status === 'queued');
+    const queuedFiles = filesRef.current.filter(file => file.status === 'queued' || file.status === 'done');
 
     if (queuedFiles.length === 0) {
       return [] as FileDescriptor[];
@@ -485,7 +580,7 @@ export default function App() {
 
       const result = await window.pywebview.api.start_processing?.(fileDescriptors, apiKey.trim(), true);
       if (!result?.ok) {
-        appendConsole(`âŒ ${result?.error || "Impossibile avviare l'elaborazione."}`);
+        appendConsole(`❌ ${result?.error || "Impossibile avviare l'elaborazione."}`);
       }
     }
   };
@@ -515,7 +610,71 @@ export default function App() {
     setIsSettingsOpen(false);
   };
 
+  const handleExportDoc = useCallback(async () => {
+    setIsExportMenuOpen(false);
+    const html = editedContent;
+    const docxTemplate = `<html><head><meta charset='utf-8'><title>${previewTitle || 'Sbobina'}</title></head><body>${html}</body></html>`;
+    if (window.pywebview?.api?.export_docx) {
+      const res = await window.pywebview.api.export_docx(`${previewTitle || 'Sbobina'}.docx`, docxTemplate);
+      if (!res.ok && res.error !== "Annullato dall'utente") appendConsole(`❌ Errore salvataggio Word: ${res.error}`);
+    } else {
+      const blob = new Blob(['\ufeff', docxTemplate], { type: 'application/msword;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${previewTitle || 'Sbobina'}.docx`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  }, [editedContent, previewTitle, appendConsole]);
+
+  const handleExportPdf = useCallback(() => {
+    setIsExportMenuOpen(false);
+    const html = editedContent;
+    const printWindow = document.createElement('iframe');
+    printWindow.style.cssText = 'position:fixed;top:5vh;left:5vw;width:90vw;height:90vh;opacity:0;pointer-events:none;z-index:-1;';
+    document.body.appendChild(printWindow);
+    const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"], style')).map(el => el.outerHTML).join('\n');
+    const doc = printWindow.contentWindow?.document;
+    if (!doc) { document.body.removeChild(printWindow); return; }
+    doc.open();
+    doc.write(`<html><head><title>${previewTitle || 'Sbobina'}</title><meta charset="utf-8">${styleLinks}<style>body{padding:40px!important;background:white!important;color:black!important;}@media print{body{padding:0!important;}}</style></head><body><div class="prose prose-sm sm:prose-base max-w-none tiptap-editor">${html}</div><script>window.onload=()=>{setTimeout(()=>{window.print();setTimeout(()=>{window.parent.document.body.removeChild(window.frameElement);},1000);},750);};<\/script></body></html>`);
+    doc.close();
+  }, [editedContent, previewTitle]);
+
+  const handleCopyForGoogleDocs = useCallback(async () => {
+    setIsExportMenuOpen(false);
+    const normalizedHtml = normalizePreviewHtmlContent(editedContent);
+    const temp = document.createElement('div');
+    temp.innerHTML = normalizedHtml;
+    try {
+      const htmlBlob = new Blob([normalizedHtml], { type: 'text/html' });
+      const textBlob = new Blob([temp.textContent || temp.innerText || ''], { type: 'text/plain' });
+      await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
+    } catch (_) {
+      navigator.clipboard.writeText(temp.textContent || temp.innerText || '');
+    }
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  }, [editedContent]);
+
+  const handleAudioStateChange = useCallback(({ currentTime, playbackRate, volume }: { currentTime: number; playbackRate: number; volume: number }) => {
+    currentEditorSessionRef.current = { ...currentEditorSessionRef.current, audioTime: currentTime, playbackRate, volume };
+  }, []);
+
+  const handleScrollTopChange = useCallback((scrollTop: number) => {
+    currentEditorSessionRef.current = { ...currentEditorSessionRef.current, scrollTop };
+  }, []);
+
   const closePreview = useCallback(() => {
+    const sessionKey = currentPreviewSessionKeyRef.current;
+    if (sessionKey) {
+      const session = currentEditorSessionRef.current;
+      const hasData = session.audioTime !== undefined || session.playbackRate !== undefined || session.volume !== undefined || session.scrollTop !== undefined;
+      if (hasData) saveEditorSession(sessionKey, session);
+    }
+    currentEditorSessionRef.current = {};
+    currentPreviewSessionKeyRef.current = null;
+    setIsExportMenuOpen(false);
     setPreviewContent(null);
     setEditedContent('');
     setPreviewTitle('');
@@ -535,14 +694,14 @@ export default function App() {
     try {
       const response = await window.pywebview.api.validate_environment(apiKey.trim(), Boolean(apiKey.trim()));
       if (!response?.ok || !response.result) {
-        appendConsole(`Ã¢ÂÅ’ Validazione ambiente fallita: ${response?.error || 'errore sconosciuto'}`);
+        appendConsole(`❌ Validazione ambiente fallita: ${response?.error || 'errore sconosciuto'}`);
         setValidationResult(null);
         return;
       }
       setValidationResult(response.result);
       appendConsole(response.result.summary);
     } catch (error: any) {
-      appendConsole(`Ã¢ÂÅ’ Validazione ambiente fallita: ${error?.message || error}`);
+      appendConsole(`❌ Validazione ambiente fallita: ${error?.message || error}`);
       setValidationResult(null);
     } finally {
       setIsValidatingEnvironment(false);
@@ -590,7 +749,7 @@ export default function App() {
       await loadPreviewAudio(selectedFile.path);
       appendConsole(`Audio ricollegato: ${selectedFile.name}`);
     } catch (error: any) {
-      appendConsole(`âŒ Impossibile ricollegare l'audio: ${error?.message || error}`);
+      appendConsole(`❌ Impossibile ricollegare l'audio: ${error?.message || error}`);
     }
   }, [appendConsole, loadPreviewAudio, previewFileId]);
 
@@ -600,11 +759,17 @@ export default function App() {
       try {
         const res = await window.pywebview.api.read_html_content(htmlPath);
         if (res.ok) {
-          // Extract only the body content to prevent internal <style> blocks from infecting the global React UI
           const bodyMatch = res.content.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
           const extractedContent = bodyMatch ? bodyMatch[1] : res.content.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
           const safeContent = normalizePreviewHtmlContent(extractedContent);
-          
+
+          const sessionKey = fileId ?? htmlPath;
+          currentPreviewSessionKeyRef.current = sessionKey;
+          const savedSession = loadEditorSession(sessionKey);
+          currentEditorSessionRef.current = { ...savedSession };
+          setPreviewInitAudio({ time: savedSession.audioTime, playbackRate: savedSession.playbackRate, volume: savedSession.volume });
+          setPreviewInitScrollTop(savedSession.scrollTop);
+
           setPreviewContent(safeContent);
           setEditedContent(safeContent);
           setPreviewTitle(filename);
@@ -616,13 +781,13 @@ export default function App() {
           lastPersistedPreviewRef.current = safeContent;
           await loadPreviewAudio(sourcePath);
         } else {
-          appendConsole(`âŒ Errore anteprima: ${res.error}`);
+          appendConsole(`❌ Errore anteprima: ${res.error}`);
         }
       } catch (e: any) {
-        appendConsole(`âŒ Errore JS anteprima: ${e.message || e}`);
+        appendConsole(`❌ Errore JS anteprima: ${e.message || e}`);
       }
     } else {
-      appendConsole('âŒ Funzione anteprima non disponibile in questa versione.');
+      appendConsole('❌ Funzione anteprima non disponibile in questa versione.');
     }
   };
 
@@ -675,6 +840,15 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [previewContent, closePreview]);
 
+  useEffect(() => {
+    if (!isExportMenuOpen) return;
+    const handlePointerDown = (e: PointerEvent) => {
+      if (!exportMenuRef.current?.contains(e.target as Node)) setIsExportMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [isExportMenuOpen]);
+
   return (
     <div className="app-shell min-h-screen font-sans flex flex-col" style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)' }}>
       
@@ -691,9 +865,9 @@ export default function App() {
                   <circle cx="17" cy="48" r="1" fill="#F5D57F" />
                   <path d="M 2 22 C 2 18, 30 18, 30 22" fill="#C38243"/>
                   <path d="M 9 18 C 9 18, 11 4, 16 4 C 21 4, 23 18, 23 18 Z" fill="#F2C86F"/>
-                  <path d="M 9.5 15 Q 16 17 22.5 15 L 23 18 Q 16 20 9 18 Z" fill="#D96D42"/>
-                  <path d="M 10 12 Q 16 14 22 12 L 22.5 15 Q 16 17 9.5 15 Z" fill="#2B9B7D"/>
-                  <path d="M 10.5 9 Q 16 11 21.5 9 L 22 12 Q 16 14 10 12 Z" fill="#FFF5E4"/>
+                  <path d="M 9.5 15 Q 16 17 22.5 15 L 23 18 Q 16 20 9.5 15 Z" fill="#D96D42"/>
+                  <path d="M 10 12 Q 16 14 22 12 L 22.5 15 Q 16 17 10 15 Z" fill="#2B9B7D"/>
+                  <path d="M 10.5 9 Q 16 11 21.5 9 L 22 12 Q 16 14 10.5 12 Z" fill="#FFF5E4"/>
                   <path d="M 2 22 C 2 28, 30 28, 30 22 C 30 20, 25 18, 16 18 C 7 18, 2 20, 2 22 Z" fill="#F2C86F"/>
                   <path d="M 2 22 C 2 28, 30 28, 30 22" fill="none" stroke="#C38243" strokeWidth="1.5"/>
                 </svg>
@@ -731,6 +905,47 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      <AnimatePresence>
+        {updateAvailable && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="w-full"
+            style={{ background: 'var(--accent-subtle)', borderBottom: '1px solid var(--accent-ring, var(--border-default))' }}
+          >
+            <div className="max-w-6xl mx-auto px-5 sm:px-6 py-2.5 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5 text-sm font-medium" style={{ color: 'var(--accent-text, var(--text-primary))' }}>
+                <Zap className="w-4 h-4 shrink-0" />
+                <span>Nuova versione disponibile: <strong>{updateAvailable}</strong></span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL); }}
+                  className="premium-button-secondary compact-button text-xs px-3 py-1.5"
+                  style={{ color: 'var(--accent-text, var(--text-primary))', borderColor: 'var(--accent-ring, var(--border-default))' }}
+                >
+                  Scarica
+                </a>
+                <button
+                  onClick={() => {
+                    try { window.localStorage.setItem(UPDATE_DISMISSED_KEY, updateAvailable); } catch (_) {}
+                    setUpdateAvailable(null);
+                  }}
+                  className="icon-button h-7 w-7 rounded-[10px]"
+                  style={{ color: 'var(--text-muted)' }}
+                  aria-label="Chiudi avviso aggiornamento"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <main className="max-w-6xl mx-auto px-5 sm:px-6 py-8 w-full flex-1 flex flex-col gap-6">
         
@@ -774,12 +989,7 @@ export default function App() {
             <div className="flex flex-col items-end gap-2">
               <AnimatePresence>
                 {files.length > 0 && appState === 'idle' && (
-                  <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="flex items-center justify-end gap-2 self-end">
-                    {doneCount > 0 && (
-                      <button onClick={clearCompletedFiles} className="premium-button-secondary compact-button">
-                        Svuota completati
-                      </button>
-                    )}
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center justify-end gap-2 self-end">
                     <button onClick={clearAllFiles} className="premium-button-secondary compact-button" style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}>
                       Svuota tutto
                     </button>
@@ -916,7 +1126,7 @@ export default function App() {
                     {file.status === 'done' && file.outputHtml && (
                       <>
                         <button onClick={(e) => { e.stopPropagation(); openPreview(file.outputHtml!, file.name, file.path, file.id); }} className="icon-button compact-icon-button" style={{ color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.03)', borderColor: 'var(--border-default)' }} title="Anteprima testo"><Eye className="w-4 h-4" /></button>
-                        <button onClick={(e) => { e.stopPropagation(); openFile(file.outputHtml!); }} className="icon-button compact-icon-button" style={{ color: 'var(--success-text)', background: 'var(--success-subtle)', borderColor: 'var(--success-ring)' }} title="Apri nel browser"><ExternalLink className="w-4 h-4" /></button>
+                        <button onClick={(e) => { e.stopPropagation(); openFile(file.outputHtml!); }} className="icon-button compact-icon-button" style={{ color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.03)', borderColor: 'var(--border-default)' }} title="Apri nel browser"><ExternalLink className="w-4 h-4" /></button>
                         {file.outputDir && <button onClick={(e) => { e.stopPropagation(); openFile(file.outputDir!); }} className="icon-button compact-icon-button" style={{ color: 'var(--text-muted)' }} title="Apri cartella"><FolderOpen className="w-4 h-4" /></button>}
                       </>
                     )}
@@ -928,9 +1138,7 @@ export default function App() {
                             <button onClick={() => moveFile(file.id, 'down')} disabled={idx === files.length - 1} className="icon-button compact-icon-button disabled:opacity-30" style={{ color: 'var(--text-muted)' }}><ChevronDown className="w-4 h-4" /></button>
                           </>
                         )}
-                        {file.status !== 'done' && (
-                           <button onClick={() => removeFile(file.id)} className="icon-button compact-icon-button" style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}><Trash2 className="w-4 h-4" /></button>
-                        )}
+                        <button onClick={() => removeFile(file.id)} className="icon-button compact-icon-button" style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}><Trash2 className="w-4 h-4" /></button>
                       </>
                     )}
                   </div>
@@ -965,6 +1173,9 @@ export default function App() {
               Console
             </h2>
             <div className="flex items-center gap-2">
+              <button onClick={() => setConsoleLogs([])} className="premium-button-secondary compact-button px-2.5 py-1.5 text-[11px] rounded-[13px]" style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'var(--border-default)' }}>
+                Pulisci
+              </button>
               <button onClick={() => setIsConsoleExpanded(prev => !prev)} className="premium-button-secondary compact-button px-2.5 py-1.5 text-[11px] rounded-[13px]" style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'var(--border-default)' }}>
                 {isConsoleExpanded ? 'Riduci' : 'Espandi'}
               </button>
@@ -973,9 +1184,9 @@ export default function App() {
           {isConsoleExpanded ? (
           <div className="console-scroll p-4 overflow-y-auto font-mono text-xs space-y-1 h-52 select-text" style={{ color: 'var(--console-text)', background: 'var(--console-bg)' }}>
             {consoleLogs.map((log, i) => {
-              const color = log.includes('Errore') || log.includes('âŒ') || log.includes('[!]') || log.includes('Annullamento') ? 'var(--error-text)' 
-                : log.includes('COMPLETATA') || log.includes('âœ…') ? 'var(--success-text)' 
-                : log.includes('âš ') ? 'var(--warning-text)' : 'var(--console-text)';
+              const color = log.includes('Errore') || log.includes('❌') || log.includes('[!]') || log.includes('Annullamento') ? 'var(--error-text)' 
+                : log.includes('COMPLETATA') || log.includes('✅') ? 'var(--success-text)' 
+                : log.includes('⚠') ? 'var(--warning-text)' : 'var(--console-text)';
 
               const match = log.match(/^\[\d{2}:\d{2}:\d{2}\]/);
               if (match) {
@@ -1043,7 +1254,7 @@ export default function App() {
       <footer className="max-w-6xl mx-auto w-full px-5 sm:px-6 pb-8 pt-2 flex items-center justify-center gap-3 text-sm shrink-0" style={{ color: 'var(--text-muted)' }}>
         <a 
           href="#"
-          onClick={(e) => { e.preventDefault(); window.pywebview?.api?.open_file('https://github.com/vimuw/Sbobby'); }}
+          onClick={(e) => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }}
           className="font-medium transition-colors hover:opacity-100 opacity-70 inline-flex items-center gap-2"
         >
           <Github className="w-4 h-4" />
@@ -1052,7 +1263,7 @@ export default function App() {
         <span aria-hidden="true" className="opacity-40">•</span>
         <a
           href="#"
-          onClick={(e) => { e.preventDefault(); window.pywebview?.api?.open_file('https://ko-fi.com/vimuw'); }}
+          onClick={(e) => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }}
           className="text-sm font-medium transition-colors hover:opacity-100 opacity-70"
           style={{ color: 'var(--text-muted)' }}
         >
@@ -1303,28 +1514,46 @@ export default function App() {
                   <span className="inline-flex h-11 items-center rounded-[14px] px-3 text-sm font-medium" style={{ color: autosaveStatus === 'error' ? 'var(--error-text)' : autosaveStatus === 'saved' ? 'var(--success-text)' : 'var(--text-muted)', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-default)' }}>
                     {autosaveStatus === 'saving' ? 'Salvataggio...' : autosaveStatus === 'saved' ? 'Salvato' : autosaveStatus === 'error' ? 'Errore salvataggio' : 'Salvataggio automatico'}
                   </span>
-                  <button
-                    onClick={async () => {
-                      const normalizedHtml = normalizePreviewHtmlContent(editedContent);
-                      const temp = document.createElement("div");
-                      temp.innerHTML = normalizedHtml;
-                      try {
-                        const htmlBlob = new Blob([normalizedHtml], { type: 'text/html' });
-                        const textBlob = new Blob([temp.textContent || temp.innerText || ""], { type: 'text/plain' });
-                        const data = [new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })];
-                        await navigator.clipboard.write(data);
-                      } catch (e) {
-                        navigator.clipboard.writeText(temp.textContent || temp.innerText || "");
-                      }
-                      setIsCopied(true);
-                      setTimeout(() => setIsCopied(false), 2000);
-                    }}
-                    className="premium-button-secondary h-11 rounded-[14px] px-4 text-sm"
-                  style={isCopied ? { color: 'var(--success-text)', borderColor: 'var(--success-ring)', background: 'var(--success-subtle)' } : undefined}
-                  >
-                    {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    {isCopied ? 'Copiato' : 'Copia testo'}
-                  </button>
+                  <div className="relative" ref={exportMenuRef}>
+                    <button
+                      onClick={() => setIsExportMenuOpen(prev => !prev)}
+                      className="premium-button-secondary h-11 rounded-[14px] px-4 text-sm flex items-center gap-2"
+                      style={isExportMenuOpen ? { borderColor: 'var(--accent-bg)', color: 'var(--text-primary)' } : undefined}
+                    >
+                      <FileText className="w-4 h-4" />
+                      Esporta
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${isExportMenuOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {isExportMenuOpen && (
+                      <div
+                        className="absolute right-0 top-full mt-1.5 z-[60] rounded-xl overflow-hidden"
+                        style={{ minWidth: '210px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', boxShadow: '0 16px 40px rgba(0,0,0,0.28)' }}
+                      >
+                        <button onClick={handleExportDoc} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover:bg-white/5" style={{ color: 'var(--text-primary)' }}>
+                          <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                          <div>
+                            <div className="font-medium">Word (.docx)</div>
+                            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Salva come documento</div>
+                          </div>
+                        </button>
+                        <button onClick={handleExportPdf} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover:bg-white/5" style={{ color: 'var(--text-primary)' }}>
+                          <Printer className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                          <div>
+                            <div className="font-medium">PDF / Stampa</div>
+                            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Apri dialogo di stampa</div>
+                          </div>
+                        </button>
+                        <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 0' }} />
+                        <button onClick={handleCopyForGoogleDocs} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors hover:bg-white/5" style={{ color: isCopied ? 'var(--success-text)' : 'var(--text-primary)' }}>
+                          {isCopied ? <Check className="w-4 h-4 shrink-0" /> : <Copy className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} />}
+                          <div>
+                            <div className="font-medium">{isCopied ? 'Copiato!' : 'Copia per Google Docs'}</div>
+                            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Incolla in Google Docs</div>
+                          </div>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <button onClick={closePreview} className="icon-button h-11 w-11 rounded-[14px]" style={{ color: 'var(--text-muted)' }}>
                     <X className="w-5 h-5" />
                   </button>
@@ -1333,7 +1562,7 @@ export default function App() {
 
               <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                 <Suspense fallback={<div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
-                  <LazyRichTextEditor initialContent={previewContent || ''} onChange={setEditedContent} />
+                  <LazyRichTextEditor initialContent={previewContent || ''} onChange={setEditedContent} initialScrollTop={previewInitScrollTop} onScrollTopChange={handleScrollTopChange} />
                 </Suspense>
               </div>
 
@@ -1341,7 +1570,7 @@ export default function App() {
                 <div className="shrink-0 border-t px-4 sm:px-5" style={{ borderColor: 'var(--border-subtle)' }}>
                   {audioSrc ? (
                     <Suspense fallback={<div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento player...</div>}>
-                      <LazyAudioPlayer src={audioSrc} />
+                      <LazyAudioPlayer src={audioSrc} initialTime={previewInitAudio.time} initialPlaybackRate={previewInitAudio.playbackRate} initialVolume={previewInitAudio.volume} onStateChange={handleAudioStateChange} />
                     </Suspense>
                   ) : (
                     <div className="flex items-center justify-between gap-3 py-3.5">

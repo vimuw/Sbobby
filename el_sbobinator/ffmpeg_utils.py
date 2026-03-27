@@ -96,6 +96,7 @@ def probe_duration_seconds(path: str, ffmpeg_exe: Optional[str] = None) -> Tuple
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             creationflags=_creation_flags(),
+            timeout=15,
         )
         raw = (res.stderr or b"") + b"\n" + (res.stdout or b"")
         try:

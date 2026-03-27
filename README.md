@@ -121,7 +121,7 @@ Per tutti i dettagli, consulta il file `LICENSE` incluso in questa repository.
 ## 🛠️ Costruire l'App dai sorgenti
 
 Se scarichi il codice sorgente completo e vuoi compilare tu stesso i pacchetti nativi, usa gli script di automazione inclusi. La WebUI è l'unica interfaccia supportata per lo sviluppo e le release (i vecchi entrypoint desktop restano solo come alias di compatibilità).
-- **Windows:** usa `Costruisci_EXE_Windows.bat` (oppure `Costruisci_EXE_WebUI.bat`).
+- **Windows:** usa `Costruisci_EXE_Windows.bat`.
 - **macOS:** dal terminale, avvia `Costruisci_APP_Mac.command`.
 
 **Verifiche locali consigliate e Build CLI:**

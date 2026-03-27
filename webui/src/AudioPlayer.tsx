@@ -3,17 +3,26 @@ import { Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2 } from 'lucide-r
 
 interface AudioPlayerProps {
   src: string;
+  initialTime?: number;
+  initialPlaybackRate?: number;
+  initialVolume?: number;
+  onStateChange?: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
 }
 
 const PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 
-export function AudioPlayer({ src }: AudioPlayerProps) {
+export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolume, onStateChange }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [playbackRate, setPlaybackRate] = useState(1);
-  const [volume, setVolume] = useState(1);
+  const [playbackRate, setPlaybackRate] = useState(initialPlaybackRate ?? 1);
+  const [volume, setVolume] = useState(initialVolume ?? 1);
+  const pendingInitialTimeRef = useRef<number | null>(initialTime ?? null);
+  const playbackRateRef = useRef(initialPlaybackRate ?? 1);
+  const volumeRef = useRef(initialVolume ?? 1);
+  const onStateChangeRef = useRef(onStateChange);
+  useEffect(() => { onStateChangeRef.current = onStateChange; }, [onStateChange]);
 
   useEffect(() => {
     if (!audioRef.current) return;
@@ -29,6 +38,7 @@ export function AudioPlayer({ src }: AudioPlayerProps) {
     setDuration(0);
     audio.pause();
     audio.currentTime = 0;
+    pendingInitialTimeRef.current = initialTime ?? null;
     audio.load();
 
     const syncDuration = () => {
@@ -76,15 +86,24 @@ export function AudioPlayer({ src }: AudioPlayerProps) {
 
   const handleTimeUpdate = () => {
     if (!audioRef.current) return;
-    setCurrentTime(audioRef.current.currentTime);
+    const t = audioRef.current.currentTime;
+    setCurrentTime(t);
     if (isFinite(audioRef.current.duration) && audioRef.current.duration > 0) {
       setDuration(audioRef.current.duration);
     }
+    onStateChangeRef.current?.({ currentTime: t, playbackRate: playbackRateRef.current, volume: volumeRef.current });
   };
 
   const handleLoadedMetadata = () => {
-    if (audioRef.current && isFinite(audioRef.current.duration)) {
+    if (!audioRef.current) return;
+    if (isFinite(audioRef.current.duration)) {
       setDuration(audioRef.current.duration);
+    }
+    if (pendingInitialTimeRef.current !== null && pendingInitialTimeRef.current > 0) {
+      const t = pendingInitialTimeRef.current;
+      pendingInitialTimeRef.current = null;
+      audioRef.current.currentTime = t;
+      setCurrentTime(t);
     }
   };
 
@@ -96,7 +115,10 @@ export function AudioPlayer({ src }: AudioPlayerProps) {
   };
 
   const handleVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setVolume(parseFloat(e.target.value));
+    const v = parseFloat(e.target.value);
+    volumeRef.current = v;
+    setVolume(v);
+    onStateChangeRef.current?.({ currentTime, playbackRate: playbackRateRef.current, volume: v });
   };
 
   const formatTime = (time: number) => {
@@ -162,7 +184,7 @@ export function AudioPlayer({ src }: AudioPlayerProps) {
         <label className="player-speed-wrap" aria-label="Velocita di riproduzione">
           <select
             value={playbackRate}
-            onChange={e => setPlaybackRate(parseFloat(e.target.value))}
+            onChange={e => { const r = parseFloat(e.target.value); playbackRateRef.current = r; setPlaybackRate(r); onStateChangeRef.current?.({ currentTime, playbackRate: r, volume: volumeRef.current }); }}
             className="player-speed-select"
           >
             {PLAYBACK_RATES.map(rate => (
