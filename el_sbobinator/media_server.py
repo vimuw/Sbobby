@@ -16,6 +16,20 @@ import time
 class LocalMediaServer:
     _servers: dict[str, tuple[socketserver.ThreadingTCPServer, int]] = {}
     _lock: threading.Lock = threading.Lock()
+    MAX_ENTRIES = 5  # LRU cap to prevent port exhaustion
+
+    @classmethod
+    def _evict_oldest_if_needed(cls):
+        """Shutdown and remove oldest server if over MAX_ENTRIES."""
+        if len(cls._servers) < cls.MAX_ENTRIES:
+            return
+        # Pop oldest entry (dict preserves insertion order in Python 3.7+)
+        oldest_path, (oldest_server, _) = cls._servers.popitem(last=False)
+        try:
+            oldest_server.shutdown()
+            oldest_server.server_close()
+        except Exception:
+            pass  # Best-effort cleanup
 
     @classmethod
     def stream_url_for_file(cls, file_path: str) -> str:
@@ -78,8 +92,22 @@ class LocalMediaServer:
                 def log_message(self, format, *args):
                     pass
 
+            cls._evict_oldest_if_needed()
+
             server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), MediaHandler)
             port = server.server_address[1]
             cls._servers[file_path] = (server, port)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         return f"http://127.0.0.1:{port}/stream.media?t={time.time()}"
+
+    @classmethod
+    def shutdown_all(cls):
+        """Shutdown all servers. Called on app exit."""
+        with cls._lock:
+            for server, _ in cls._servers.values():
+                try:
+                    server.shutdown()
+                    server.server_close()
+                except Exception:
+                    pass
+            cls._servers.clear()

@@ -626,6 +626,7 @@ def _partial_file_hash(path: str, max_bytes: int = 65536) -> str:
 
 
 _session_id_cache: dict[tuple, str] = {}
+_MAX_SESSION_CACHE_SIZE = 500  # LRU cap to prevent unbounded growth
 
 
 def _session_id_for_file(path: str) -> str:
@@ -642,6 +643,10 @@ def _session_id_for_file(path: str) -> str:
     _cached = _session_id_cache.get(cache_key)
     if _cached is not None:
         return _cached
+
+    # LRU eviction: remove oldest entry if at capacity
+    if len(_session_id_cache) >= _MAX_SESSION_CACHE_SIZE:
+        _session_id_cache.pop(next(iter(_session_id_cache)))
 
     content_hash = _partial_file_hash(abs_path)
     blob = json.dumps({
