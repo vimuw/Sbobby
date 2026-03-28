@@ -1,18 +1,54 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Color } from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style';
-import { Bold, ChevronDown, Clipboard, Copy, Heading1, Heading2, Heading3, Heading4, Heading5, ImagePlus, Italic, List, ListOrdered, Quote, Redo, Scissors, Undo } from 'lucide-react';
+import Underline from '@tiptap/extension-underline';
+import Highlight from '@tiptap/extension-highlight';
+import TextAlign from '@tiptap/extension-text-align';
+import FontFamily from '@tiptap/extension-font-family';
+import Link from '@tiptap/extension-link';
+import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table';
+import Subscript from '@tiptap/extension-subscript';
+import Superscript from '@tiptap/extension-superscript';
+import { Extension } from '@tiptap/core';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import {
+  AlignCenter, AlignJustify, AlignLeft, AlignRight,
+  Bold, ChevronDown, Clipboard, Copy, ImagePlus, Italic,
+  Link2, Link2Off, List, ListOrdered, Quote, Redo,
+  Scissors, Search, Strikethrough, Subscript as SubIcon,
+  Superscript as SupIcon, Table2, Underline as UnderlineIcon, Undo, X,
+} from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
+
+export interface Heading {
+  id: string;
+  level: number;
+  text: string;
+}
 
 interface RichTextEditorProps {
   initialContent: string;
   onChange: (html: string) => void;
   initialScrollTop?: number;
   onScrollTopChange?: (scrollTop: number) => void;
+  onHeadingsChange?: (headings: Heading[]) => void;
 }
+
+const extractHeadings = (editor: any): Heading[] => {
+  const json = editor.getJSON();
+  const result: Heading[] = [];
+  json.content?.forEach((node: any, idx: number) => {
+    if (node.type === 'heading') {
+      const text = node.content?.map((n: any) => n.text ?? '').join('') ?? '';
+      if (text.trim()) result.push({ id: `h-${idx}`, level: node.attrs?.level ?? 2, text });
+    }
+  });
+  return result;
+};
 
 const COLOR_PALETTE: string[][] = [
   ['#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#cccccc', '#d9d9d9', '#ffffff'],
@@ -23,6 +59,134 @@ const COLOR_PALETTE: string[][] = [
   ['#cc0000', '#e69138', '#f1c232', '#6aa84f', '#3c78d8', '#3d85c8', '#674ea7', '#a64d79'],
   ['#990000', '#b45f06', '#bf9000', '#38761d', '#1155cc', '#0b5394', '#20124d', '#4c1130'],
 ];
+
+const HIGHLIGHT_COLORS = [
+  { label: 'Giallo', color: '#fef08a' },
+  { label: 'Verde', color: '#bbf7d0' },
+  { label: 'Azzurro', color: '#bae6fd' },
+  { label: 'Rosa', color: '#fecdd3' },
+  { label: 'Arancione', color: '#fed7aa' },
+  { label: 'Viola', color: '#e9d5ff' },
+  { label: 'Nessuno', color: '#ffffff' },
+];
+
+const FONT_FAMILIES = [
+  { label: 'Predefinito', value: '' },
+  { label: 'Arial', value: 'Arial, sans-serif' },
+  { label: 'Times New Roman', value: '"Times New Roman", serif' },
+  { label: 'Georgia', value: 'Georgia, serif' },
+  { label: 'Courier New', value: '"Courier New", monospace' },
+  { label: 'Verdana', value: 'Verdana, sans-serif' },
+  { label: 'Trebuchet MS', value: '"Trebuchet MS", sans-serif' },
+];
+
+const FONT_SIZES = ['8', '9', '10', '11', '12', '14', '16', '18', '20', '24', '28', '32', '36', '48', '72'];
+
+const HEADING_OPTIONS = [
+  { label: 'Testo normale', value: 'paragraph' },
+  { label: 'Titolo 1', value: 'h1' },
+  { label: 'Titolo 2', value: 'h2' },
+  { label: 'Titolo 3', value: 'h3' },
+  { label: 'Titolo 4', value: 'h4' },
+  { label: 'Titolo 5', value: 'h5' },
+];
+
+interface SearchHighlightPluginState {
+  searchTerm: string;
+  currentIndex: number;
+  decorations: DecorationSet;
+}
+
+const searchHighlightKey = new PluginKey<SearchHighlightPluginState>('searchHighlight');
+
+const SearchHighlight = Extension.create({
+  name: 'searchHighlight',
+
+  addCommands() {
+    return {
+      setSearchTerm:
+        (term: string, currentIndex = -1) =>
+        ({ view }: { view: any }) => {
+          view.dispatch(
+            view.state.tr.setMeta(searchHighlightKey, { term, currentIndex }),
+          );
+          return true;
+        },
+    } as any;
+  },
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin<SearchHighlightPluginState>({
+        key: searchHighlightKey,
+        state: {
+          init(): SearchHighlightPluginState {
+            return { searchTerm: '', currentIndex: -1, decorations: DecorationSet.empty };
+          },
+          apply(tr, value, _old, newState): SearchHighlightPluginState {
+            const meta = tr.getMeta(searchHighlightKey) as
+              | { term: string; currentIndex: number }
+              | undefined;
+            const searchTerm = meta !== undefined ? meta.term : value.searchTerm;
+            const currentIndex = meta !== undefined ? meta.currentIndex : value.currentIndex;
+
+            if (!searchTerm) {
+              return { searchTerm: '', currentIndex: -1, decorations: DecorationSet.empty };
+            }
+
+            const decorations: Decoration[] = [];
+            const lower = searchTerm.toLowerCase();
+            let matchIdx = 0;
+
+            newState.doc.descendants((node: any, pos: number) => {
+              if (!node.isText || !node.text) return;
+              let idx = 0;
+              while ((idx = node.text.toLowerCase().indexOf(lower, idx)) !== -1) {
+                decorations.push(
+                  Decoration.inline(pos + idx, pos + idx + searchTerm.length, {
+                    class:
+                      matchIdx === currentIndex
+                        ? 'search-highlight-active'
+                        : 'search-highlight',
+                  }),
+                );
+                idx += searchTerm.length;
+                matchIdx++;
+              }
+            });
+
+            return {
+              searchTerm,
+              currentIndex,
+              decorations: DecorationSet.create(newState.doc, decorations),
+            };
+          },
+        },
+        props: {
+          decorations(state) {
+            return searchHighlightKey.getState(state)?.decorations ?? DecorationSet.empty;
+          },
+        },
+      }),
+    ];
+  },
+});
+
+const FontSize = Extension.create({
+  name: 'fontSize',
+  addGlobalAttributes() {
+    return [{
+      types: ['textStyle'],
+      attributes: {
+        fontSize: {
+          default: null,
+          parseHTML: el => (el as HTMLElement).style.fontSize || null,
+          renderHTML: attrs => attrs.fontSize ? { style: `font-size: ${attrs.fontSize}` } : {},
+        },
+      },
+    }];
+  },
+});
 
 const ColorPickerButton = ({ editor }: { editor: any }) => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -127,9 +291,277 @@ const readFileAsDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
+const HighlightPickerButton = ({ editor }: { editor: any }) => {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const currentColor: string | undefined = editor.getAttributes('highlight').color;
+
+  const toggleOpen = () => {
+    if (!isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setPanelPos({ top: rect.bottom + 6, left: rect.left });
+    }
+    setIsOpen(prev => !prev);
+  };
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setIsOpen(false);
+    };
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
+  }, [isOpen]);
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={toggleOpen}
+        className={`editor-button color-picker-btn${isOpen || editor.isActive('highlight') ? ' is-active' : ''}`}
+        title="Evidenziatore"
+      >
+        <span className="color-picker-label">
+          <span style={{ fontWeight: 700, fontSize: '0.8rem', lineHeight: 1 }}>H</span>
+          <span
+            className="color-indicator"
+            style={{ background: currentColor ?? '#fef08a', opacity: 0.9 }}
+          />
+        </span>
+        <ChevronDown style={{ width: 9, height: 9, opacity: 0.55, flexShrink: 0 }} />
+      </button>
+      {isOpen && createPortal(
+        <div
+          ref={panelRef}
+          className="color-picker-panel"
+          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999 }}
+        >
+          <div className="color-row" style={{ flexWrap: 'wrap', gap: 5 }}>
+            {HIGHLIGHT_COLORS.map(({ label, color }) => (
+              <button
+                key={color}
+                type="button"
+                onPointerDown={e => {
+                  e.preventDefault();
+                  if (color === '#ffffff') {
+                    editor.chain().focus().unsetHighlight().run();
+                  } else {
+                    editor.chain().focus().toggleHighlight({ color }).run();
+                  }
+                  setIsOpen(false);
+                }}
+                className={`color-swatch${currentColor === color ? ' is-selected' : ''}`}
+                style={{ background: color, border: color === '#ffffff' ? '1px solid #ccc' : undefined }}
+                title={label}
+              />
+            ))}
+          </div>
+          <div className="color-footer" style={{ justifyContent: 'flex-start' }}>
+            <button
+              type="button"
+              onPointerDown={e => { e.preventDefault(); editor.chain().focus().unsetHighlight().run(); setIsOpen(false); }}
+              className="color-reset"
+            >
+              ✕ Rimuovi evidenziatore
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+};
+
+const FontFamilySelect = ({ editor }: { editor: any }) => {
+  const currentFamily = editor.getAttributes('textStyle').fontFamily ?? '';
+  return (
+    <div className="editor-select-wrap">
+      <select
+        className="editor-select font-family-select"
+        value={currentFamily}
+        onChange={e => {
+          if (e.target.value === '') {
+            editor.chain().focus().unsetFontFamily().run();
+          } else {
+            editor.chain().focus().setFontFamily(e.target.value).run();
+          }
+        }}
+        title="Carattere"
+      >
+        {FONT_FAMILIES.map(f => (
+          <option key={f.label} value={f.value}>{f.label}</option>
+        ))}
+      </select>
+      <ChevronDown className="editor-select-chevron" />
+    </div>
+  );
+};
+
+const FontSizeSelect = ({ editor }: { editor: any }) => {
+  const getCurrentSize = () => {
+    if (!editor) return '';
+    
+    // 1. Check for inline fontSize mark first
+    const fontSize = editor.getAttributes('textStyle').fontSize;
+    if (fontSize) return fontSize.replace('px', '');
+
+    // 2. Check heading level
+    for (let i = 1; i <= 5; i++) {
+      if (editor.isActive('heading', { level: i })) {
+        const sizes: Record<number, string> = { 1: '24', 2: '20', 3: '18', 4: '16', 5: '14' };
+        return sizes[i];
+      }
+    }
+
+    // 3. For any other text (paragraph, list, etc.), use default 14
+    return '14';
+  };
+
+  const currentSize = getCurrentSize();
+
+  return (
+    <div className="editor-select-wrap">
+      <select
+        className="editor-select font-size-select"
+        value={currentSize}
+        onChange={e => {
+          if (e.target.value) {
+            editor.chain().focus().setMark('textStyle', { fontSize: `${e.target.value}px` }).run();
+          }
+        }}
+        title="Dimensione carattere"
+      >
+        <option value="">—</option>
+        {FONT_SIZES.map(s => (
+          <option key={s} value={s}>{s}</option>
+        ))}
+      </select>
+      <ChevronDown className="editor-select-chevron" />
+    </div>
+  );
+};
+
+const HeadingSelect = ({ editor }: { editor: any }) => {
+  let current = 'paragraph';
+  for (let i = 1; i <= 5; i++) {
+    if (editor.isActive('heading', { level: i })) { current = `h${i}`; break; }
+  }
+  return (
+    <div className="editor-select-wrap">
+      <select
+        className="editor-select heading-select"
+        value={current}
+        onChange={e => {
+          if (e.target.value === 'paragraph') {
+            editor.chain().focus().setParagraph().run();
+          } else {
+            const level = parseInt(e.target.value.replace('h', '')) as 1 | 2 | 3 | 4 | 5;
+            editor.chain().focus().toggleHeading({ level }).run();
+          }
+        }}
+        title="Stile paragrafo"
+      >
+        {HEADING_OPTIONS.map(o => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      <ChevronDown className="editor-select-chevron" />
+    </div>
+  );
+};
+
+const LinkButton = ({ editor }: { editor: any }) => {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [url, setUrl] = React.useState('');
+  const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const isActive = editor.isActive('link');
+
+  const openPanel = () => {
+    if (isActive) {
+      editor.chain().focus().unsetLink().run();
+      return;
+    }
+    setUrl(editor.getAttributes('link').href ?? '');
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setPanelPos({ top: rect.bottom + 6, left: rect.left });
+    }
+    setIsOpen(true);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setIsOpen(false);
+    };
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
+  }, [isOpen]);
+
+  const applyLink = () => {
+    if (!url.trim()) return;
+    const href = url.startsWith('http') ? url : `https://${url}`;
+    editor.chain().focus().setLink({ href }).run();
+    setIsOpen(false);
+  };
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={openPanel}
+        className={`editor-button${isActive ? ' is-active' : ''}`}
+        title={isActive ? 'Rimuovi link' : 'Inserisci link'}
+      >
+        {isActive ? <Link2Off className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
+      </button>
+      {isOpen && createPortal(
+        <div
+          ref={panelRef}
+          className="link-panel"
+          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999 }}
+        >
+          <input
+            ref={inputRef}
+            type="url"
+            placeholder="https://..."
+            value={url}
+            onChange={e => setUrl(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') applyLink();
+              if (e.key === 'Escape') setIsOpen(false);
+            }}
+            className="link-input"
+          />
+          <button type="button" onClick={applyLink} className="link-apply-btn">Applica</button>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+};
+
 const menuBarStateKey = (editor: any): string => [
   editor.isActive('bold'),
   editor.isActive('italic'),
+  editor.isActive('underline'),
+  editor.isActive('strike'),
+  editor.isActive('highlight'),
+  editor.isActive('subscript'),
+  editor.isActive('superscript'),
+  editor.isActive('link'),
   editor.isActive('heading', { level: 1 }),
   editor.isActive('heading', { level: 2 }),
   editor.isActive('heading', { level: 3 }),
@@ -138,12 +570,27 @@ const menuBarStateKey = (editor: any): string => [
   editor.isActive('bulletList'),
   editor.isActive('orderedList'),
   editor.isActive('blockquote'),
+  editor.isActive({ textAlign: 'center' }),
+  editor.isActive({ textAlign: 'right' }),
+  editor.isActive({ textAlign: 'justify' }),
   editor.can().undo(),
   editor.can().redo(),
   editor.getAttributes('textStyle').color ?? '',
+  editor.getAttributes('textStyle').fontFamily ?? '',
+  editor.getAttributes('textStyle').fontSize ?? '',
 ].join('|');
 
-const MenuBar = ({ editor, onInsertImages }: { editor: any; onInsertImages: (files: FileList | File[]) => void }) => {
+const MenuBar = ({
+  editor,
+  onInsertImages,
+  showFindReplace,
+  onToggleFindReplace,
+}: {
+  editor: any;
+  onInsertImages: (files: FileList | File[]) => void;
+  showFindReplace: boolean;
+  onToggleFindReplace: () => void;
+}) => {
   const [, forceUpdate] = React.useState({});
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const prevMenuKeyRef = useRef('');
@@ -162,57 +609,88 @@ const MenuBar = ({ editor, onInsertImages }: { editor: any; onInsertImages: (fil
   }, [editor]);
 
   if (!editor) return null;
-
-  const toggleHeading = (level: 1 | 2 | 3 | 4 | 5) => {
-    editor.chain().focus().toggleHeading({ level }).run();
-  };
-
-  const btnClass = (isActive: boolean) => `editor-button ${isActive ? 'is-active' : ''}`;
+  const btn = (active: boolean) => `editor-button${active ? ' is-active' : ''}`;
 
   return (
     <div className="editor-toolbar">
-      <button type="button" onClick={() => editor.chain().focus().toggleBold().run()} className={btnClass(editor.isActive('bold'))} title="Grassetto">
+      <button type="button" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} className="editor-button" title="Annulla (Ctrl+Z)">
+        <Undo className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} className="editor-button" title="Ripeti (Ctrl+Y)">
+        <Redo className="h-4 w-4" />
+      </button>
+      <div className="editor-separator" />
+      <FontFamilySelect editor={editor} />
+      <FontSizeSelect editor={editor} />
+      <div className="editor-separator" />
+      <button type="button" onClick={() => editor.chain().focus().toggleBold().run()} className={btn(editor.isActive('bold'))} title="Grassetto (Ctrl+B)">
         <Bold className="h-4 w-4" />
       </button>
-      <button type="button" onClick={() => editor.chain().focus().toggleItalic().run()} className={btnClass(editor.isActive('italic'))} title="Corsivo">
+      <button type="button" onClick={() => editor.chain().focus().toggleItalic().run()} className={btn(editor.isActive('italic'))} title="Corsivo (Ctrl+I)">
         <Italic className="h-4 w-4" />
       </button>
+      <button type="button" onClick={() => editor.chain().focus().toggleUnderline().run()} className={btn(editor.isActive('underline'))} title="Sottolineato (Ctrl+U)">
+        <UnderlineIcon className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={() => editor.chain().focus().toggleStrike().run()} className={btn(editor.isActive('strike'))} title="Barrato">
+        <Strikethrough className="h-4 w-4" />
+      </button>
+      <div className="editor-separator" />
       <ColorPickerButton editor={editor} />
+      <HighlightPickerButton editor={editor} />
       <div className="editor-separator" />
-      <button type="button" onClick={() => toggleHeading(1)} className={btnClass(editor.isActive('heading', { level: 1 }))} title="Titolo 1">
-        <Heading1 className="h-4 w-4" />
+      <button type="button" onClick={() => editor.chain().focus().toggleSubscript().run()} className={btn(editor.isActive('subscript'))} title="Pedice">
+        <SubIcon className="h-4 w-4" />
       </button>
-      <button type="button" onClick={() => toggleHeading(2)} className={btnClass(editor.isActive('heading', { level: 2 }))} title="Titolo 2">
-        <Heading2 className="h-4 w-4" />
-      </button>
-      <button type="button" onClick={() => toggleHeading(3)} className={btnClass(editor.isActive('heading', { level: 3 }))} title="Titolo 3">
-        <Heading3 className="h-4 w-4" />
-      </button>
-      <button type="button" onClick={() => toggleHeading(4)} className={btnClass(editor.isActive('heading', { level: 4 }))} title="Titolo 4">
-        <Heading4 className="h-4 w-4" />
-      </button>
-      <button type="button" onClick={() => toggleHeading(5)} className={btnClass(editor.isActive('heading', { level: 5 }))} title="Titolo 5">
-        <Heading5 className="h-4 w-4" />
+      <button type="button" onClick={() => editor.chain().focus().toggleSuperscript().run()} className={btn(editor.isActive('superscript'))} title="Apice">
+        <SupIcon className="h-4 w-4" />
       </button>
       <div className="editor-separator" />
-      <button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()} className={btnClass(editor.isActive('bulletList'))} title="Elenco puntato">
+      <HeadingSelect editor={editor} />
+      <div className="editor-separator" />
+      <button type="button" onClick={() => editor.chain().focus().setTextAlign('left').run()} className={btn(editor.isActive({ textAlign: 'left' }))} title="Allinea sinistra">
+        <AlignLeft className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={() => editor.chain().focus().setTextAlign('center').run()} className={btn(editor.isActive({ textAlign: 'center' }))} title="Centra">
+        <AlignCenter className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={() => editor.chain().focus().setTextAlign('right').run()} className={btn(editor.isActive({ textAlign: 'right' }))} title="Allinea destra">
+        <AlignRight className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={() => editor.chain().focus().setTextAlign('justify').run()} className={btn(editor.isActive({ textAlign: 'justify' }))} title="Giustifica">
+        <AlignJustify className="h-4 w-4" />
+      </button>
+      <div className="editor-separator" />
+      <button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn(editor.isActive('bulletList'))} title="Elenco puntato">
         <List className="h-4 w-4" />
       </button>
-      <button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btnClass(editor.isActive('orderedList'))} title="Elenco numerato">
+      <button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(editor.isActive('orderedList'))} title="Elenco numerato">
         <ListOrdered className="h-4 w-4" />
       </button>
-      <button type="button" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={btnClass(editor.isActive('blockquote'))} title="Citazione">
+      <button type="button" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={btn(editor.isActive('blockquote'))} title="Citazione">
         <Quote className="h-4 w-4" />
+      </button>
+      <div className="editor-separator" />
+      <LinkButton editor={editor} />
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+        className="editor-button"
+        title="Inserisci tabella"
+      >
+        <Table2 className="h-4 w-4" />
       </button>
       <button type="button" onClick={() => imageInputRef.current?.click()} className="editor-button" title="Inserisci immagine">
         <ImagePlus className="h-4 w-4" />
       </button>
       <div className="editor-separator" />
-      <button type="button" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} className="editor-button" title="Annulla">
-        <Undo className="h-4 w-4" />
-      </button>
-      <button type="button" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} className="editor-button" title="Ripeti">
-        <Redo className="h-4 w-4" />
+      <button
+        type="button"
+        onClick={onToggleFindReplace}
+        className={btn(showFindReplace)}
+        title="Trova e sostituisci (Ctrl+H)"
+      >
+        <Search className="h-4 w-4" />
       </button>
 
       <input
@@ -232,112 +710,303 @@ const MenuBar = ({ editor, onInsertImages }: { editor: any; onInsertImages: (fil
   );
 };
 
-export function RichTextEditor({ initialContent, onChange, initialScrollTop, onScrollTopChange }: RichTextEditorProps) {
+const FindReplacePanel = ({ editor, onClose }: { editor: any; onClose: () => void }) => {
+  const [findText, setFindText] = useState('');
+  const [replaceText, setReplaceText] = useState('');
+  const [matchCount, setMatchCount] = useState(0);
+  const [currentMatch, setCurrentMatch] = useState(0);
+  const matchesRef = useRef<{ from: number; to: number }[]>([]);
+  const currentMatchRef = useRef(0);
+  const findInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    findInputRef.current?.focus({ preventScroll: true });
+    return () => {
+      editor.commands.setSearchTerm('', -1);
+    };
+  }, [editor]);
+
+  const buildMatches = useCallback((text: string) => {
+    if (!editor || !text) return [];
+    const { doc } = editor.state;
+    const results: { from: number; to: number }[] = [];
+    const lower = text.toLowerCase();
+    doc.descendants((node: any, pos: number) => {
+      if (!node.isText || !node.text) return;
+      let idx = 0;
+      while ((idx = node.text.toLowerCase().indexOf(lower, idx)) !== -1) {
+        results.push({ from: pos + idx, to: pos + idx + text.length });
+        idx += text.length;
+      }
+    });
+    return results;
+  }, [editor]);
+
+  const updateSearch = useCallback((text: string, curIdx = -1) => {
+    const matches = buildMatches(text);
+    matchesRef.current = matches;
+    setMatchCount(matches.length);
+    editor.commands.setSearchTerm(text, curIdx);
+    return matches;
+  }, [editor, buildMatches]);
+
+  const scrollToMatch = useCallback((matches: { from: number; to: number }[], idx: number) => {
+    if (!matches.length || !editor) return;
+    currentMatchRef.current = idx + 1;
+    setCurrentMatch(idx + 1);
+    editor.commands.setSearchTerm(findText, idx);
+    requestAnimationFrame(() => {
+      const activeEl = editor.view.dom.querySelector('.search-highlight-active');
+      if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      findInputRef.current?.focus({ preventScroll: true });
+    });
+  }, [editor, findText]);
+
+  const handleNext = useCallback(() => {
+    const matches = matchesRef.current.length ? matchesRef.current : buildMatches(findText);
+    if (!matches.length) return;
+    const next = currentMatchRef.current >= matches.length ? 0 : currentMatchRef.current;
+    scrollToMatch(matches, next);
+  }, [findText, buildMatches, scrollToMatch]);
+
+  const handlePrev = useCallback(() => {
+    const matches = matchesRef.current.length ? matchesRef.current : buildMatches(findText);
+    if (!matches.length) return;
+    const prev = currentMatchRef.current <= 1 ? matches.length - 1 : currentMatchRef.current - 2;
+    scrollToMatch(matches, prev);
+  }, [findText, buildMatches, scrollToMatch]);
+
+  const handleReplace = () => {
+    if (!editor || !findText || !matchesRef.current.length) return;
+    const { from, to } = editor.state.selection;
+    const selectedText = editor.state.doc.textBetween(from, to);
+    if (selectedText.toLowerCase() === findText.toLowerCase()) {
+      const tr = editor.state.tr;
+      if (replaceText) {
+        editor.view.dispatch(tr.replaceWith(from, to, editor.schema.text(replaceText)));
+      } else {
+        editor.view.dispatch(tr.delete(from, to));
+      }
+      const newMatches = updateSearch(findText, -1);
+      if (newMatches.length) scrollToMatch(newMatches, Math.min(currentMatchRef.current - 1, newMatches.length - 1));
+    } else {
+      handleNext();
+    }
+  };
+
+  const handleReplaceAll = () => {
+    if (!editor || !findText) return;
+    const matches = buildMatches(findText);
+    if (!matches.length) return;
+    // Sort matches in reverse order (from end to start) to avoid position shifts
+    const sortedMatches = [...matches].sort((a, b) => b.from - a.from);
+    const tr = editor.state.tr;
+    for (const m of sortedMatches) {
+      if (replaceText) {
+        tr.replaceWith(m.from, m.to, editor.schema.text(replaceText));
+      } else {
+        tr.delete(m.from, m.to);
+      }
+    }
+    editor.view.dispatch(tr);
+    matchesRef.current = [];
+    currentMatchRef.current = 0;
+    setMatchCount(0);
+    setCurrentMatch(0);
+    editor.commands.setSearchTerm('', -1);
+    requestAnimationFrame(() => findInputRef.current?.focus({ preventScroll: true }));
+  };
+
+  return (
+    <div className="find-replace-panel">
+      <div className="find-replace-row">
+        <input
+          ref={findInputRef}
+          type="text"
+          placeholder="Trova..."
+          value={findText}
+          onChange={e => {
+            setFindText(e.target.value);
+            currentMatchRef.current = 0;
+            setCurrentMatch(0);
+            updateSearch(e.target.value, -1);
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); handleNext(); }
+            if (e.key === 'Escape') onClose();
+          }}
+          className="find-replace-input"
+        />
+        <span className="find-replace-count">
+          {findText ? (matchCount > 0 ? `${currentMatch}/${matchCount}` : '0') : ''}
+        </span>
+        <button type="button" onClick={handlePrev} className="editor-button" title="Precedente (Shift+Enter)" disabled={matchCount === 0}>
+          <ChevronDown style={{ transform: 'rotate(180deg)', width: 14, height: 14 }} />
+        </button>
+        <button type="button" onClick={handleNext} className="editor-button" title="Successivo (Enter)" disabled={matchCount === 0}>
+          <ChevronDown style={{ width: 14, height: 14 }} />
+        </button>
+        <button type="button" onClick={onClose} className="editor-button" title="Chiudi (Esc)">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="find-replace-row">
+        <input
+          type="text"
+          placeholder="Sostituisci con..."
+          value={replaceText}
+          onChange={e => setReplaceText(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); handleReplace(); }
+            if (e.key === 'Escape') onClose();
+          }}
+          className="find-replace-input"
+        />
+        <button type="button" onClick={handleReplace} className="editor-button find-replace-action-btn" title="Sostituisci il match corrente" disabled={matchCount === 0}>
+          Sostituisci
+        </button>
+        <button type="button" onClick={handleReplaceAll} className="editor-button find-replace-action-btn" title="Sostituisci tutti i match" disabled={matchCount === 0}>
+          Tutto
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const WordCount = ({ editor }: { editor: any }) => {
+  const [counts, setCounts] = React.useState({ words: 0, chars: 0 });
+  React.useEffect(() => {
+    if (!editor) return;
+    const update = () => {
+      const text = editor.state.doc.textContent;
+      const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+      setCounts({ words, chars: text.length });
+    };
+    editor.on('update', update);
+    update();
+    return () => editor.off('update', update);
+  }, [editor]);
+
+  return (
+    <div className="editor-wordcount">
+      <span>{counts.words} {counts.words === 1 ? 'parola' : 'parole'}</span>
+      <span className="editor-wordcount-sep">·</span>
+      <span>{counts.chars} caratteri</span>
+    </div>
+  );
+};
+
+export function RichTextEditor({ initialContent, onChange, initialScrollTop, onScrollTopChange, onHeadingsChange }: RichTextEditorProps) {
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
+  const [showFindReplace, setShowFindReplace] = useState(false);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<any>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const hasRestoredScrollRef = useRef(false);
   const onScrollTopChangeRef = useRef(onScrollTopChange);
   useEffect(() => { onScrollTopChangeRef.current = onScrollTopChange; }, [onScrollTopChange]);
+  const onHeadingsChangeRef = useRef(onHeadingsChange);
+  useEffect(() => { onHeadingsChangeRef.current = onHeadingsChange; }, [onHeadingsChange]);
 
   const insertImageFiles = useCallback(async (inputFiles: FileList | File[]) => {
     const activeEditor = editorRef.current;
     if (!activeEditor) return;
-
-    const files = Array.from(inputFiles).filter(file => file.type.startsWith('image/'));
+    const files = Array.from(inputFiles).filter(f => f.type.startsWith('image/'));
     if (!files.length) return;
-
     for (const file of files) {
       const src = await readFileAsDataUrl(file);
-      activeEditor
-        .chain()
-        .focus()
-        .insertContent([
-          {
-            type: 'floatingImage',
-            attrs: {
-              src,
-              alt: file.name,
-              title: file.name,
-              width: 56,
-            },
-          },
-          {
-            type: 'paragraph',
-          },
-        ])
-        .run();
+      activeEditor.chain().focus().insertContent([
+        { type: 'floatingImage', attrs: { src, alt: file.name, title: file.name, width: 56 } },
+        { type: 'paragraph' },
+      ]).run();
     }
   }, []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
-      if ((event.target as HTMLElement | null)?.closest('.context-menu')) {
-        return;
-      }
+      if ((event.target as HTMLElement | null)?.closest('.context-menu')) return;
       setContextMenu(null);
     };
-
     document.addEventListener('pointerdown', handlePointerDown, true);
     return () => document.removeEventListener('pointerdown', handlePointerDown, true);
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'h' || e.key === 'H' || e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        setShowFindReplace(prev => !prev);
+      }
+      if (e.key === 'Escape') setShowFindReplace(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    const menuWidth = 220;
-    const menuHeight = 320;
-    const padding = 12;
+    const menuWidth = 220, menuHeight = 260, padding = 12;
     const x = Math.min(e.clientX, window.innerWidth - menuWidth - padding);
     const y = Math.min(e.clientY, window.innerHeight - menuHeight - padding);
-    setContextMenu({
-      x: Math.max(padding, x),
-      y: Math.max(padding, y),
-    });
+    setContextMenu({ x: Math.max(padding, x), y: Math.max(padding, y) });
   };
 
   const editor = useEditor({
-    extensions: [StarterKit, FloatingImage, TextStyle, Color],
+    extensions: [
+      StarterKit,
+      FloatingImage,
+      TextStyle,
+      Color,
+      FontFamily.configure({ types: ['textStyle'] }),
+      FontSize,
+      Underline,
+      Highlight.configure({ multicolor: true }),
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      Link.configure({ openOnClick: false }),
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      Subscript,
+      Superscript,
+      SearchHighlight,
+    ],
     content: initialContent,
     onCreate: ({ editor }) => {
       editorRef.current = editor;
+      onHeadingsChangeRef.current?.(extractHeadings(editor));
+    },
+    onUpdate: ({ editor }) => {
+      onChange(editor.getHTML());
+      onHeadingsChangeRef.current?.(extractHeadings(editor));
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm sm:prose-base max-w-none focus:outline-none min-h-[500px] p-6 tiptap-editor',
+        class: 'prose prose-sm sm:prose-base max-w-none focus:outline-none tiptap-editor',
         spellcheck: 'false',
       },
       handlePaste: (_view, event) => {
-        const files = Array.from(event.clipboardData?.files || []).filter(file => file.type.startsWith('image/'));
+        const files = Array.from(event.clipboardData?.files || []).filter(f => f.type.startsWith('image/'));
         if (!files.length) return false;
         event.preventDefault();
         void insertImageFiles(files);
         return true;
       },
       handleDrop: (_view, event) => {
-        const files = Array.from(event.dataTransfer?.files || []).filter(file => file.type.startsWith('image/'));
+        const files = Array.from(event.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
         if (!files.length) return false;
         event.preventDefault();
         void insertImageFiles(files);
         return true;
       },
     },
-    onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
-    },
   });
 
-  useEffect(() => {
-    if (editor) {
-      editorRef.current = editor;
-    }
-  }, [editor]);
+  useEffect(() => { if (editor) editorRef.current = editor; }, [editor]);
 
   useEffect(() => {
-    if (editor && initialContent !== editor.getHTML() && !editor.isFocused) {
-      if (editor.isEmpty) {
-        editor.commands.setContent(initialContent);
-      }
+    if (editor && initialContent !== editor.getHTML() && !editor.isFocused && editor.isEmpty) {
+      editor.commands.setContent(initialContent);
     }
   }, [initialContent, editor]);
 
@@ -345,35 +1014,41 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
     if (hasRestoredScrollRef.current || !scrollContainerRef.current || !editor || !initialScrollTop) return;
     hasRestoredScrollRef.current = true;
     requestAnimationFrame(() => {
-      if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = initialScrollTop;
-      }
+      if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = initialScrollTop;
     });
   }, [editor, initialScrollTop]);
 
   return (
     <div className="editor-shell flex flex-1 min-h-0 w-full flex-col relative" onContextMenu={handleContextMenu}>
-      <MenuBar editor={editor} onInsertImages={insertImageFiles} />
+      <MenuBar
+        editor={editor}
+        onInsertImages={insertImageFiles}
+        showFindReplace={showFindReplace}
+        onToggleFindReplace={() => setShowFindReplace(p => !p)}
+      />
+      {showFindReplace && editor && (
+        <FindReplacePanel editor={editor} onClose={() => setShowFindReplace(false)} />
+      )}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto"
+        className="editor-page-container flex-1 overflow-y-auto"
         onScroll={() => {
           if (scrollContainerRef.current) {
             onScrollTopChangeRef.current?.(scrollContainerRef.current.scrollTop);
           }
         }}
       >
-        <EditorContent editor={editor} />
+        <div className="editor-page">
+          <EditorContent editor={editor} />
+        </div>
       </div>
+      {editor && <WordCount editor={editor} />}
 
       {contextMenu && createPortal(
         <div
           className="context-menu fixed z-50 py-1 text-sm"
           style={{ left: contextMenu.x, top: contextMenu.y }}
-          onClick={e => {
-            e.stopPropagation();
-            setContextMenu(null);
-          }}
+          onClick={e => { e.stopPropagation(); setContextMenu(null); }}
         >
           <button className="context-menu-item" onClick={() => { document.execCommand('cut'); editor?.chain().focus().run(); }}>
             <Scissors className="h-4 w-4" /> Taglia
@@ -385,27 +1060,22 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
             try {
               const text = await navigator.clipboard.readText();
               editor?.commands.insertContent(text);
-            } catch (_) {
-              console.error('Clipboard permission denied');
-            }
+            } catch (_) { console.error('Clipboard permission denied'); }
           }}>
             <Clipboard className="h-4 w-4" /> Incolla
           </button>
           <div className="editor-separator mx-3 my-1 w-auto" />
-          <button className="context-menu-item" onClick={() => { editor?.chain().focus().toggleBold().run(); }}>
+          <button className="context-menu-item" onClick={() => { editor?.chain().focus().toggleBold().run(); setContextMenu(null); }}>
             <Bold className="h-4 w-4" /> Grassetto
           </button>
-          <button className="context-menu-item" onClick={() => { editor?.chain().focus().toggleItalic().run(); }}>
+          <button className="context-menu-item" onClick={() => { editor?.chain().focus().toggleItalic().run(); setContextMenu(null); }}>
             <Italic className="h-4 w-4" /> Corsivo
           </button>
-          <button className="context-menu-item" onClick={() => imageInputRef.current?.click()}>
+          <button className="context-menu-item" onClick={() => { editor?.chain().focus().toggleUnderline().run(); setContextMenu(null); }}>
+            <UnderlineIcon className="h-4 w-4" /> Sottolineato
+          </button>
+          <button className="context-menu-item" onClick={() => { imageInputRef.current?.click(); }}>
             <ImagePlus className="h-4 w-4" /> Inserisci immagine
-          </button>
-          <button className="context-menu-item" onClick={() => { editor?.chain().focus().toggleHeading({ level: 1 }).run(); }}>
-            <Heading1 className="h-4 w-4" /> Titolo 1
-          </button>
-          <button className="context-menu-item" onClick={() => { editor?.chain().focus().toggleHeading({ level: 2 }).run(); }}>
-            <Heading2 className="h-4 w-4" /> Titolo 2
           </button>
         </div>
       , document.body)}
@@ -417,9 +1087,7 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
         multiple
         className="hidden"
         onChange={event => {
-          if (event.target.files?.length) {
-            void insertImageFiles(event.target.files);
-          }
+          if (event.target.files?.length) void insertImageFiles(event.target.files);
           event.currentTarget.value = '';
           setContextMenu(null);
         }}

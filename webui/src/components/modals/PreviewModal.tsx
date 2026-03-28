@@ -1,6 +1,7 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, Copy, FileText, X } from 'lucide-react';
+import { Check, Copy, FileText, Menu, X } from 'lucide-react';
+import type { Heading } from '../../RichTextEditor';
 
 const LazyAudioPlayer = React.lazy(() => import('../../AudioPlayer').then(module => ({ default: module.AudioPlayer })));
 const LazyRichTextEditor = React.lazy(() => import('../../RichTextEditor').then(module => ({ default: module.RichTextEditor })));
@@ -30,6 +31,19 @@ export function PreviewModal({
   previewInitAudio, previewInitScrollTop,
   onAudioStateChange, onScrollTopChange,
 }: PreviewModalProps) {
+  const [isTocOpen, setIsTocOpen] = useState(false);
+  const [headings, setHeadings] = useState<Heading[]>([]);
+
+  const scrollToHeading = (text: string, level: number) => {
+    const els = document.querySelectorAll(`.tiptap-editor h${level}`);
+    for (const el of Array.from(els)) {
+      if (el.textContent?.trim() === text.trim()) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        break;
+      }
+    }
+  };
+
   return (
     <AnimatePresence>
       {previewContent !== null && (
@@ -46,7 +60,8 @@ export function PreviewModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             onClick={event => event.stopPropagation()}
-            className="modal-card w-full max-w-5xl max-h-[88vh] flex flex-col overflow-hidden"
+            className="modal-card w-full max-h-[88vh] flex flex-col overflow-hidden"
+            style={{ maxWidth: isTocOpen ? '1400px' : '1100px', transition: 'max-width 0.25s ease' }}
           >
             <div className="px-4 py-4 sm:px-5 flex items-center justify-between gap-3 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
               <h3 className="font-semibold text-lg flex items-center gap-2 truncate min-w-0" style={{ color: 'var(--text-primary)' }}>
@@ -80,44 +95,90 @@ export function PreviewModal({
               </div>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-              <Suspense fallback={<div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
-                <LazyRichTextEditor
-                  initialContent={previewContent || ''}
-                  onChange={onChange}
-                  initialScrollTop={previewInitScrollTop}
-                  onScrollTopChange={onScrollTopChange}
-                />
-              </Suspense>
-            </div>
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-row">
+              {/* Left TOC Sidebar */}
+              <div className="toc-left-sidebar" style={{ width: isTocOpen ? 260 : 44, opacity: 1 }}>
+                {!isTocOpen && (
+                  <button
+                    className="toc-left-btn"
+                    onClick={() => setIsTocOpen(true)}
+                    title="Apri indice"
+                  >
+                    <Menu className="w-4 h-4" />
+                  </button>
+                )}
+                {isTocOpen && (
+                  <>
+                    <div className="toc-left-header">
+                      <span>Indice</span>
+                      <button className="toc-left-close" onClick={() => setIsTocOpen(false)} title="Chiudi">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <nav className="toc-left-nav">
+                      {headings.length === 0 ? (
+                        <p className="toc-empty">Nessun titolo</p>
+                      ) : (
+                        headings.map(h => (
+                          <button
+                            key={h.id}
+                            className={`toc-item toc-item-h${h.level}`}
+                            style={{ paddingLeft: `${(h.level - 1) * 12 + 14}px` }}
+                            onClick={() => scrollToHeading(h.text, h.level)}
+                            title={h.text}
+                          >
+                            {h.text}
+                          </button>
+                        ))
+                      )}
+                    </nav>
+                  </>
+                )}
+              </div>
 
-            {(audioSrc || audioRelinkNeeded) && (
-              <div className="shrink-0 border-t px-4 sm:px-5" style={{ borderColor: 'var(--border-subtle)' }}>
-                {audioSrc ? (
-                  <Suspense fallback={<div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento player...</div>}>
-                    <LazyAudioPlayer
-                      src={audioSrc}
-                      initialTime={previewInitAudio.time}
-                      initialPlaybackRate={previewInitAudio.playbackRate}
-                      initialVolume={previewInitAudio.volume}
-                      onStateChange={onAudioStateChange}
+              {/* Editor area + Player column */}
+              <div className="flex-1 min-h-0 flex flex-col">
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  <Suspense fallback={<div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
+                    <LazyRichTextEditor
+                      initialContent={previewContent || ''}
+                      onChange={onChange}
+                      initialScrollTop={previewInitScrollTop}
+                      onScrollTopChange={onScrollTopChange}
+                      onHeadingsChange={setHeadings}
                     />
                   </Suspense>
-                ) : (
-                  <div className="flex items-center justify-between gap-3 py-3.5">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Audio non trovato</p>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        Il file originale e stato spostato. Selezionalo di nuovo per riattivare il player.
-                      </p>
-                    </div>
-                    <button onClick={onRelink} className="premium-button-secondary compact-button shrink-0">
-                      Ricollega audio
-                    </button>
+                </div>
+
+                {(audioSrc || audioRelinkNeeded) && (
+                  <div className="shrink-0 border-t px-4 sm:px-5" style={{ borderColor: 'var(--border-subtle)' }}>
+                    {audioSrc ? (
+                      <Suspense fallback={<div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento player...</div>}>
+                        <LazyAudioPlayer
+                          src={audioSrc}
+                          initialTime={previewInitAudio.time}
+                          initialPlaybackRate={previewInitAudio.playbackRate}
+                          initialVolume={previewInitAudio.volume}
+                          onStateChange={onAudioStateChange}
+                        />
+                      </Suspense>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3 py-3.5">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Audio non trovato</p>
+                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                            Il file originale e stato spostato. Selezionalo di nuovo per riattivare il player.
+                          </p>
+                        </div>
+                        <button onClick={onRelink} className="premium-button-secondary compact-button shrink-0">
+                          Ricollega audio
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
+            </div>
           </motion.div>
         </motion.div>
       )}
