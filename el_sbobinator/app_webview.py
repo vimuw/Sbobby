@@ -15,6 +15,7 @@ import threading
 import time
 import warnings
 from collections import deque
+from typing import Literal, get_args
 from html import escape
 
 # Suppress benign requests warning about chardet/charset_normalizer failing to import
@@ -94,7 +95,15 @@ def _drain_dnd_paths(names: set[str]) -> list[tuple[str, str]]:
 
 
 class _BridgeDispatcher:
-    BATCHABLE = {"updateProgress", "updatePhase", "setWorkTotals", "updateWorkDone", "registerStepTime"}
+    _BridgeEvent = Literal[
+        "updateProgress", "updatePhase", "setWorkTotals", "updateWorkDone",
+        "registerStepTime", "setCurrentFile", "fileDone", "filesDropped",
+        "pipelineDone", "pipelineError", "pipelineCancelled",
+    ]
+    _ALL_EVENTS: frozenset[str] = frozenset(get_args(_BridgeEvent))
+    BATCHABLE: frozenset[str] = frozenset({
+        "updateProgress", "updatePhase", "setWorkTotals", "updateWorkDone", "registerStepTime",
+    })
     MAX_RETRIES = 3
 
     def __init__(self, window_getter, flush_interval: float = 0.12):
@@ -107,6 +116,7 @@ class _BridgeDispatcher:
         self._timer: threading.Timer | None = None
 
     def emit(self, fn_name: str, data, batched: bool | None = None):
+        assert fn_name in self._ALL_EVENTS, f"Unknown bridge event: {fn_name!r}"
         should_batch = fn_name in self.BATCHABLE if batched is None else batched
         with self._lock:
             if should_batch:
