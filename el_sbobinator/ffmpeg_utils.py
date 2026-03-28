@@ -47,26 +47,33 @@ def _run_cancellable(cmd, *, stop_event=None) -> Tuple[int, str, str, bool]:
         creationflags=_creation_flags(),
     )
     cancelled = False
+    out, err = "", ""
     try:
-        while proc.poll() is None:
-            if _is_cancelled(stop_event):
-                cancelled = True
-                try:
-                    proc.terminate()
-                except Exception:
-                    pass
-                # Give a short grace period then hard kill.
-                t0 = time.time()
-                while proc.poll() is None and (time.time() - t0) < 2.0:
-                    time.sleep(0.05)
-                if proc.poll() is None:
+        while True:
+            try:
+                out, err = proc.communicate(timeout=0.15)
+                break
+            except subprocess.TimeoutExpired:
+                if _is_cancelled(stop_event):
+                    cancelled = True
                     try:
-                        proc.kill()
+                        proc.terminate()
                     except Exception:
                         pass
-                break
-            time.sleep(0.15)
-        out, err = proc.communicate(timeout=5)
+                    # Give a short grace period then hard kill.
+                    t0 = time.time()
+                    while proc.poll() is None and (time.time() - t0) < 2.0:
+                        time.sleep(0.05)
+                    if proc.poll() is None:
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
+                    try:
+                        out, err = proc.communicate(timeout=2)
+                    except Exception:
+                        out, err = "", ""
+                    break
     except Exception:
         try:
             proc.kill()

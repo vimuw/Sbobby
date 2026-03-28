@@ -18,6 +18,19 @@ from google.genai import types
 from el_sbobinator.logging_utils import get_logger
 from el_sbobinator.shared import load_config
 
+# ---------------------------------------------------------------------------
+# Module-level constants
+# ---------------------------------------------------------------------------
+
+_FILE_UPLOAD_TIMEOUT_SECONDS: int = 900  # 15-minute ceiling for Google to finish processing an uploaded audio file
+_FILE_UPLOAD_POLL_SECONDS: int = 3  # How often (seconds) to re-query file state while waiting
+
+_MAX_RETRY_ATTEMPTS: int = 4  # Maximum Gemini API call attempts before propagating the error
+_RETRY_SLEEP_SECONDS: float = 30.0  # Back-off pause between generic transient errors
+# Gemini enforces a per-minute request quota that resets after ~60 s; sleeping
+# 65 s adds a small buffer to ensure the window has fully elapsed before retry.
+_RATE_LIMIT_SLEEP_SECONDS: float = 65.0
+
 
 def extract_client_api_key(client_obj) -> str | None:
     try:
@@ -74,7 +87,7 @@ def try_rotate_key(current_client, fallback_keys: list[str], model_name: str, lo
     return current_client, False, None
 
 
-def wait_for_file_ready(client_for_file, file_obj, cancelled: Callable[[], bool], max_wait_seconds: int = 900, poll_seconds: int = 3):
+def wait_for_file_ready(client_for_file, file_obj, cancelled: Callable[[], bool], max_wait_seconds: int = _FILE_UPLOAD_TIMEOUT_SECONDS, poll_seconds: int = _FILE_UPLOAD_POLL_SECONDS):
     start_time = time.monotonic()
     while True:
         state = str(getattr(file_obj, "state", "")).upper()
@@ -148,12 +161,11 @@ def retry_with_quota(
     fallback_keys: list,
     model_name: str,
     cancelled,
-    safe_phase,
-    safe_set_effective_api_key,
+    runtime,
     request_fallback_key,
-    max_attempts: int = 4,
-    retry_sleep_seconds: float = 30.0,
-    rate_limit_sleep_seconds: float = 65.0,
+    max_attempts: int = _MAX_RETRY_ATTEMPTS,
+    retry_sleep_seconds: float = _RETRY_SLEEP_SECONDS,
+    rate_limit_sleep_seconds: float = _RATE_LIMIT_SLEEP_SECONDS,
     on_key_rotated=None,
     logger=None,
 ):
@@ -182,7 +194,7 @@ def retry_with_quota(
                 )
                 if not is_daily and attempts < max_attempts - 1:
                     print("      [Rilevato limite temporaneo. Attesa di 65s per il reset quota al minuto...]")
-                    safe_phase("⏳ Rate limit: attesa 65s...")
+                    runtime.phase("⏳ Rate limit: attesa 65s...")
                     if not sleep_with_cancel(cancelled, rate_limit_sleep_seconds):
                         print("   [*] Operazione annullata dall'utente.")
                         return client, None
@@ -193,7 +205,7 @@ def retry_with_quota(
                 new_c, rotated, rotated_key = try_rotate_key(client, fallback_keys, model_name, logger=log)
                 if rotated:
                     client = new_c
-                    safe_set_effective_api_key(rotated_key)
+                    runtime.set_effective_api_key(rotated_key)
                     if on_key_rotated is not None:
                         on_key_rotated(client)
                     continue
@@ -204,7 +216,7 @@ def retry_with_quota(
                         test_c = genai.Client(api_key=new_api_key.strip())
                         test_c.models.get(model=model_name)
                         client = test_c
-                        safe_set_effective_api_key(new_api_key.strip())
+                        runtime.set_effective_api_key(new_api_key.strip())
                         if on_key_rotated is not None:
                             on_key_rotated(client)
                         print("   ✅ Nuova API Key valida! Ripresa automatica...")

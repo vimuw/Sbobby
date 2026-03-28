@@ -8,6 +8,7 @@ checks to quickly surface missing dependencies or configuration issues.
 from __future__ import annotations
 
 import os
+import platform
 import tempfile
 
 from google import genai
@@ -113,6 +114,25 @@ def validate_environment(api_key: str | None = None, validate_api_key: bool = Fa
                         "details": str(exc),
                     }
                 )
+
+    if platform.system() != "Windows":
+        keyring_ok = False
+        keyring_detail = ""
+        try:
+            import keyring  # type: ignore
+            keyring.get_password("__el_sbobinator_probe__", "__probe__")
+            keyring_ok = True
+        except Exception as exc:
+            keyring_detail = str(exc)
+        checks.append(
+            {
+                "id": "keyring",
+                "label": "Keyring",
+                "status": "ok" if keyring_ok else "warning",
+                "message": "Keyring disponibile: chiave API protetta." if keyring_ok else "Keyring non disponibile: la chiave API sarà salvata in chiaro.",
+                "details": "" if keyring_ok else keyring_detail,
+            }
+        )
 
     ok = all(check["status"] != "error" for check in checks)
     summary = "Ambiente pronto." if ok else "Ambiente incompleto: correggi gli errori segnalati."

@@ -7,6 +7,7 @@ che vengono usati sia dalla pipeline che dalla UI.
 
 from __future__ import annotations
 
+import concurrent.futures
 import functools
 import hashlib
 import json
@@ -15,6 +16,7 @@ import platform
 import re
 import shutil
 import tempfile
+import threading
 import time
 from datetime import datetime
 
@@ -45,11 +47,21 @@ __all__ = [
     "PROMPT_REVISIONE",
     "PROMPT_REVISIONE_CONFINE",
     "get_session_storage_info",
+    "invalidate_session_storage_cache",
     "cleanup_orphan_sessions",
 ]
 
 _KEYRING_SERVICE = "El Sbobinator"
 _KEYRING_USER_API = "gemini_api_key"
+_config_lock = threading.Lock()
+
+_storage_info_cache: dict | None = None
+_storage_info_cache_time: float = 0.0
+_STORAGE_INFO_TTL: float = 30.0
+_storage_info_lock = threading.Lock()
+_storage_info_executor = concurrent.futures.ThreadPoolExecutor(
+    max_workers=1, thread_name_prefix="storage_info"
+)
 
 
 def _keyring_get_api_key() -> str:
@@ -442,127 +454,129 @@ def load_config() -> dict:  # noqa: C901
 
 
 def save_config(api_key: str, fallback_keys: list | None = None) -> None:  # noqa: C901
-    api_key_norm = str(api_key or "").strip()
-    data: dict = {"api_key": api_key_norm}
-    # Persist fallback keys (array of riserva) if provided.
-    if fallback_keys is not None:
-        data["fallback_keys"] = [str(k or "").strip() for k in fallback_keys if str(k or "").strip()]
-    else:
-        # Preserve existing fallback keys without the full DPAPI/keyring overhead
-        # of load_config(). On Windows, read raw JSON and carry whatever stored
-        # form is already on disk verbatim (no decrypt+re-encrypt cycle needed).
-        # On macOS/Linux, do a targeted keyring lookup for fallback keys only.
-        try:
-            if platform.system() == "Windows":
-                _raw: dict | None = None
-                for _p in (CONFIG_FILE, LEGACY_CONFIG_FILE):
-                    if os.path.exists(_p):
-                        try:
-                            with open(_p, "r", encoding="utf-8") as _f:
-                                _raw = json.load(_f)
-                        except Exception:
-                            pass
-                        break
-                if isinstance(_raw, dict):
-                    if _raw.get("fallback_keys_protected"):
-                        data["fallback_keys_protected"] = _raw["fallback_keys_protected"]
-                    elif isinstance(_raw.get("fallback_keys"), list) and _raw["fallback_keys"]:
-                        data["fallback_keys"] = _raw["fallback_keys"]
-            else:
-                try:
-                    import keyring as _kr  # type: ignore
-                    _fk_json = _kr.get_password(_KEYRING_SERVICE, "gemini_fallback_keys")
-                    if _fk_json:
-                        data["fallback_keys"] = json.loads(_fk_json)
-                except Exception:
-                    pass
-        except Exception:
-            pass
-    # Store encrypted secret on Windows if possible (avoid plaintext on disk).
-    try:
-        if platform.system() == "Windows" and api_key_norm:
-            protected = _dpapi_protect_text_windows(api_key_norm)
-            if protected:
-                data["api_key"] = ""
-                data["api_key_protected"] = protected
-            else:
-                debug_log("dpapi: CryptProtectData failed; API key stored as plaintext in config")
-    except Exception as _dpapi_exc:
-        debug_log(f"dpapi: exception during protect — API key stored as plaintext in config: {_dpapi_exc}")
-
-    # Store secret in OS keyring on macOS/Linux if available.
-    try:
-        if platform.system() != "Windows":
-            if api_key_norm:
-                ok = _keyring_set_api_key(api_key_norm)
-                if ok:
-                    data["api_key"] = ""
-                    data["use_keyring"] = True
-                else:
-                    debug_log("keyring: set_password failed; fallback to plaintext config")
-            else:
-                # If user clears the key, also clear from keyring (best-effort).
-                _keyring_delete_api_key()
-                data["api_key"] = ""
-                data["use_keyring"] = True
-    except Exception:
-        pass
-    # Encrypt fallback keys (same mechanisms as primary key).
-    fk = data.get("fallback_keys")
-    if fk:
-        try:
-            if platform.system() == "Windows":
-                protected_fk = _dpapi_protect_text_windows(json.dumps(fk))
-                if protected_fk:
-                    data["fallback_keys"] = []
-                    data["fallback_keys_protected"] = protected_fk
-                else:
-                    debug_log("dpapi: CryptProtectData failed for fallback keys; stored as plaintext in config")
-        except Exception as _dpapi_fk_exc:
-            debug_log(f"dpapi: exception during protect for fallback keys — stored as plaintext in config: {_dpapi_fk_exc}")
-        try:
-            if platform.system() != "Windows":
-                import keyring  # type: ignore
-                keyring.set_password(_KEYRING_SERVICE, "gemini_fallback_keys", json.dumps(fk))
-                data["fallback_keys"] = []
-        except Exception:
-            pass
-    try:
-        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-    except Exception:
-        pass
-
-    try:
-        # Atomic write to avoid truncation on crash/force-close.
-        tmp_path = CONFIG_FILE + ".tmp"
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-        os.replace(tmp_path, CONFIG_FILE)
-
-        # Restrict permissions on POSIX systems (best-effort).
-        if platform.system() != "Windows":
+    with _config_lock:
+        api_key_norm = str(api_key or "").strip()
+        data: dict = {"api_key": api_key_norm}
+        # Persist fallback keys (array of riserva) if provided.
+        if fallback_keys is not None:
+            data["fallback_keys"] = [str(k or "").strip() for k in fallback_keys if str(k or "").strip()]
+        else:
+            # Preserve existing fallback keys without the full DPAPI/keyring overhead
+            # of load_config(). On Windows, read raw JSON and carry whatever stored
+            # form is already on disk verbatim (no decrypt+re-encrypt cycle needed).
+            # On macOS/Linux, do a targeted keyring lookup for fallback keys only.
             try:
-                os.chmod(CONFIG_FILE, 0o600)
+                if platform.system() == "Windows":
+                    _raw: dict | None = None
+                    for _p in (CONFIG_FILE, LEGACY_CONFIG_FILE):
+                        if os.path.exists(_p):
+                            try:
+                                with open(_p, "r", encoding="utf-8") as _f:
+                                    _raw = json.load(_f)
+                            except Exception:
+                                pass
+                            break
+                    if isinstance(_raw, dict):
+                        if _raw.get("fallback_keys_protected"):
+                            data["fallback_keys_protected"] = _raw["fallback_keys_protected"]
+                        elif isinstance(_raw.get("fallback_keys"), list) and _raw["fallback_keys"]:
+                            data["fallback_keys"] = _raw["fallback_keys"]
+                else:
+                    try:
+                        import keyring as _kr  # type: ignore
+                        _fk_json = _kr.get_password(_KEYRING_SERVICE, "gemini_fallback_keys")
+                        if _fk_json:
+                            data["fallback_keys"] = json.loads(_fk_json)
+                    except Exception:
+                        pass
             except Exception:
                 pass
-    except Exception:
-        # Best-effort: non bloccare l'app se il config non e' scrivibile.
-        return
+        # Store encrypted secret on Windows if possible (avoid plaintext on disk).
+        try:
+            if platform.system() == "Windows" and api_key_norm:
+                protected = _dpapi_protect_text_windows(api_key_norm)
+                if protected:
+                    data["api_key"] = ""
+                    data["api_key_protected"] = protected
+                else:
+                    debug_log("dpapi: CryptProtectData failed; API key stored as plaintext in config")
+        except Exception as _dpapi_exc:
+            debug_log(f"dpapi: exception during protect — API key stored as plaintext in config: {_dpapi_exc}")
 
-    # Back-compat (opt-in): write legacy file only if explicitly requested.
-    # Avoid duplicating secrets (especially on Windows).
-    try:
-        if str(os.environ.get("EL_SBOBINATOR_WRITE_LEGACY_CONFIG", "")).strip() in ("1", "true", "TRUE", "yes", "YES"):
-            with open(LEGACY_CONFIG_FILE + ".tmp", "w", encoding="utf-8") as f:
+        # Store secret in OS keyring on macOS/Linux if available.
+        try:
+            if platform.system() != "Windows":
+                if api_key_norm:
+                    ok = _keyring_set_api_key(api_key_norm)
+                    if ok:
+                        data["api_key"] = ""
+                        data["use_keyring"] = True
+                    else:
+                        print("[!] Avviso: Keyring non disponibile. La chiave API è salvata in chiaro in config.json.")
+                        data.setdefault("use_keyring", False)
+                else:
+                    # If user clears the key, also clear from keyring (best-effort).
+                    _keyring_delete_api_key()
+                    data["api_key"] = ""
+                    data["use_keyring"] = True
+        except Exception:
+            pass
+        # Encrypt fallback keys (same mechanisms as primary key).
+        fk = data.get("fallback_keys")
+        if fk:
+            try:
+                if platform.system() == "Windows":
+                    protected_fk = _dpapi_protect_text_windows(json.dumps(fk))
+                    if protected_fk:
+                        data["fallback_keys"] = []
+                        data["fallback_keys_protected"] = protected_fk
+                    else:
+                        debug_log("dpapi: CryptProtectData failed for fallback keys; stored as plaintext in config")
+            except Exception as _dpapi_fk_exc:
+                debug_log(f"dpapi: exception during protect for fallback keys — stored as plaintext in config: {_dpapi_fk_exc}")
+            try:
+                if platform.system() != "Windows":
+                    import keyring  # type: ignore
+                    keyring.set_password(_KEYRING_SERVICE, "gemini_fallback_keys", json.dumps(fk))
+                    data["fallback_keys"] = []
+            except Exception:
+                pass
+        try:
+            os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+        except Exception:
+            pass
+
+        try:
+            # Atomic write to avoid truncation on crash/force-close.
+            tmp_path = CONFIG_FILE + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False)
-            os.replace(LEGACY_CONFIG_FILE + ".tmp", LEGACY_CONFIG_FILE)
+            os.replace(tmp_path, CONFIG_FILE)
+
+            # Restrict permissions on POSIX systems (best-effort).
             if platform.system() != "Windows":
                 try:
-                    os.chmod(LEGACY_CONFIG_FILE, 0o600)
+                    os.chmod(CONFIG_FILE, 0o600)
                 except Exception:
                     pass
-    except Exception:
-        pass
+        except Exception:
+            # Best-effort: non bloccare l'app se il config non e' scrivibile.
+            return
+
+        # Back-compat (opt-in): write legacy file only if explicitly requested.
+        # Avoid duplicating secrets (especially on Windows).
+        try:
+            if str(os.environ.get("EL_SBOBINATOR_WRITE_LEGACY_CONFIG", "")).strip() in ("1", "true", "TRUE", "yes", "YES"):
+                with open(LEGACY_CONFIG_FILE + ".tmp", "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False)
+                os.replace(LEGACY_CONFIG_FILE + ".tmp", LEGACY_CONFIG_FILE)
+                if platform.system() != "Windows":
+                    try:
+                        os.chmod(LEGACY_CONFIG_FILE, 0o600)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
 
 # ==========================================
@@ -626,7 +640,7 @@ def _partial_file_hash(path: str, max_bytes: int = 65536) -> str:
 
 
 _session_id_cache: dict[tuple, str] = {}
-_MAX_SESSION_CACHE_SIZE = 500  # LRU cap to prevent unbounded growth
+_MAX_SESSION_CACHE_SIZE = 500  # LRU cap: at ~200 bytes per entry this stays well under 100 KB; prevents unbounded growth in long-running processes
 
 
 def _session_id_for_file(path: str) -> str:
@@ -705,10 +719,10 @@ def _folder_newest_mtime(path: str) -> float:
     return newest
 
 
-def get_session_storage_info() -> dict:
+def _compute_session_storage_info() -> dict:
     """
-    Return total size in bytes and count of session folders in SESSION_ROOT.
-    Safe to call even when SESSION_ROOT does not yet exist.
+    Blocking FS traversal – call via get_session_storage_info() which caches
+    the result and offloads the work to a background thread.
     """
     total_bytes = 0
     total_sessions = 0
@@ -724,6 +738,37 @@ def get_session_storage_info() -> dict:
     except Exception:
         pass
     return {"total_bytes": total_bytes, "total_sessions": total_sessions}
+
+
+def get_session_storage_info() -> dict:
+    """
+    Return total size in bytes and count of session folders in SESSION_ROOT.
+    Result is cached for _STORAGE_INFO_TTL seconds.  The FS traversal runs in
+    a dedicated single-worker thread so the caller is never blocked for longer
+    than the OS I/O takes (bounded by a 10-second timeout).
+    """
+    global _storage_info_cache, _storage_info_cache_time
+    now = time.time()
+    with _storage_info_lock:
+        if _storage_info_cache is not None and (now - _storage_info_cache_time) < _STORAGE_INFO_TTL:
+            return dict(_storage_info_cache)
+    future = _storage_info_executor.submit(_compute_session_storage_info)
+    try:
+        result = future.result(timeout=10.0)
+    except Exception:
+        result = {"total_bytes": 0, "total_sessions": 0}
+    with _storage_info_lock:
+        _storage_info_cache = result
+        _storage_info_cache_time = time.time()
+    return dict(result)
+
+
+def invalidate_session_storage_cache() -> None:
+    """Bust the get_session_storage_info cache (call after deleting sessions)."""
+    global _storage_info_cache, _storage_info_cache_time
+    with _storage_info_lock:
+        _storage_info_cache = None
+        _storage_info_cache_time = 0.0
 
 
 def cleanup_orphan_sessions(max_age_days: int = 30) -> dict:
@@ -759,6 +804,7 @@ def cleanup_orphan_sessions(max_age_days: int = 30) -> dict:
                 errors += 1
     except Exception:
         pass
+    invalidate_session_storage_cache()
     return {"removed": removed, "freed_bytes": freed_bytes, "errors": errors}
 
 

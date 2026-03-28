@@ -1,4 +1,4 @@
-import { type Dispatch, useEffect } from 'react';
+import { type Dispatch, useEffect, useRef } from 'react';
 import type React from 'react';
 import { createBridge } from '../bridge';
 import type { AppStatus, FileDescriptor, FileItem, ProcessingAction } from '../appState';
@@ -22,11 +22,23 @@ export function useBridgeCallbacks(options: {
     setAskNewKeyPrompt,
   } = options;
 
+  const dispatchRef = useRef(dispatch);
+  const appendConsoleRef = useRef(appendConsole);
+  const enqueueUniqueFilesRef = useRef(enqueueUniqueFiles);
+  const setRegeneratePromptRef = useRef(setRegeneratePrompt);
+  const setAskNewKeyPromptRef = useRef(setAskNewKeyPrompt);
+
+  dispatchRef.current = dispatch;
+  appendConsoleRef.current = appendConsole;
+  enqueueUniqueFilesRef.current = enqueueUniqueFiles;
+  setRegeneratePromptRef.current = setRegeneratePrompt;
+  setAskNewKeyPromptRef.current = setAskNewKeyPrompt;
+
   useEffect(() => {
     window.elSbobinatorBridge = createBridge({
-      dispatch,
-      appendConsole,
-      onRegenerate: data => setRegeneratePrompt(data),
+      dispatch: (...args) => dispatchRef.current(...args),
+      appendConsole: msg => appendConsoleRef.current(msg),
+      onRegenerate: data => setRegeneratePromptRef.current(data),
       onFilesDropped: (droppedFiles: FileDescriptor[]) => {
         if (appStateRef.current !== 'idle') return;
         const filesToAdd = droppedFiles.map(f => ({
@@ -39,10 +51,10 @@ export function useBridgeCallbacks(options: {
           progress: 0,
           phase: 0,
         }));
-        enqueueUniqueFiles(filesToAdd);
+        enqueueUniqueFilesRef.current(filesToAdd);
       },
       onAskNewKey: () => {
-        setAskNewKeyPrompt(true);
+        setAskNewKeyPromptRef.current(true);
       },
       onBatchDone: data => {
         if (!data?.cancelled && data?.total && data.completed === data.total && window.pywebview?.api?.show_notification && !document.hasFocus()) {
@@ -56,5 +68,8 @@ export function useBridgeCallbacks(options: {
         }
       },
     });
-  }, [appendConsole]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      window.elSbobinatorBridge = null as any;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 }

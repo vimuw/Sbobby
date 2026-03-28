@@ -102,7 +102,8 @@ def export_doc_html(path: str, doc_html: str) -> str:
             target_path += ".docx"
 
     from html2docx import html2docx
-    buf = html2docx(doc_html, title="Sbobina")
+    safe_html = sanitize_html_basic(str(doc_html or ""))
+    buf = html2docx(safe_html, title="Sbobina")
     with open(target_path, "wb") as handle:
         handle.write(buf.getvalue())
     return target_path

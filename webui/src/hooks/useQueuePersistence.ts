@@ -1,4 +1,4 @@
-import { type Dispatch, useEffect, useRef } from 'react';
+import { type Dispatch, useEffect, useMemo, useRef } from 'react';
 import type { FileItem, ProcessingAction } from '../appState';
 
 const QUEUE_STORAGE_KEY = 'el-sbobinator.queue.v1';
@@ -39,9 +39,10 @@ export function useQueuePersistence(
     }
   }, [appendConsole]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const queueStructuralKey = files
-    .map(f => `${f.id}|${f.status}|${f.outputHtml ?? ''}|${f.outputDir ?? ''}|${f.path ?? ''}`)
-    .join(',');
+  const queueStructuralKey = useMemo(() =>
+    files.map(f => `${f.id}|${f.status}|${f.outputHtml ?? ''}|${f.outputDir ?? ''}|${f.path ?? ''}`).join(','),
+    [files]
+  );
 
   useEffect(() => {
     try {

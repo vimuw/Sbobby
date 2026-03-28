@@ -112,6 +112,36 @@ declare global {
   }
 }
 
+type PreviewState = {
+  content: string | null;
+  editedContent: string;
+  title: string;
+  path: string;
+  audioSrc: string | null;
+  fileId: string | null;
+  sourcePath: string;
+  audioRelinkNeeded: boolean;
+  isCopied: boolean;
+  autosaveStatus: 'idle' | 'saving' | 'saved' | 'error';
+  initAudio: { time?: number; playbackRate?: number; volume?: number };
+  initScrollTop?: number;
+};
+
+const initialPreviewState: PreviewState = {
+  content: null,
+  editedContent: '',
+  title: '',
+  path: '',
+  audioSrc: null,
+  fileId: null,
+  sourcePath: '',
+  audioRelinkNeeded: false,
+  isCopied: false,
+  autosaveStatus: 'idle',
+  initAudio: {},
+  initScrollTop: undefined,
+};
+
 export default function App() {
   const [{ files, appState, currentPhase, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
 
@@ -127,18 +157,7 @@ export default function App() {
   const [askNewKeyPrompt, setAskNewKeyPrompt] = useState(false);
 
   // --- Preview state ---
-  const [previewContent, setPreviewContent] = useState<string | null>(null);
-  const [editedContent, setEditedContent] = useState<string>('');
-  const [previewTitle, setPreviewTitle] = useState<string>('');
-  const [previewPath, setPreviewPath] = useState<string>('');
-  const [audioSrc, setAudioSrc] = useState<string | null>(null);
-  const [previewFileId, setPreviewFileId] = useState<string | null>(null);
-  const [previewSourcePath, setPreviewSourcePath] = useState<string>('');
-  const [audioRelinkNeeded, setAudioRelinkNeeded] = useState(false);
-  const [isCopied, setIsCopied] = useState(false);
-  const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [previewInitAudio, setPreviewInitAudio] = useState<{ time?: number; playbackRate?: number; volume?: number }>({});
-  const [previewInitScrollTop, setPreviewInitScrollTop] = useState<number | undefined>(undefined);
+  const [preview, setPreview] = useState<PreviewState>(initialPreviewState);
 
   // --- UI state ---
   const [isDragging, setIsDragging] = useState(false);
@@ -195,7 +214,7 @@ export default function App() {
   useBridgeCallbacks({ dispatch, appendConsole, filesRef, appStateRef, enqueueUniqueFiles, setRegeneratePrompt, setAskNewKeyPrompt });
 
   // --- Body scroll lock ---
-  const isModalOpen = isSettingsOpen || regeneratePrompt !== null || previewContent !== null || askNewKeyPrompt;
+  const isModalOpen = isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt;
   useBodyScrollLock(isModalOpen);
 
   // --- Handlers ---
@@ -328,27 +347,25 @@ export default function App() {
   const loadPreviewAudio = useCallback(async (sourcePath?: string) => {
     const normalizedSource = String(sourcePath || '').trim();
     if (!normalizedSource || !window.pywebview?.api?.stream_media_file) {
-      setAudioSrc(null);
-      setAudioRelinkNeeded(Boolean(normalizedSource));
+      setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: Boolean(normalizedSource) }));
       return;
     }
     const streamRes = await window.pywebview.api.stream_media_file(normalizedSource);
-    if (streamRes.ok && streamRes.url) { setAudioSrc(streamRes.url); setAudioRelinkNeeded(false); return; }
-    setAudioSrc(null);
-    setAudioRelinkNeeded(true);
+    if (streamRes.ok && streamRes.url) { setPreview(prev => ({ ...prev, audioSrc: streamRes.url, audioRelinkNeeded: false })); return; }
+    setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: true }));
   }, []);
 
   const relinkPreviewAudio = useCallback(async () => {
-    if (!window.pywebview?.api?.ask_media_file || !previewFileId) return;
+    if (!window.pywebview?.api?.ask_media_file || !preview.fileId) return;
     try {
       const selectedFile = await window.pywebview.api.ask_media_file();
       if (!selectedFile?.path) return;
-      dispatch({ type: 'queue/update_source', id: previewFileId, path: selectedFile.path, name: selectedFile.name, size: selectedFile.size, duration: selectedFile.duration });
-      setPreviewSourcePath(selectedFile.path);
+      dispatch({ type: 'queue/update_source', id: preview.fileId, path: selectedFile.path, name: selectedFile.name, size: selectedFile.size, duration: selectedFile.duration });
+      setPreview(prev => ({ ...prev, sourcePath: selectedFile.path }));
       await loadPreviewAudio(selectedFile.path);
       appendConsole(`Audio ricollegato: ${selectedFile.name}`);
     } catch (error: any) { appendConsole(`❌ Impossibile ricollegare l'audio: ${error?.message || error}`); }
-  }, [appendConsole, loadPreviewAudio, previewFileId]);
+  }, [appendConsole, loadPreviewAudio, preview.fileId]);
 
   const openPreview = async (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => {
     if (window.pywebview?.api?.read_html_content) {
@@ -363,16 +380,20 @@ export default function App() {
           currentPreviewSessionKeyRef.current = sessionKey;
           const savedSession = loadEditorSession(sessionKey);
           currentEditorSessionRef.current = { ...savedSession };
-          setPreviewInitAudio({ time: savedSession.audioTime, playbackRate: savedSession.playbackRate, volume: savedSession.volume });
-          setPreviewInitScrollTop(savedSession.scrollTop);
-          setPreviewContent(safeContent);
-          setEditedContent(safeContent);
-          setPreviewTitle(filename);
-          setPreviewPath(htmlPath);
-          setPreviewFileId(fileId ?? null);
-          setPreviewSourcePath(sourcePath || '');
-          setIsCopied(false);
-          setAutosaveStatus('idle');
+          setPreview({
+            content: safeContent,
+            editedContent: safeContent,
+            title: filename,
+            path: htmlPath,
+            fileId: fileId ?? null,
+            sourcePath: sourcePath || '',
+            audioSrc: null,
+            audioRelinkNeeded: false,
+            isCopied: false,
+            autosaveStatus: 'idle',
+            initAudio: { time: savedSession.audioTime, playbackRate: savedSession.playbackRate, volume: savedSession.volume },
+            initScrollTop: savedSession.scrollTop,
+          });
           lastPersistedPreviewRef.current = safeContent;
           await loadPreviewAudio(sourcePath);
         } else { appendConsole(`❌ Errore anteprima: ${res.error}`); }
@@ -389,21 +410,14 @@ export default function App() {
     }
     currentEditorSessionRef.current = {};
     currentPreviewSessionKeyRef.current = null;
-    setPreviewContent(null);
-    setEditedContent('');
-    setPreviewTitle('');
-    setPreviewPath('');
-    setPreviewFileId(null);
-    setPreviewSourcePath('');
-    setAudioSrc(null);
-    setAudioRelinkNeeded(false);
-    setIsCopied(false);
-    setAutosaveStatus('idle');
+    setPreview(initialPreviewState);
     lastPersistedPreviewRef.current = '';
   }, []);
 
+  const handleEditedContentChange = useCallback((v: string) => setPreview(prev => ({ ...prev, editedContent: v })), []);
+
   const handleCopyForGoogleDocs = useCallback(async () => {
-    const normalizedHtml = normalizePreviewHtmlContent(editedContent);
+    const normalizedHtml = normalizePreviewHtmlContent(preview.editedContent);
     const temp = document.createElement('div');
     temp.innerHTML = normalizedHtml;
     try {
@@ -411,9 +425,9 @@ export default function App() {
       const textBlob = new Blob([temp.textContent || temp.innerText || ''], { type: 'text/plain' });
       await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
     } catch (_) { navigator.clipboard.writeText(temp.textContent || temp.innerText || ''); }
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
-  }, [editedContent]);
+    setPreview(prev => ({ ...prev, isCopied: true }));
+    setTimeout(() => setPreview(prev => ({ ...prev, isCopied: false })), 2000);
+  }, [preview.editedContent]);
 
   const handleAudioStateChange = useCallback(({ currentTime, playbackRate, volume }: { currentTime: number; playbackRate: number; volume: number }) => {
     currentEditorSessionRef.current = { ...currentEditorSessionRef.current, audioTime: currentTime, playbackRate, volume };
@@ -429,31 +443,31 @@ export default function App() {
 
   // --- Preview autosave ---
   useEffect(() => {
-    if (!previewPath || previewContent === null) return;
-    if (editedContent === lastPersistedPreviewRef.current) return;
-    setAutosaveStatus('saving');
+    if (!preview.path || preview.content === null) return;
+    if (preview.editedContent === lastPersistedPreviewRef.current) return;
+    setPreview(prev => ({ ...prev, autosaveStatus: 'saving' }));
     const timeoutId = window.setTimeout(async () => {
       if (!window.pywebview?.api?.save_html_content) return;
-      const contentToSave = editedContent;
-      const res = await window.pywebview.api.save_html_content(previewPath, contentToSave);
-      if (res.ok) { lastPersistedPreviewRef.current = contentToSave; setAutosaveStatus('saved'); }
-      else { setAutosaveStatus('error'); }
+      const contentToSave = preview.editedContent;
+      const res = await window.pywebview.api.save_html_content(preview.path, contentToSave);
+      if (res.ok) { lastPersistedPreviewRef.current = contentToSave; setPreview(prev => ({ ...prev, autosaveStatus: 'saved' })); }
+      else { setPreview(prev => ({ ...prev, autosaveStatus: 'error' })); }
     }, 700);
     return () => window.clearTimeout(timeoutId);
-  }, [editedContent, previewContent, previewPath]);
+  }, [preview.editedContent, preview.content, preview.path]);
 
   useEffect(() => {
-    if (autosaveStatus !== 'saved') return;
-    const timeoutId = window.setTimeout(() => setAutosaveStatus('idle'), 1500);
+    if (preview.autosaveStatus !== 'saved') return;
+    const timeoutId = window.setTimeout(() => setPreview(prev => ({ ...prev, autosaveStatus: 'idle' })), 1500);
     return () => window.clearTimeout(timeoutId);
-  }, [autosaveStatus]);
+  }, [preview.autosaveStatus]);
 
   useEffect(() => {
-    if (previewContent === null) return;
+    if (preview.content === null) return;
     const handleEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') closePreview(); };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [previewContent, closePreview]);
+  }, [preview.content, closePreview]);
 
   // --- Computed values ---
   const queuedCount = files.filter(f => f.status === 'queued').length;
@@ -785,19 +799,19 @@ export default function App() {
         appendConsole={appendConsole}
       />
       <PreviewModal
-        previewContent={previewContent}
-        previewTitle={previewTitle}
-        editedContent={editedContent}
-        onChange={setEditedContent}
+        previewContent={preview.content}
+        previewTitle={preview.title}
+        editedContent={preview.editedContent}
+        onChange={handleEditedContentChange}
         onClose={closePreview}
-        audioSrc={audioSrc}
-        audioRelinkNeeded={audioRelinkNeeded}
+        audioSrc={preview.audioSrc}
+        audioRelinkNeeded={preview.audioRelinkNeeded}
         onRelink={relinkPreviewAudio}
-        autosaveStatus={autosaveStatus}
-        isCopied={isCopied}
+        autosaveStatus={preview.autosaveStatus}
+        isCopied={preview.isCopied}
         onCopy={handleCopyForGoogleDocs}
-        previewInitAudio={previewInitAudio}
-        previewInitScrollTop={previewInitScrollTop}
+        previewInitAudio={preview.initAudio}
+        previewInitScrollTop={preview.initScrollTop}
         onAudioStateChange={handleAudioStateChange}
         onScrollTopChange={handleScrollTopChange}
       />

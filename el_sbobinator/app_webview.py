@@ -55,6 +55,7 @@ from el_sbobinator.logging_utils import configure_logging, get_logger
 from el_sbobinator.media_server import LocalMediaServer
 from el_sbobinator.shared import (
     DEFAULT_MODEL,
+    get_desktop_dir,
     load_config,
     save_config,
     cleanup_orphan_temp_chunks,
@@ -98,7 +99,7 @@ class _BridgeDispatcher:
     _BridgeEvent = Literal[
         "updateProgress", "updatePhase", "setWorkTotals", "updateWorkDone",
         "registerStepTime", "setCurrentFile", "fileDone", "fileFailed",
-        "filesDropped", "processDone", "appendConsole", "setOutputHtml",
+        "filesDropped", "processDone", "appendConsole",
         "askRegenerate", "askNewKey",
     ]
     _ALL_EVENTS: frozenset[str] = frozenset(get_args(_BridgeEvent))
@@ -260,7 +261,6 @@ class PipelineAdapter:
     def imposta_output_html(self, path: str):
         self.last_output_html = path
         self.last_output_dir = os.path.dirname(path) if path else None
-        self._emit_js("setOutputHtml", path, batched=False)
 
     def processo_terminato(self):
         # Hook per fine file: il lifecycle del batch e' gestito da ElSbobinatorApi.start_processing.
@@ -642,8 +642,7 @@ class ElSbobinatorApi:
         # Path traversal protection: resolve and check against allowed roots
         real_path = os.path.realpath(os.path.abspath(path))
         allowed_roots = [
-            os.path.realpath(os.path.expanduser("~")),  # User home (includes Desktop)
-            os.path.realpath(os.path.join(os.path.expanduser("~"), "Desktop")),
+            os.path.realpath(get_desktop_dir()),         # Desktop / OneDrive Desktop
             os.path.realpath(self._get_session_root()),  # Session storage
         ]
         if not any(real_path.startswith(root + os.sep) or real_path == root for root in allowed_roots):
@@ -668,8 +667,7 @@ class ElSbobinatorApi:
         # Path traversal protection: resolve and check against allowed roots
         real_path = os.path.realpath(os.path.abspath(path))
         allowed_roots = [
-            os.path.realpath(os.path.expanduser("~")),  # User home (includes Desktop)
-            os.path.realpath(os.path.join(os.path.expanduser("~"), "Desktop")),
+            os.path.realpath(get_desktop_dir()),         # Desktop / OneDrive Desktop
             os.path.realpath(self._get_session_root()),  # Session storage
         ]
         if not any(real_path.startswith(root + os.sep) or real_path == root for root in allowed_roots):
@@ -750,6 +748,9 @@ class ElSbobinatorApi:
 # Monkey-patch print per catturare output della pipeline nella console React
 # ---------------------------------------------------------------------------
 
+_MAX_CONSOLE_LINE_LEN = 2000
+
+
 class _ConsoleTee:
     """Intercept print() calls and forward to React console too."""
 
@@ -764,7 +765,10 @@ class _ConsoleTee:
             except Exception:
                 pass
         if text and text.strip():
-            self._api._push_console(text.rstrip())
+            line = text.rstrip()
+            if len(line) > _MAX_CONSOLE_LINE_LEN:
+                line = line[:_MAX_CONSOLE_LINE_LEN] + "… [troncato]"
+            self._api._push_console(line)
 
     def flush(self):
         if self._original is not None:
@@ -1014,6 +1018,11 @@ def main():
             hidden=False,
         )
     api.set_window(window)
+
+    def _on_closing():
+        LocalMediaServer.shutdown_all()
+
+    window.events.closing += _on_closing
 
     try:
         from webview.dom import _dnd_state

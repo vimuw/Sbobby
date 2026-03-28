@@ -10,17 +10,41 @@ import html as _html
 import re
 
 import markdown
+import nh3
+
+
+_ALLOWED_TAGS: frozenset[str] = frozenset({
+    "p", "br", "hr",
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "strong", "em", "u", "s", "mark", "code", "pre",
+    "sub", "sup",
+    "ul", "ol", "li",
+    "blockquote",
+    "table", "thead", "tbody", "tr", "th", "td",
+    "a", "span", "div", "img",
+})
+
+_ALLOWED_ATTRS: dict[str, set[str]] = {
+    "*": {"style", "class"},
+    "a": {"href", "title", "target"},
+    "img": {"src", "alt", "width", "height"},
+    "th": {"colspan", "rowspan"},
+    "td": {"colspan", "rowspan"},
+}
+
+_ALLOWED_URL_SCHEMES: frozenset[str] = frozenset({"http", "https", "mailto"})
 
 
 def sanitize_html_basic(html: str) -> str:
-    # Sanitizzazione di base (difensiva) nel caso l'AI inserisca HTML pericoloso.
-    html = re.sub(r"(?is)<script\b.*?>.*?</script>", "", html or "")
-    html = re.sub(r"(?is)<(iframe|object|embed)\b.*?>.*?</\1>", "", html)
-    html = re.sub(r"(?is)<(style)\b.*?>.*?</\1>", "", html)
-    html = re.sub(r"(?is)<(meta|link|base)\b.*?>", "", html)
-    html = re.sub(r"(?i)\son\w+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", "", html)
-    html = re.sub(r"(?i)javascript:", "", html)
-    return html
+    # Sanitizzazione tramite allowlist (nh3/ammonia) — blocca tag/attributi non permessi
+    # e schemi URL pericolosi (javascript:, vbscript:, data:).
+    return nh3.clean(
+        html or "",
+        tags=_ALLOWED_TAGS,
+        attributes=_ALLOWED_ATTRS,
+        url_schemes=_ALLOWED_URL_SCHEMES,
+        strip_comments=True,
+    )
 
 
 def normalize_inline_star_lists(md: str) -> str:

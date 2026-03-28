@@ -7,6 +7,7 @@ so resume/autosave behavior is easier to reason about and test in isolation.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import tempfile
@@ -78,6 +79,18 @@ def load_session(session_path: str):
 def save_session(session_path: str, session: dict) -> None:
     session["updated_at"] = _now_iso()
     _atomic_write_json(session_path, session)
+
+
+def _update_session(session: dict, updates: dict) -> dict:
+    """Apply updates atomically to a session copy; restore old state on failure."""
+    snapshot = copy.deepcopy(session)
+    try:
+        session.update(updates)
+        return snapshot
+    except Exception:
+        session.clear()
+        session.update(snapshot)
+        raise
 
 
 def new_session(input_path: str, settings: dict | None = None) -> dict:

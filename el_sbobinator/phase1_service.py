@@ -25,6 +25,8 @@ from el_sbobinator.generation_service import (
     sleep_with_cancel,
 )
 from el_sbobinator.logging_utils import get_logger
+from el_sbobinator.pipeline_session import record_step_metric
+from el_sbobinator.session_store import _update_session
 from el_sbobinator.shared import _atomic_write_text, debug_log
 
 
@@ -49,15 +51,8 @@ def process_phase1_transcription(  # noqa: C901
     phase1_chunks_dir: str,
     session: dict,
     save_session: Callable[[], bool],
-    safe_phase: Callable[[str], None],
-    safe_progress: Callable[[float], None],
-    safe_set_work_totals: Callable[..., None],
-    safe_update_work_done: Callable[..., None],
-    safe_register_step_time: Callable[..., None],
-    safe_set_effective_api_key: Callable[[str | None], None],
     fallback_keys: list,
     request_fallback_key: Callable[[], str | None],
-    is_empty_model_response_error: Callable[[str], bool],
     system_prompt: str,
     runtime,
     logger=None,
@@ -79,8 +74,8 @@ def process_phase1_transcription(  # noqa: C901
     start_int = int(start_sec)
     chunk_idx = 0 if start_int <= 0 else (start_int + step_seconds - 1) // step_seconds
 
-    safe_set_work_totals(chunks_total=total_chunks)
-    safe_update_work_done("chunks", chunk_idx, total=total_chunks)
+    runtime.set_work_totals(chunks_total=total_chunks)
+    runtime.update_work_done("chunks", chunk_idx, total=total_chunks)
 
     next_cut = None  # {"start": int, "end": int, "path": str, "thread": Thread, "result": dict}
 
@@ -143,7 +138,7 @@ def process_phase1_transcription(  # noqa: C901
 
         print(f"\n======================================")
         print(f"-> LAVORAZIONE BLOCCO AUDIO {chunk_idx} DI {total_chunks} (Da {chunk_start_sec}s a {int(chunk_end_sec)}s)")
-        safe_phase(f"Fase 1/3: trascrizione (chunk {chunk_idx}/{total_chunks})")
+        runtime.phase(f"Fase 1/3: trascrizione (chunk {chunk_idx}/{total_chunks})")
 
         if cancelled():
             print("   [*] Operazione annullata dall'utente.")
@@ -296,9 +291,8 @@ def process_phase1_transcription(  # noqa: C901
                     client=client,
                     fallback_keys=fallback_keys,
                     model_name=model_name,
+                    runtime=runtime,
                     cancelled=cancelled,
-                    safe_phase=safe_phase,
-                    safe_set_effective_api_key=safe_set_effective_api_key,
                     request_fallback_key=request_fallback_key,
                     retry_sleep_seconds=30.0,
                     on_key_rotated=_on_key_rotated,
@@ -320,22 +314,23 @@ def process_phase1_transcription(  # noqa: C901
                     except Exception as save_err:
                         print(f"   [!] Autosave chunk fallito: {save_err}")
 
-                    session["stage"] = "phase1"
-                    session.setdefault("phase1", {})
-                    session["phase1"]["chunks_done"] = int(chunk_idx)
-                    session["phase1"]["next_start_sec"] = int(chunk_start_sec + step_seconds)
-                    session["phase1"]["memoria_precedente"] = prev_memory
-                    session["last_error"] = None
+                    _update_session(session, {
+                        "stage": "phase1",
+                        "phase1": {
+                            **session.get("phase1", {}),
+                            "chunks_done": int(chunk_idx),
+                            "next_start_sec": int(chunk_start_sec + step_seconds),
+                            "memoria_precedente": prev_memory,
+                        },
+                        "last_error": None,
+                    })
                     save_session()
 
                     success = True
-                    safe_progress(0.7 * chunk_idx / total_chunks)
-                    safe_register_step_time(
-                        "chunks",
-                        max(0.0, time.monotonic() - float(chunk_step_t0)),
-                        done=chunk_idx,
-                        total=total_chunks,
-                    )
+                    runtime.progress(0.7 * chunk_idx / total_chunks)
+                    _step_secs = max(0.0, time.monotonic() - float(chunk_step_t0))
+                    runtime.register_step_time("chunks", _step_secs, done=chunk_idx, total=total_chunks)
+                    record_step_metric(session, "chunks", _step_secs, done=chunk_idx, total=total_chunks)
 
             except QuotaDailyLimitError:
                 session["last_error"] = "rate_limit_phase1"
