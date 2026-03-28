@@ -131,7 +131,7 @@ class _BridgeDispatcher:
                     self._queue.extend(self._latest.items())
                     self._latest.clear()
                 self._queue.append((fn_name, data))
-            self._ensure_timer()
+        self._ensure_timer()
 
     def flush(self):
         with self._lock:

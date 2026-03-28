@@ -279,10 +279,22 @@ export default function App() {
   const startProcessing = async () => {
     if (queuedCount === 0 || !apiKey.trim()) return;
     if (window.pywebview?.api) {
-      const fileDescriptors = await resolveQueuedFilesForProcessing();
-      if (!fileDescriptors || fileDescriptors.length === 0) return;
-      const result = await window.pywebview.api.start_processing?.(fileDescriptors, apiKey.trim(), true);
-      if (!result?.ok) appendConsole(`❌ ${result?.error || "Impossibile avviare l'elaborazione."}`);
+      dispatch({ type: 'app/set_status', status: 'processing' });
+      try {
+        const fileDescriptors = await resolveQueuedFilesForProcessing();
+        if (!fileDescriptors || fileDescriptors.length === 0) {
+          dispatch({ type: 'app/set_status', status: 'idle' });
+          return;
+        }
+        const result = await window.pywebview.api.start_processing?.(fileDescriptors, apiKey.trim(), true);
+        if (!result?.ok) {
+          dispatch({ type: 'app/set_status', status: 'idle' });
+          appendConsole(`❌ ${result?.error || "Impossibile avviare l'elaborazione."}`);
+        }
+      } catch (e: any) {
+        dispatch({ type: 'app/set_status', status: 'idle' });
+        appendConsole(`❌ Errore avvio: ${e?.message || e}`);
+      }
     }
   };
 
