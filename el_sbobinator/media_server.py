@@ -25,11 +25,10 @@ class LocalMediaServer:
             return
         # Pop oldest entry (dict preserves insertion order in Python 3.7+)
         oldest_path, (oldest_server, _) = cls._servers.popitem(last=False)
-        try:
-            oldest_server.shutdown()
-            oldest_server.server_close()
-        except Exception:
-            pass  # Best-effort cleanup
+        threading.Thread(
+            target=lambda: (oldest_server.shutdown(), oldest_server.server_close()),
+            daemon=True,
+        ).start()
 
     @classmethod
     def stream_url_for_file(cls, file_path: str) -> str:

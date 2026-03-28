@@ -24,7 +24,12 @@ export function useApiReady(appendConsole: (msg: string) => void) {
       try { if (window.pywebview?.api) await window.pywebview.api.load_settings(); } catch (_) {}
     }, 100);
 
-    const fallback = setTimeout(() => setApiReady(true), 5000);
+    const fallback = setTimeout(() => {
+      if (!window.pywebview?.api) {
+        console.warn('pywebview bridge not available after 5s fallback.');
+      }
+      setApiReady(true);
+    }, 5000);
 
     return () => {
       window.removeEventListener('pywebviewready', onReady);

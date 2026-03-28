@@ -408,9 +408,9 @@ export default function App() {
     setAutosaveStatus('saving');
     const timeoutId = window.setTimeout(async () => {
       if (!window.pywebview?.api?.save_html_content) return;
-      const contentToSave = normalizePreviewHtmlContent(editedContent);
+      const contentToSave = editedContent;
       const res = await window.pywebview.api.save_html_content(previewPath, contentToSave);
-      if (res.ok) { lastPersistedPreviewRef.current = contentToSave; setPreviewContent(contentToSave); setAutosaveStatus('saved'); }
+      if (res.ok) { lastPersistedPreviewRef.current = contentToSave; setAutosaveStatus('saved'); }
       else { setAutosaveStatus('error'); }
     }, 700);
     return () => window.clearTimeout(timeoutId);
