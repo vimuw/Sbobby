@@ -34,14 +34,15 @@ export function PreviewModal({
   const [isTocOpen, setIsTocOpen] = useState(false);
   const [headings, setHeadings] = useState<Heading[]>([]);
 
-  const scrollToHeading = (text: string, level: number) => {
-    const els = document.querySelectorAll(`.tiptap-editor h${level}`);
-    for (const el of Array.from(els)) {
-      if (el.textContent?.trim() === text.trim()) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        break;
-      }
-    }
+  const scrollToHeading = (heading: Heading) => {
+    const { text, level, id } = heading;
+    const occurrencesBefore = headings
+      .slice(0, headings.findIndex(h => h.id === id))
+      .filter(h => h.level === level && h.text.trim() === text.trim())
+      .length;
+    const els = Array.from(document.querySelectorAll(`.tiptap-editor h${level}`))
+      .filter(el => el.textContent?.trim() === text.trim());
+    els[occurrencesBefore]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   return (
@@ -124,7 +125,7 @@ export function PreviewModal({
                             key={h.id}
                             className={`toc-item toc-item-h${h.level}`}
                             style={{ paddingLeft: `${(h.level - 1) * 12 + 14}px` }}
-                            onClick={() => scrollToHeading(h.text, h.level)}
+                            onClick={() => scrollToHeading(h)}
                             title={h.text}
                           >
                             {h.text}
@@ -138,7 +139,7 @@ export function PreviewModal({
 
               {/* Editor area + Player column */}
               <div className="flex-1 min-h-0 flex flex-col">
-                <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="flex-1 min-h-0 flex flex-col">
                   <Suspense fallback={<div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
                     <LazyRichTextEditor
                       initialContent={previewContent || ''}

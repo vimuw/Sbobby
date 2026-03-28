@@ -410,11 +410,22 @@ const FontSizeSelect = ({ editor }: { editor: any }) => {
     const fontSize = editor.getAttributes('textStyle').fontSize;
     if (fontSize) return fontSize.replace('px', '');
 
-    // 2. Check heading level
+    // 2. Check heading level – walk up from the cursor's DOM node to find
+    //    the exact heading element the cursor lives in (not the first in DOM)
     for (let i = 1; i <= 5; i++) {
       if (editor.isActive('heading', { level: i })) {
-        const sizes: Record<number, string> = { 1: '24', 2: '20', 3: '18', 4: '16', 5: '14' };
-        return sizes[i];
+        try {
+          const { from } = editor.state.selection;
+          const { node: domNode } = editor.view.domAtPos(from);
+          let el: Element | null = domNode instanceof Element ? domNode : domNode.parentElement;
+          while (el && !/^H[1-5]$/.test(el.tagName)) el = el.parentElement;
+          if (el instanceof HTMLElement) {
+            return String(Math.round(parseFloat(window.getComputedStyle(el).fontSize)));
+          }
+        } catch (_) { /* fall through to rem fallback */ }
+        const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
+        const rems: Record<number, number> = { 1: 1.5, 2: 1.25, 3: 1.1, 4: 1.0, 5: 0.9 };
+        return String(Math.round(rems[i] * rootPx));
       }
     }
 
@@ -432,6 +443,8 @@ const FontSizeSelect = ({ editor }: { editor: any }) => {
         onChange={e => {
           if (e.target.value) {
             editor.chain().focus().setMark('textStyle', { fontSize: `${e.target.value}px` }).run();
+          } else {
+            editor.chain().focus().setMark('textStyle', { fontSize: null }).run();
           }
         }}
         title="Dimensione carattere"
@@ -461,7 +474,7 @@ const HeadingSelect = ({ editor }: { editor: any }) => {
             editor.chain().focus().setParagraph().run();
           } else {
             const level = parseInt(e.target.value.replace('h', '')) as 1 | 2 | 3 | 4 | 5;
-            editor.chain().focus().toggleHeading({ level }).run();
+            editor.chain().focus().setNode('heading', { level }).run();
           }
         }}
         title="Stile paragrafo"
@@ -710,7 +723,7 @@ const MenuBar = ({
   );
 };
 
-const FindReplacePanel = ({ editor, onClose }: { editor: any; onClose: () => void }) => {
+const FindReplacePanel = ({ editor, onClose, focusTrigger }: { editor: any; onClose: () => void; focusTrigger?: number }) => {
   const [findText, setFindText] = useState('');
   const [replaceText, setReplaceText] = useState('');
   const [matchCount, setMatchCount] = useState(0);
@@ -725,6 +738,12 @@ const FindReplacePanel = ({ editor, onClose }: { editor: any; onClose: () => voi
       editor.commands.setSearchTerm('', -1);
     };
   }, [editor]);
+
+  useEffect(() => {
+    if (focusTrigger !== undefined && focusTrigger > 0) {
+      findInputRef.current?.focus({ preventScroll: true });
+    }
+  }, [focusTrigger]);
 
   const buildMatches = useCallback((text: string) => {
     if (!editor || !text) return [];
@@ -899,6 +918,9 @@ const WordCount = ({ editor }: { editor: any }) => {
 export function RichTextEditor({ initialContent, onChange, initialScrollTop, onScrollTopChange, onHeadingsChange }: RichTextEditorProps) {
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
   const [showFindReplace, setShowFindReplace] = useState(false);
+  const [findFocusTrigger, setFindFocusTrigger] = useState(0);
+  const showFindReplaceRef = useRef(false);
+  useEffect(() => { showFindReplaceRef.current = showFindReplace; }, [showFindReplace]);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<any>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -907,6 +929,7 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
   useEffect(() => { onScrollTopChangeRef.current = onScrollTopChange; }, [onScrollTopChange]);
   const onHeadingsChangeRef = useRef(onHeadingsChange);
   useEffect(() => { onHeadingsChangeRef.current = onHeadingsChange; }, [onHeadingsChange]);
+  const headingsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const insertImageFiles = useCallback(async (inputFiles: FileList | File[]) => {
     const activeEditor = editorRef.current;
@@ -935,9 +958,13 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'h' || e.key === 'H' || e.key === 'f' || e.key === 'F')) {
         e.preventDefault();
-        setShowFindReplace(prev => !prev);
+        if (showFindReplaceRef.current) {
+          setFindFocusTrigger(prev => prev + 1);
+        } else {
+          setShowFindReplace(true);
+        }
       }
-      if (e.key === 'Escape') setShowFindReplace(false);
+      if (e.key === 'Escape' && showFindReplaceRef.current) { e.stopPropagation(); setShowFindReplace(false); }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
@@ -978,7 +1005,10 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
     },
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
-      onHeadingsChangeRef.current?.(extractHeadings(editor));
+      if (headingsDebounceRef.current) clearTimeout(headingsDebounceRef.current);
+      headingsDebounceRef.current = setTimeout(() => {
+        onHeadingsChangeRef.current?.(extractHeadings(editor));
+      }, 400);
     },
     editorProps: {
       attributes: {
@@ -1027,7 +1057,7 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
         onToggleFindReplace={() => setShowFindReplace(p => !p)}
       />
       {showFindReplace && editor && (
-        <FindReplacePanel editor={editor} onClose={() => setShowFindReplace(false)} />
+        <FindReplacePanel editor={editor} onClose={() => setShowFindReplace(false)} focusTrigger={findFocusTrigger} />
       )}
       <div
         ref={scrollContainerRef}
@@ -1050,10 +1080,24 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={e => { e.stopPropagation(); setContextMenu(null); }}
         >
-          <button className="context-menu-item" onClick={() => { document.execCommand('cut'); editor?.chain().focus().run(); }}>
+          <button className="context-menu-item" onClick={async () => {
+            try {
+              const { from, to } = editor!.state.selection;
+              const text = editor!.state.doc.textBetween(from, to, '\n');
+              await navigator.clipboard.writeText(text);
+              editor!.chain().focus().deleteSelection().run();
+            } catch (_) { console.error('Clipboard permission denied'); }
+          }}>
             <Scissors className="h-4 w-4" /> Taglia
           </button>
-          <button className="context-menu-item" onClick={() => { document.execCommand('copy'); editor?.chain().focus().run(); }}>
+          <button className="context-menu-item" onClick={async () => {
+            try {
+              const { from, to } = editor!.state.selection;
+              const text = editor!.state.doc.textBetween(from, to, '\n');
+              await navigator.clipboard.writeText(text);
+              editor!.chain().focus().run();
+            } catch (_) { console.error('Clipboard permission denied'); }
+          }}>
             <Copy className="h-4 w-4" /> Copia
           </button>
           <button className="context-menu-item" onClick={async () => {
