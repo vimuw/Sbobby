@@ -196,7 +196,6 @@ def retry_with_quota(
                     safe_set_effective_api_key(rotated_key)
                     if on_key_rotated is not None:
                         on_key_rotated(client)
-                    attempts = 0
                     continue
 
                 new_api_key = request_fallback_key()
@@ -209,7 +208,6 @@ def retry_with_quota(
                         if on_key_rotated is not None:
                             on_key_rotated(client)
                         print("   ✅ Nuova API Key valida! Ripresa automatica...")
-                        attempts = 0
                         continue
                     except Exception as err:
                         print(f"   [!] Chiave non valida fornita: {err}")

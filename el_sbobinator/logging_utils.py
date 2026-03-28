@@ -44,11 +44,9 @@ def configure_logging(stream: IO[str] | None = None) -> logging.Logger:
 def get_logger(name: str = LOGGER_NAME, **context: str) -> logging.LoggerAdapter:
     base = configure_logging()
     logger = base if name == LOGGER_NAME else logging.getLogger(name)
-    if logger is not base and not logger.handlers:
-        for handler in base.handlers:
-            logger.addHandler(handler)
+    if logger is not base:
         logger.setLevel(base.level)
-        logger.propagate = False
+        logger.propagate = True  # propagate to parent; parent has propagate=False
     clean_context = {key: value for key, value in context.items() if value}
     return logging.LoggerAdapter(logger, clean_context)
 

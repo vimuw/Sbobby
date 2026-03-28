@@ -126,11 +126,7 @@ class _BridgeDispatcher:
         with self._lock:
             self._timer = None
             events: list[tuple[str, object, int]] = []
-            # Drain pending retries first (they have priority)
-            while self._pending:
-                fn_name, data, retry_count = self._pending.popleft()
-                events.append((fn_name, data, retry_count))
-            # Add new queued events with retry_count=0
+            # New queued events first (maintain causal order)
             for fn_name, data in self._queue:
                 events.append((fn_name, data, 0))
             self._queue.clear()
@@ -139,6 +135,10 @@ class _BridgeDispatcher:
                 for fn_name, data in self._latest.items():
                     events.append((fn_name, data, 0))
                 self._latest.clear()
+            # Retries appended last — they're stale and must not precede newer lifecycle events
+            while self._pending:
+                fn_name, data, retry_count = self._pending.popleft()
+                events.append((fn_name, data, retry_count))
 
         if not events:
             return
@@ -461,16 +461,7 @@ class ElSbobinatorApi:
         for basename, fullpath in _drain_dnd_paths(name_set):
             ext = os.path.splitext(fullpath)[1].lower()
             if ext in self._ALLOWED_DROP_EXTS and os.path.isfile(fullpath):
-                try:
-                    size = os.path.getsize(fullpath)
-                except Exception:
-                    size = 0
-                descriptors.append({
-                    "path": fullpath,
-                    "name": basename,
-                    "size": size,
-                    "duration": 0,
-                })
+                descriptors.append(self._build_file_descriptor(fullpath))
         if descriptors:
             self._adapter.emit("filesDropped", descriptors, batched=False)
         return {"ok": True}
