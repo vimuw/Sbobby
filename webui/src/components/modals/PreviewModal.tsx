@@ -1,6 +1,6 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, Copy, FileText, X } from 'lucide-react';
+import { BookOpen, Check, Copy, FileText, X } from 'lucide-react';
 
 const LazyAudioPlayer = React.lazy(() => import('../../AudioPlayer').then(module => ({ default: module.AudioPlayer })));
 const LazyRichTextEditor = React.lazy(() => import('../../RichTextEditor').then(module => ({ default: module.RichTextEditor })));
@@ -30,6 +30,18 @@ export function PreviewModal({
   previewInitAudio, previewInitScrollTop,
   onAudioStateChange, onScrollTopChange,
 }: PreviewModalProps) {
+  const [headings, setHeadings] = useState<{ id: string; level: number; text: string }[]>([]);
+  const [isTocOpen, setIsTocOpen] = useState(false);
+  const scrollToHeadingRef = useRef<((index: number) => void) | null>(null);
+
+  const handleHeadingsChange = useCallback((
+    newHeadings: { id: string; level: number; text: string }[],
+    scrollTo: (index: number) => void
+  ) => {
+    setHeadings(newHeadings);
+    scrollToHeadingRef.current = scrollTo;
+  }, []);
+
   return (
     <AnimatePresence>
       {previewContent !== null && (
@@ -74,21 +86,49 @@ export function PreviewModal({
                     {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
+                <button
+                  onClick={() => setIsTocOpen(v => !v)}
+                  className="icon-button h-11 w-11 rounded-[14px]"
+                  style={isTocOpen ? { borderColor: 'var(--accent-ring)', color: 'var(--accent-text)' } : { color: 'var(--text-muted)' }}
+                  title={isTocOpen ? 'Nascondi indice' : 'Mostra indice capitoli'}
+                >
+                  <BookOpen className="w-5 h-5" />
+                </button>
                 <button onClick={onClose} className="icon-button h-11 w-11 rounded-[14px]" style={{ color: 'var(--text-muted)' }}>
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-              <Suspense fallback={<div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
-                <LazyRichTextEditor
-                  initialContent={previewContent || ''}
-                  onChange={onChange}
-                  initialScrollTop={previewInitScrollTop}
-                  onScrollTopChange={onScrollTopChange}
-                />
-              </Suspense>
+            <div className="flex flex-1 min-h-0 overflow-hidden">
+              {isTocOpen && headings.length > 0 && (
+                <aside
+                  className="w-56 shrink-0 overflow-y-auto border-r p-2 hidden sm:block"
+                  style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)' }}
+                >
+                  {headings.map((h, i) => (
+                    <button
+                      key={h.id}
+                      className="block w-full text-left text-xs py-1 rounded hover:bg-white/5 truncate"
+                      style={{ paddingLeft: `${(h.level - 1) * 12 + 8}px`, color: 'var(--text-muted)' }}
+                      onClick={() => scrollToHeadingRef.current?.(i)}
+                    >
+                      {h.text}
+                    </button>
+                  ))}
+                </aside>
+              )}
+              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                <Suspense fallback={<div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
+                  <LazyRichTextEditor
+                    initialContent={previewContent || ''}
+                    onChange={onChange}
+                    initialScrollTop={previewInitScrollTop}
+                    onScrollTopChange={onScrollTopChange}
+                    onHeadingsChange={handleHeadingsChange}
+                  />
+                </Suspense>
+              </div>
             </div>
 
             {(audioSrc || audioRelinkNeeded) && (

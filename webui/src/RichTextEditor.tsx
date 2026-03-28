@@ -12,6 +12,10 @@ interface RichTextEditorProps {
   onChange: (html: string) => void;
   initialScrollTop?: number;
   onScrollTopChange?: (scrollTop: number) => void;
+  onHeadingsChange?: (
+    headings: { id: string; level: number; text: string }[],
+    scrollTo: (index: number) => void
+  ) => void;
 }
 
 const COLOR_PALETTE: string[][] = [
@@ -118,6 +122,19 @@ const ColorPickerButton = ({ editor }: { editor: any }) => {
     </>
   );
 };
+
+function extractHeadings(editor: any): { id: string; level: number; text: string }[] {
+  const json = editor.getJSON();
+  const headings: { id: string; level: number; text: string }[] = [];
+  let hi = 0;
+  json.content?.forEach((node: any) => {
+    if (node.type === 'heading') {
+      const text = node.content?.map((n: any) => n.text ?? '').join('') ?? '';
+      headings.push({ id: `h-${hi++}`, level: node.attrs?.level ?? 2, text });
+    }
+  });
+  return headings;
+}
 
 const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -232,7 +249,7 @@ const MenuBar = ({ editor, onInsertImages }: { editor: any; onInsertImages: (fil
   );
 };
 
-export function RichTextEditor({ initialContent, onChange, initialScrollTop, onScrollTopChange }: RichTextEditorProps) {
+export function RichTextEditor({ initialContent, onChange, initialScrollTop, onScrollTopChange, onHeadingsChange }: RichTextEditorProps) {
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<any>(null);
@@ -240,6 +257,20 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
   const hasRestoredScrollRef = useRef(false);
   const onScrollTopChangeRef = useRef(onScrollTopChange);
   useEffect(() => { onScrollTopChangeRef.current = onScrollTopChange; }, [onScrollTopChange]);
+
+  const onHeadingsChangeRef = useRef(onHeadingsChange);
+  useEffect(() => { onHeadingsChangeRef.current = onHeadingsChange; }, [onHeadingsChange]);
+
+  const scrollToHeading = useCallback((index: number) => {
+    if (!scrollContainerRef.current) return;
+    const els = scrollContainerRef.current.querySelectorAll('h1, h2, h3, h4, h5');
+    const el = els[index] as HTMLElement | undefined;
+    if (!el) return;
+    const container = scrollContainerRef.current;
+    const elTop = el.getBoundingClientRect().top;
+    const containerTop = container.getBoundingClientRect().top;
+    container.scrollBy({ top: elTop - containerTop - 16, behavior: 'smooth' });
+  }, []);
 
   const insertImageFiles = useCallback(async (inputFiles: FileList | File[]) => {
     const activeEditor = editorRef.current;
@@ -301,6 +332,7 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
     content: initialContent,
     onCreate: ({ editor }) => {
       editorRef.current = editor;
+      onHeadingsChangeRef.current?.(extractHeadings(editor), scrollToHeading);
     },
     editorProps: {
       attributes: {
@@ -324,6 +356,7 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
     },
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
+      onHeadingsChangeRef.current?.(extractHeadings(editor), scrollToHeading);
     },
   });
 
