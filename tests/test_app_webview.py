@@ -29,15 +29,17 @@ class AppWebviewTests(unittest.TestCase):
         self.assertIn("fileDone", joined)
 
     def test_save_html_content_preserves_head(self):
+        import tempfile as _tempfile
         api = ElSbobinatorApi()
-        with tempfile.NamedTemporaryFile("w+", suffix=".html", delete=False, encoding="utf-8") as tmp:
+        with _tempfile.NamedTemporaryFile("w+", suffix=".html", delete=False, encoding="utf-8") as tmp:
             tmp.write(
                 "<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{color:red}</style></head>"
                 "<body><p>Old</p></body></html>"
             )
             path = tmp.name
 
-        result = api.save_html_content(path, "<p>New</p>")
+        with patch("el_sbobinator.app_webview.get_desktop_dir", return_value=_tempfile.gettempdir()):
+            result = api.save_html_content(path, "<p>New</p>")
         self.assertTrue(result["ok"])
 
         with open(path, "r", encoding="utf-8") as fh:
@@ -73,7 +75,7 @@ class AppWebviewTests(unittest.TestCase):
         result = api.save_html_content("/tmp/nonexistent_file_xyz.html", "<p>x</p>")
         self.assertFalse(result["ok"])
 
-    @patch("el_sbobinator.app_webview.validate_environment")
+    @patch("el_sbobinator.validation_service.validate_environment")
     def test_validate_environment_returns_backend_result(self, mock_validate):
         api = ElSbobinatorApi()
         mock_validate.return_value = {

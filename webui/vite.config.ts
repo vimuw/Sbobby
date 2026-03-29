@@ -23,6 +23,11 @@ export default defineConfig({
         entryFileNames: 'assets/index.js',
         chunkFileNames: 'assets/[name].js',
         assetFileNames: 'assets/[name][extname]',
+        manualChunks(id) {
+          if (id.includes('@tiptap')) return 'tiptap';
+          if (id.includes('motion')) return 'motion';
+          if (id.includes('lucide')) return 'lucide';
+        },
       },
     },
   },

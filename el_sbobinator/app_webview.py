@@ -30,10 +30,10 @@ _ALLOWED_URL_PREFIXES: tuple[str, ...] = (
     "https://aistudio.google.com/",
 )
 
-# Lazy imports to avoid loading customtkinter/pipeline at startup
+# Lazy imports to avoid loading heavy deps at startup:
 # from el_sbobinator.pipeline import esegui_sbobinatura  -- imported lazily in start_processing
-# from el_sbobinator.audio_service import probe_media_duration -- imported lazily in ask_files
-from el_sbobinator.audio_service import probe_media_duration
+# from el_sbobinator.audio_service import probe_media_duration -- imported lazily in _build_file_descriptor
+# from el_sbobinator.validation_service import validate_environment -- imported lazily in validate_environment
 from el_sbobinator.bridge_types import (
     BridgeFileItem,
     FileDonePayload,
@@ -62,7 +62,6 @@ from el_sbobinator.shared import (
     get_session_storage_info,
     cleanup_orphan_sessions,
 )
-from el_sbobinator.validation_service import validate_environment
 
 # ---------------------------------------------------------------------------
 # DnD helper
@@ -397,6 +396,7 @@ class ElSbobinatorApi:
         except Exception:
             size = 0
         try:
+            from el_sbobinator.audio_service import probe_media_duration
             dur_val, _reason = probe_media_duration(path)
             duration = dur_val if dur_val else 0
         except Exception:
@@ -609,7 +609,8 @@ class ElSbobinatorApi:
     def validate_environment(self, api_key: str | None = None, check_api_key: bool = False) -> dict:
         """Run an explicit environment validation without starting a full transcription."""
         try:
-            result: ValidationResult = validate_environment(api_key=api_key, validate_api_key=bool(check_api_key))
+            from el_sbobinator.validation_service import validate_environment as _validate_env
+            result: ValidationResult = _validate_env(api_key=api_key, validate_api_key=bool(check_api_key))
             return {"ok": True, "result": result}
         except Exception as e:
             self._logger.exception("Validazione ambiente fallita.")

@@ -28,7 +28,7 @@ import { QueueFileCard } from './components/QueueFileCard';
 import { RegenerateModal } from './components/modals/RegenerateModal';
 import { NewKeyModal } from './components/modals/NewKeyModal';
 import { SettingsModal } from './components/modals/SettingsModal';
-import { PreviewModal } from './components/modals/PreviewModal';
+const PreviewModal = React.lazy(() => import('./components/modals/PreviewModal').then(m => ({ default: m.PreviewModal })));
 
 const EDITOR_SESSION_STORAGE_KEY = 'el-sbobinator.editor-sessions.v1';
 
@@ -799,23 +799,25 @@ export default function App() {
         setFallbackKeys={setFallbackKeys}
         appendConsole={appendConsole}
       />
-      <PreviewModal
-        previewContent={preview.content}
-        previewTitle={preview.title}
-        editedContent={preview.editedContent}
-        onChange={handleEditedContentChange}
-        onClose={closePreview}
-        audioSrc={preview.audioSrc}
-        audioRelinkNeeded={preview.audioRelinkNeeded}
-        onRelink={relinkPreviewAudio}
-        autosaveStatus={preview.autosaveStatus}
-        isCopied={preview.isCopied}
-        onCopy={handleCopyForGoogleDocs}
-        previewInitAudio={preview.initAudio}
-        previewInitScrollTop={preview.initScrollTop}
-        onAudioStateChange={handleAudioStateChange}
-        onScrollTopChange={handleScrollTopChange}
-      />
+      <React.Suspense fallback={null}>
+        <PreviewModal
+          previewContent={preview.content}
+          previewTitle={preview.title}
+          editedContent={preview.editedContent}
+          onChange={handleEditedContentChange}
+          onClose={closePreview}
+          audioSrc={preview.audioSrc}
+          audioRelinkNeeded={preview.audioRelinkNeeded}
+          onRelink={relinkPreviewAudio}
+          autosaveStatus={preview.autosaveStatus}
+          isCopied={preview.isCopied}
+          onCopy={handleCopyForGoogleDocs}
+          previewInitAudio={preview.initAudio}
+          previewInitScrollTop={preview.initScrollTop}
+          onAudioStateChange={handleAudioStateChange}
+          onScrollTopChange={handleScrollTopChange}
+        />
+      </React.Suspense>
     </div>
   );
 }
