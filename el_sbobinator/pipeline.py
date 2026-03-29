@@ -59,24 +59,13 @@ from el_sbobinator.shared import (
 _REGENERATE_DIALOG_TIMEOUT_SECONDS: int = 120
 
 
-def _esegui_sbobinatura_legacy(input_path, api_key_value, app_instance, session_dir_hint=None, resume_session=False):  # noqa: C901
+def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_dir_hint=None, resume_session=False):  # noqa: C901
     runtime = PipelineRuntime(app_instance)
     runtime.reset_temp_files()
     cancel_event = runtime.cancel_event
     log_handler = None
     logger = get_logger("el_sbobinator.pipeline")
     start_time = time.monotonic()  # Track start time for duration calculation
-
-    def _is_empty_model_response_error(err_txt: str) -> bool:
-        try:
-            low = str(err_txt or "").lower()
-        except Exception:
-            return False
-        return (
-            "risposta vuota dal modello" in low
-            or "text=none" in low
-            or ("nonetype" in low and "has no attribute" in low and "strip" in low)
-        )
 
     # ---- Fallback API keys rotation ----
     fallback_keys = load_fallback_keys()
@@ -369,8 +358,8 @@ def _esegui_sbobinatura_legacy(input_path, api_key_value, app_instance, session_
             })
             save_session()
 
-        stage2 = str(session.get("stage", "phase1")).strip().lower()
-        if stage2 == "boundary":
+        current_stage = str(session.get("stage", "phase1")).strip().lower()
+        if current_stage == "boundary":
             client = process_boundary_revision_phase(
                 client=client,
                 model_name=model_name,
@@ -487,7 +476,7 @@ def _esegui_sbobinatura_legacy(input_path, api_key_value, app_instance, session_
 
 def esegui_sbobinatura(input_path, api_key_value, app_instance, session_dir_hint=None, resume_session=False):
     # Wrapper stabile: mantiene la firma pubblica mentre l'implementazione evolve.
-    return _esegui_sbobinatura_legacy(
+    return _esegui_sbobinatura_impl(
         input_path,
         api_key_value,
         app_instance,

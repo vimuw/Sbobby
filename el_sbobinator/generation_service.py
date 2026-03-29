@@ -208,6 +208,7 @@ def retry_with_quota(
                     runtime.set_effective_api_key(rotated_key)
                     if on_key_rotated is not None:
                         on_key_rotated(client)
+                    attempts = 0
                     continue
 
                 new_api_key = request_fallback_key()
@@ -219,6 +220,7 @@ def retry_with_quota(
                         runtime.set_effective_api_key(new_api_key.strip())
                         if on_key_rotated is not None:
                             on_key_rotated(client)
+                        attempts = 0
                         print("   ✅ Nuova API Key valida! Ripresa automatica...")
                         continue
                     except Exception as err:

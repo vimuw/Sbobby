@@ -23,7 +23,7 @@ describe('processingReducer', () => {
     const second = makeFile({ id: 'b', name: 'b.mp3' });
 
     let state = processingReducer(initialProcessingState, { type: 'queue/add', files: [first, second] });
-    state = processingReducer(state, { type: 'queue/move', id: 'b', direction: 'up' });
+    state = processingReducer(state, { type: 'queue/reorder', fromIndex: 1, toIndex: 0 });
 
     expect(state.files.map(file => file.id)).toEqual(['b', 'a']);
   });
@@ -45,6 +45,22 @@ describe('processingReducer', () => {
     });
     expect(state.files[0].status).toBe('done');
     expect(state.files[0].outputHtml).toBe('out.html');
+  });
+
+  it('resets error files to queued on retry_failed', () => {
+    const failed = makeFile({ id: 'f1', status: 'error', progress: 0, phase: 0, errorText: 'timeout' });
+    const done = makeFile({ id: 'f2', status: 'done', progress: 100, phase: 3 });
+    const queued = makeFile({ id: 'f3', status: 'queued' });
+    const state = processingReducer(
+      { ...initialProcessingState, files: [failed, done, queued] },
+      { type: 'queue/retry_failed' },
+    );
+    expect(state.files[0].status).toBe('queued');
+    expect(state.files[0].progress).toBe(0);
+    expect(state.files[0].phase).toBe(0);
+    expect(state.files[0].errorText).toBeUndefined();
+    expect(state.files[1].status).toBe('done');
+    expect(state.files[2].status).toBe('queued');
   });
 
   it('resets processing files to queued on cancelled batch completion', () => {

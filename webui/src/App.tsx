@@ -1,4 +1,6 @@
 ﻿import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   FileAudio,
@@ -32,18 +34,29 @@ const PreviewModal = React.lazy(() => import('./components/modals/PreviewModal')
 
 const EDITOR_SESSION_STORAGE_KEY = 'el-sbobinator.editor-sessions.v1';
 
+const EDITOR_SESSION_TTL_DAYS = 30;
+
 type EditorSession = {
   audioTime?: number;
   playbackRate?: number;
   volume?: number;
   scrollTop?: number;
+  savedAt?: number;
+};
+
+const purgeOldEditorSessions = (sessions: Record<string, EditorSession>): Record<string, EditorSession> => {
+  const cutoff = Date.now() - EDITOR_SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
+  return Object.fromEntries(
+    Object.entries(sessions).filter(([, s]) => (s.savedAt ?? 0) >= cutoff)
+  );
 };
 
 const loadEditorSession = (key: string): EditorSession => {
   try {
     const raw = window.localStorage.getItem(EDITOR_SESSION_STORAGE_KEY);
     if (!raw) return {};
-    const sessions = JSON.parse(raw) as Record<string, EditorSession>;
+    const sessions = purgeOldEditorSessions(JSON.parse(raw) as Record<string, EditorSession>);
+    window.localStorage.setItem(EDITOR_SESSION_STORAGE_KEY, JSON.stringify(sessions));
     return sessions[key] ?? {};
   } catch (_) { return {}; }
 };
@@ -52,14 +65,14 @@ const saveEditorSession = (key: string, session: EditorSession) => {
   try {
     const raw = window.localStorage.getItem(EDITOR_SESSION_STORAGE_KEY) ?? '{}';
     const sessions = JSON.parse(raw) as Record<string, EditorSession>;
-    sessions[key] = session;
+    sessions[key] = { ...session, savedAt: Date.now() };
     window.localStorage.setItem(EDITOR_SESSION_STORAGE_KEY, JSON.stringify(sessions));
   } catch (_) {}
 };
 
 
 const EDITOR_IMAGE_ALLOWED_DATA_ATTRS = new Set(['data-editor-image', 'data-layout', 'data-align', 'data-width']);
-const ALLOWED_STYLE_PROPS = new Set(['font-size', 'color', 'font-family', 'background-color', 'text-align']);
+const ALLOWED_STYLE_PROPS = new Set(['font-size', 'color', 'font-family', 'background-color', 'text-align', 'font-weight', 'font-style', 'text-decoration']);
 
 const normalizePreviewHtmlContent = (content: string) => {
   const parsed = new DOMParser().parseFromString(`<body>${content || ''}</body>`, 'text/html');
@@ -146,7 +159,7 @@ export default function App() {
   const [{ files, appState, currentPhase, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
 
   // --- Extracted hooks ---
-  const { consoleLogs, appendConsole, consoleEndRef } = useConsole();
+  const { consoleLogs, appendConsole } = useConsole();
   const { themeMode, setThemeMode } = useTheme();
   const { updateAvailable, dismissUpdate } = useUpdateChecker();
   const { apiReady, apiKey, setApiKey, fallbackKeys, setFallbackKeys } = useApiReady(appendConsole);
@@ -267,15 +280,26 @@ export default function App() {
     setClearAllConfirm(false);
   };
 
-  const moveFile = useCallback((id: string, direction: 'up' | 'down') => {
-    if (appState !== 'idle') return;
-    dispatch({ type: 'queue/move', id, direction });
-  }, [appState]);
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || appState !== 'idle') return;
+    const fromIndex = files.findIndex(f => f.id === active.id);
+    const toIndex = files.findIndex(f => f.id === over.id);
+    if (fromIndex < 0 || toIndex < 0) return;
+    dispatch({ type: 'queue/reorder', fromIndex, toIndex });
+  }, [appState, files]);
 
   const clearAllFiles = () => {
     if (appState !== 'idle') return;
     dispatch({ type: 'queue/clear_all' });
     setClearAllConfirm(false);
+  };
+
+  const clearCompletedFiles = () => {
+    if (appState !== 'idle') return;
+    dispatch({ type: 'queue/clear_completed' });
   };
 
   const resolveQueuedFilesForProcessing = useCallback(async () => {
@@ -472,6 +496,7 @@ export default function App() {
   // --- Computed values ---
   const queuedCount = files.filter(f => f.status === 'queued').length;
   const doneCount = files.filter(f => f.status === 'done').length;
+  const errorCount = files.filter(f => f.status === 'error').length;
   const processingCount = files.filter(f => f.status === 'processing').length;
   const hasApiKey = Boolean(apiKey.trim());
   const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
@@ -491,6 +516,14 @@ export default function App() {
     return s > 0 ? `~${m}m ${s}s` : `~${m}m`;
   };
   const etaLabel = computeEta();
+
+  useEffect(() => {
+    if (appState === 'processing') {
+      document.title = etaLabel ? `[ETA ${etaLabel}] El Sbobinator` : '⏳ El Sbobinator';
+    } else {
+      document.title = 'El Sbobinator';
+    }
+  }, [appState, etaLabel]);
 
   const titleGradient = { background: 'linear-gradient(90deg, var(--gradient-title-from), var(--gradient-title-to))', WebkitBackgroundClip: 'text' as const, WebkitTextFillColor: 'transparent' };
   const sGradient = { background: 'linear-gradient(90deg, var(--gradient-s-from), var(--gradient-s-to))', WebkitBackgroundClip: 'text' as const, WebkitTextFillColor: 'transparent' };
@@ -632,7 +665,17 @@ export default function App() {
             <div className="flex flex-col items-end gap-2">
               <AnimatePresence mode="wait">
                 {files.length > 0 && appState === 'idle' && !clearAllConfirm && (
-                  <motion.div key="clear-btn" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <motion.div key="clear-btn" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
+                    {errorCount > 0 && (
+                      <button onClick={() => dispatch({ type: 'queue/retry_failed' })} className="premium-button-secondary compact-button" style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)' }}>
+                        Riprova falliti ({errorCount})
+                      </button>
+                    )}
+                    {doneCount > 0 && (
+                      <button onClick={clearCompletedFiles} className="premium-button-secondary compact-button">
+                        Rimuovi completati
+                      </button>
+                    )}
                     <button onClick={() => setClearAllConfirm(true)} className="premium-button-secondary compact-button" style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}>
                       Svuota tutto
                     </button>
@@ -649,26 +692,31 @@ export default function App() {
             </div>
           </div>
 
-          <AnimatePresence mode="popLayout" onExitComplete={() => { if (filesRef.current.length === 0) setShowEmptyState(true); }}>
-            {files.map((file, idx) => (
-              <QueueFileCard
-                key={file.id}
-                file={file}
-                idx={idx}
-                filesLength={files.length}
-                appState={appState}
-                currentPhase={currentPhase}
-                workDone={workDone}
-                workTotals={workTotals}
-                etaLabel={etaLabel}
-                onRemove={removeFile}
-                onMove={moveFile}
-                onPreview={openPreview}
-                onOpenFile={openFile}
-                onOpenDir={openFile}
-              />
-            ))}
-          </AnimatePresence>
+          <DndContext
+            sensors={dndSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={files.map(f => f.id)} strategy={verticalListSortingStrategy}>
+              <AnimatePresence mode="popLayout" onExitComplete={() => { if (filesRef.current.length === 0) setShowEmptyState(true); }}>
+                {files.map((file) => (
+                  <QueueFileCard
+                    key={file.id}
+                    file={file}
+                    appState={appState}
+                    currentPhase={currentPhase}
+                    workDone={workDone}
+                    workTotals={workTotals}
+                    etaLabel={etaLabel}
+                    onRemove={removeFile}
+                    onPreview={openPreview}
+                    onOpenFile={openFile}
+                    onOpenDir={openFile}
+                  />
+                ))}
+              </AnimatePresence>
+            </SortableContext>
+          </DndContext>
           <AnimatePresence>
             {showEmptyState && (
               <motion.div
@@ -714,7 +762,6 @@ export default function App() {
                 }
                 return <div key={i} style={{ color }}>{log}</div>;
               })}
-              <div ref={consoleEndRef} />
             </div>
           ) : (
             <div className="px-5 pt-3 pb-4 text-[13px] leading-5" style={{ color: 'var(--console-text)', background: 'var(--console-bg)' }}>

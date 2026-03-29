@@ -5,7 +5,6 @@ export function useConsole() {
   const [consoleLogs, setConsoleLogs] = useState<string[]>([
     `[${new Date().toLocaleTimeString()}] ${APP_NAME} avviato.`,
   ]);
-  const consoleEndRef = useRef<HTMLDivElement>(null);
   const pendingLogsRef = useRef<string[]>([]);
   const logRafRef = useRef<number | null>(null);
 
@@ -25,10 +24,6 @@ export function useConsole() {
     }
   }, []);
 
-  useEffect(() => {
-    consoleEndRef.current?.scrollIntoView({ behavior: 'instant' });
-  }, [consoleLogs]);
-
   // Cleanup RAF on unmount to prevent setState on unmounted component
   useEffect(() => {
     return () => {
@@ -39,5 +34,5 @@ export function useConsole() {
     };
   }, []);
 
-  return { consoleLogs, appendConsole, consoleEndRef };
+  return { consoleLogs, appendConsole };
 }

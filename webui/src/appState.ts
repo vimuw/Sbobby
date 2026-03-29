@@ -99,9 +99,10 @@ export type ProcessingState = {
 export type ProcessingAction =
   | { type: 'queue/add'; files: FileItem[] }
   | { type: 'queue/remove'; id: string }
-  | { type: 'queue/move'; id: string; direction: 'up' | 'down' }
+  | { type: 'queue/reorder'; fromIndex: number; toIndex: number }
   | { type: 'queue/update_source'; id: string; path?: string; name?: string; size?: number; duration?: number }
   | { type: 'queue/clear_completed' }
+  | { type: 'queue/retry_failed' }
   | { type: 'queue/clear_all' }
   | { type: 'app/set_status'; status: AppStatus }
   | { type: 'bridge/update_progress'; value: number }
@@ -129,13 +130,14 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
       return { ...state, files: [...state.files, ...action.files] };
     case 'queue/remove':
       return { ...state, files: state.files.filter(file => file.id !== action.id) };
-    case 'queue/move': {
-      const idx = state.files.findIndex(file => file.id === action.id);
-      if (idx < 0) return state;
-      const nextIdx = action.direction === 'up' ? idx - 1 : idx + 1;
-      if (nextIdx < 0 || nextIdx >= state.files.length) return state;
+    case 'queue/reorder': {
+      const { fromIndex, toIndex } = action;
+      if (fromIndex === toIndex) return state;
+      if (fromIndex < 0 || fromIndex >= state.files.length) return state;
+      if (toIndex < 0 || toIndex >= state.files.length) return state;
       const files = [...state.files];
-      [files[idx], files[nextIdx]] = [files[nextIdx], files[idx]];
+      const [moved] = files.splice(fromIndex, 1);
+      files.splice(toIndex, 0, moved);
       return { ...state, files };
     }
     case 'queue/update_source':
@@ -155,6 +157,15 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
       };
     case 'queue/clear_completed':
       return { ...state, files: state.files.filter(file => file.status !== 'done') };
+    case 'queue/retry_failed':
+      return {
+        ...state,
+        files: state.files.map(file =>
+          file.status === 'error'
+            ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined }
+            : file,
+        ),
+      };
     case 'queue/clear_all':
       return { ...state, files: [] };
     case 'app/set_status':

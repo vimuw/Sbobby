@@ -9,8 +9,8 @@ interface SettingsModalProps {
   onClose: () => void;
   apiKey: string;
   setApiKey: (key: string) => void;
-  fallbackKeys: string;
-  setFallbackKeys: (keys: string) => void;
+  fallbackKeys: string[];
+  setFallbackKeys: (keys: string[]) => void;
   appendConsole: (msg: string) => void;
 }
 
@@ -80,7 +80,7 @@ export function SettingsModal({
 
   const saveSettings = async () => {
     if (window.pywebview?.api) {
-      const keys = fallbackKeys.split('\n').map(k => k.trim()).filter(Boolean);
+      const keys = fallbackKeys.map(k => k.trim()).filter(Boolean);
       const result = await window.pywebview.api.save_settings(apiKey.trim(), keys);
       if (!result?.ok) {
         appendConsole(`❌ Errore salvataggio impostazioni: ${result?.error || 'errore sconosciuto'}`);
@@ -167,8 +167,8 @@ export function SettingsModal({
                   </button>
                 </div>
                 <textarea
-                  value={fallbackKeys}
-                  onChange={e => setFallbackKeys(e.target.value)}
+                  value={fallbackKeys.join('\n')}
+                  onChange={e => setFallbackKeys(e.target.value.split('\n'))}
                   placeholder="Inserisci una API Key per riga..."
                   rows={3}
                   className={`app-textarea font-mono text-sm ${!showApiKeys ? 'obscured-text' : ''}`}

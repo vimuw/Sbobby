@@ -57,7 +57,7 @@ export function useBridgeCallbacks(options: {
         setAskNewKeyPromptRef.current(true);
       },
       onBatchDone: data => {
-        if (!data?.cancelled && data?.total && data.completed === data.total && window.pywebview?.api?.show_notification && !document.hasFocus()) {
+        if (!data?.cancelled && data?.total && data.completed === data.total && !data.failed && window.pywebview?.api?.show_notification && !document.hasFocus()) {
           window.pywebview.api.show_notification('Elaborazione completata', 'Tutti i file in coda sono stati sbobinati con successo.');
         }
       },

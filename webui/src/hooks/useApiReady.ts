@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 export function useApiReady(appendConsole: (msg: string) => void) {
   const [apiReady, setApiReady] = useState(false);
   const [apiKey, setApiKey] = useState('');
-  const [fallbackKeys, setFallbackKeys] = useState('');
+  const [fallbackKeys, setFallbackKeys] = useState<string[]>([]);
   const initDoneRef = useRef(false);
 
   useEffect(() => {
@@ -15,7 +15,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
       try {
         const cfg = await window.pywebview?.api?.load_settings?.();
         if (cfg?.api_key) setApiKey(cfg.api_key);
-        if (cfg?.fallback_keys?.length) setFallbackKeys(cfg.fallback_keys.join('\n'));
+        if (cfg?.fallback_keys?.length) setFallbackKeys(cfg.fallback_keys);
       } catch (e) { console.error('Load settings failed:', e); }
     };
 

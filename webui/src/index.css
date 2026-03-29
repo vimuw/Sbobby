@@ -520,6 +520,30 @@ button {
   border-radius: 12px;
 }
 
+.drag-handle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none;
+  transition: color 150ms ease, background 150ms ease;
+}
+
+.drag-handle-btn:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.drag-handle-btn:active {
+  cursor: grabbing;
+}
+
 .player-control {
   display: inline-flex;
   align-items: center;
