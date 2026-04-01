@@ -62,23 +62,41 @@ def read_html_content(path: str) -> str:
         return handle.read()
 
 
-def save_html_body_content(path: str, content: str) -> None:
+def extract_html_shell(html: str) -> tuple[str, str] | None:
+    """Return (open_tag, close_tag) wrapping the <body> of *html*, or None."""
+    html_lower = html.lower()
+    body_open_end = html_lower.find("<body")
+    if body_open_end == -1:
+        return None
+    body_open_end = html_lower.find(">", body_open_end)
+    body_close = html_lower.rfind("</body>")
+    if body_open_end == -1 or body_close == -1 or body_close <= body_open_end:
+        return None
+    return html[: body_open_end + 1], html[body_close:]
+
+
+def save_html_body_content(
+    path: str,
+    content: str,
+    shell: tuple[str, str] | None = None,
+) -> None:
     if not path or not os.path.exists(path):
         raise FileNotFoundError("File originale non trovato.")
 
-    with open(path, "r", encoding="utf-8") as handle:
-        original_html = handle.read()
-
     body_inner = sanitize_html_basic(str(content or ""))
-    html_lower = original_html.lower()
-    body_open_end = html_lower.find("<body")
-    body_close = -1
-    if body_open_end != -1:
-        body_open_end = html_lower.find(">", body_open_end)
-        body_close = html_lower.rfind("</body>")
-    if body_open_end != -1 and body_close != -1 and body_close > body_open_end:
-        open_tag = original_html[: body_open_end + 1]
-        close_tag = original_html[body_close:]
+
+    if shell is not None:
+        open_tag, close_tag = shell
+    else:
+        with open(path, "r", encoding="utf-8") as handle:
+            original_html = handle.read()
+        extracted = extract_html_shell(original_html)
+        if extracted is not None:
+            open_tag, close_tag = extracted
+        else:
+            open_tag = close_tag = ""
+
+    if open_tag and close_tag:
         updated_html = f"{open_tag}\n{body_inner}\n{close_tag}"
     else:
         updated_html = (

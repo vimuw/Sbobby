@@ -47,13 +47,44 @@ Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `El Sbobinator.app
 
 ---
 
-## 📖 Come si usa passo passo?
+## 💻 Requisiti di sistema
+
+| | Windows | macOS |
+|---|---|---|
+| **Versione minima** | Windows 10 (64-bit) | macOS 11 Big Sur |
+| **Connessione internet** | ✅ Richiesta durante l'elaborazione | ✅ Richiesta durante l'elaborazione |
+| **Spazio su disco** | ~50 MB (app) + variabile per le sessioni | ~50 MB (app) + variabile per le sessioni |
+| **RAM consigliata** | 4 GB | 4 GB |
+
+> ⚠️ Il PC deve rimanere **acceso e connesso a internet** per tutta la durata dell'elaborazione. L'AI gira sui server di Google, non sul tuo processore: la potenza del tuo PC non influisce sulla velocità.
+>
+> 💾 Lo spazio occupato cresce nel tempo: ogni elaborazione salva i progressi parziali (testo già trascritto, blocchi revisionati) in modo da poter riprendere in caso di interruzione. Puoi liberare spazio con il tasto **"Pulisci sessioni vecchie"** nelle Impostazioni.
+
+---
+
+## � Come si usa passo passo?
 
 1. **Inserisci la chiave:** Nelle impostazioni, incolla la tua Chiave API di Gemini. L'app la salverà in modo sicuro (tramite protezione del profilo su Windows o Portachiavi su macOS), così non dovrai rimetterla mai più. Puoi anche inserire chiavi extra e usare la funzione *Validazione ambiente* per controllare che tutto funzioni.
-2. **Carica l'audio:** Seleziona uno o più file audio. L'app li aggiungerà alla **Coda di elaborazione** scartando in automatico eventuali duplicati.
+2. **Carica l'audio:** Seleziona uno o più file audio o video trascinandoli nella finestra oppure cliccando per sfogliarli. Formati supportati: `.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.aac`, `.mp4`, `.mkv`, `.webm` (funziona anche con le registrazioni schermo di Teams, Zoom, ecc.). L'app li aggiungerà alla **Coda di elaborazione** scartando in automatico eventuali duplicati.
 3. **Avvia:** Clicca sul pulsantone "Avvia sbobinatura". L'app ti mostrerà in tempo reale la fase corrente e il progresso. Ad esempio, se l'audio dura un'ora, farà circa 4 estrazioni da 15 minuti l'una.
-4. **Rifinisci nell'Anteprima:** A fine processo si aprirà la schermata di anteprima. Qui puoi rileggere il testo, modificarlo, aggiungere titoli (`H1`, `H2...`), inserire immagini e riascoltare l'audio col player integrato! (Se l'audio originale è stato spostato nel PC, usa il tasto "Ricollega audio").
-5. **Esporta:** Una volta perfetto, usa il tasto "Copia testo" per incollarlo su Google Docs (la formattazione rimarrà intatta!), esportalo in Word o stampalo in PDF. Per sicurezza, una copia `.html` viene sempre salvata in automatico sul tuo Desktop.
+4. **Rifinisci nell'Editor:** A fine processo si potrai aprire la schermata di anteprima con un editor di testo completo. Puoi:
+   - Leggere e modificare il testo liberamente
+   - Applicare formattazione: **grassetto**, *corsivo*, sottolineato, elenchi, tabelle
+   - Strutturare il documento con titoli (`H1`, `H2`, `H3`...)
+   - Usare **Trova & Sostituisci** per correggere in blocco termini tecnici sbagliati
+   - Riascoltare l'audio originale col **player integrato**
+   - Inserire immagini nel documento
+
+   Se l'audio originale è stato spostato sul PC, usa il tasto **"Ricollega audio"** per ricollegarlo.
+5. **Esporta:** Una volta perfetto, usa il tasto **"Copia testo"** per copiare il documento con tutta la formattazione intatta (titoli, grassetti, elenchi) e incollalo direttamente su **Google Docs** o **Word** — il risultato sarà già ben strutturato, senza bisogno di riformattare nulla. Per ottenere un **PDF**, usa la funzione di stampa del browser (`Ctrl+P` → "Salva come PDF") direttamente dall'Editor. Per sicurezza, una copia `.html` viene sempre salvata in automatico sul tuo Desktop.
+
+---
+
+## ⚡ Quanto è veloce?
+
+Molto più di quanto immagini. Anche una registrazione di **3 ore di lezione** viene elaborata in circa **10-12 minuti**.
+
+Il tempo dipende principalmente dalla velocità di risposta delle API di Google, non dalla potenza del tuo PC. Durante l'elaborazione l'app mostra un'ETA aggiornata in tempo reale così sai sempre quanto manca.
 
 ---
 
@@ -61,7 +92,9 @@ Estrai l'archivio ZIP e fai **doppio clic** sull'applicazione `El Sbobinator.app
 El Sbobinator 🤠 salva automaticamente i progressi mentre lavora e le modifiche che fai nell'editor di anteprima.
 
 Se chiudi l'app per sbaglio, se il PC si spegne, o se finisci la quota giornaliera dell'API, **non perdi quasi nulla**.
-Quando riaprirai l'app e ricaricherai lo stesso file audio, El Sbobinator 🤠 ti chiederà se vuoi "riutilizzare" i risultati salvati per riprendere esattamente da dove si era interrotto, o se vuoi ricominciare da capo. I file temporanei vengono salvati in una cartella nascosta nella tua directory utente (es. `~/.el_sbobinator_sessions/`).
+Quando riaprirai l'app e ricaricherai lo stesso file audio, El Sbobinator 🤠 ti chiederà se vuoi "riutilizzare" i risultati salvati per riprendere esattamente da dove si era interrotto, o se vuoi ricominciare da capo.
+
+I dati di sessione (blocchi di testo già elaborati, progressi parziali) vengono salvati in una cartella nascosta sul tuo computer (`~/.el_sbobinator_sessions/`). Questa cartella può crescere nel tempo se elabori molti file. Nelle **Impostazioni** trovi il tasto **"Pulisci sessioni vecchie"** per eliminare automaticamente i dati più vecchi di 30 giorni e liberare spazio.
 
 ---
 
@@ -106,6 +139,12 @@ Grazie e in bocca al lupo per gli esami! 🎉
 
 ---
 
+## 🤝 Contribuire al progetto
+
+Hai trovato un bug o vuoi suggerire una nuova funzione? Apri una **[Issue](https://github.com/vimuw/El-Sbobinator/issues)** su GitHub — ogni segnalazione è benvenuta!
+
+---
+
 ## ⚖️ Disclaimer Etico e Legale (Importante)
 El Sbobinator 🤠 è esclusivamente uno **strumento software locale** che facilita l'interazione tra l'utente e le API pubbliche di Google Gemini.
 
@@ -123,7 +162,8 @@ Per tutti i dettagli, consulta il file `LICENSE` incluso in questa repository.
 
 ---
 
-## 🛠️ Costruire l'App dai sorgenti
+<details>
+<summary>🛠️ Costruire l'App dai sorgenti</summary>
 
 Se scarichi il codice sorgente completo e vuoi compilare tu stesso i pacchetti nativi, usa gli script di automazione inclusi. La WebUI è l'unica interfaccia supportata per lo sviluppo e le release (i vecchi entrypoint desktop restano solo come alias di compatibilità).
 - **Windows:** usa `Costruisci_EXE_Windows.bat`.
@@ -139,3 +179,5 @@ python scripts/build_release.py check --skip-npm-install
 python scripts/build_release.py build --target windows --ui webui --install-deps --dev-deps
 python scripts/build_release.py build --target macos --ui webui --install-deps --dev-deps
 ```
+
+</details>

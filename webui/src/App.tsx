@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { motion, AnimatePresence } from 'motion/react';
@@ -30,93 +30,11 @@ import { QueueFileCard } from './components/QueueFileCard';
 import { RegenerateModal } from './components/modals/RegenerateModal';
 import { NewKeyModal } from './components/modals/NewKeyModal';
 import { SettingsModal } from './components/modals/SettingsModal';
+import { loadEditorSession, saveEditorSession, type EditorSession } from './editorSessions';
+import { normalizePreviewHtmlContent } from './previewHtml';
 const PreviewModal = React.lazy(() => import('./components/modals/PreviewModal').then(m => ({ default: m.PreviewModal })));
 
-const EDITOR_SESSION_STORAGE_KEY = 'el-sbobinator.editor-sessions.v1';
-
-const EDITOR_SESSION_TTL_DAYS = 30;
-
-type EditorSession = {
-  audioTime?: number;
-  playbackRate?: number;
-  volume?: number;
-  scrollTop?: number;
-  savedAt?: number;
-};
-
-const purgeOldEditorSessions = (sessions: Record<string, EditorSession>): Record<string, EditorSession> => {
-  const cutoff = Date.now() - EDITOR_SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
-  return Object.fromEntries(
-    Object.entries(sessions).filter(([, s]) => (s.savedAt ?? 0) >= cutoff)
-  );
-};
-
-const loadEditorSession = (key: string): EditorSession => {
-  try {
-    const raw = window.localStorage.getItem(EDITOR_SESSION_STORAGE_KEY);
-    if (!raw) return {};
-    const sessions = purgeOldEditorSessions(JSON.parse(raw) as Record<string, EditorSession>);
-    window.localStorage.setItem(EDITOR_SESSION_STORAGE_KEY, JSON.stringify(sessions));
-    return sessions[key] ?? {};
-  } catch (_) { return {}; }
-};
-
-const saveEditorSession = (key: string, session: EditorSession) => {
-  try {
-    const raw = window.localStorage.getItem(EDITOR_SESSION_STORAGE_KEY) ?? '{}';
-    const sessions = JSON.parse(raw) as Record<string, EditorSession>;
-    sessions[key] = { ...session, savedAt: Date.now() };
-    window.localStorage.setItem(EDITOR_SESSION_STORAGE_KEY, JSON.stringify(sessions));
-  } catch (_) {}
-};
-
-
-const EDITOR_IMAGE_ALLOWED_DATA_ATTRS = new Set(['data-editor-image', 'data-layout', 'data-align', 'data-width']);
-const ALLOWED_STYLE_PROPS = new Set(['font-size', 'color', 'font-family', 'background-color', 'text-align', 'font-weight', 'font-style', 'text-decoration']);
-
-const normalizePreviewHtmlContent = (content: string) => {
-  const parsed = new DOMParser().parseFromString(`<body>${content || ''}</body>`, 'text/html');
-
-  parsed.body.querySelectorAll('*').forEach(element => {
-    const tag = element.tagName.toLowerCase();
-    const isEditorImageContainer = tag === 'div' && element.hasAttribute('data-editor-image');
-    const isEditorImageAsset = tag === 'img' && element.parentElement?.hasAttribute('data-editor-image');
-
-    element.removeAttribute('align');
-
-    if (!isEditorImageContainer && !isEditorImageAsset) {
-      const htmlEl = element as HTMLElement;
-      const allowedStyles = Array.from(htmlEl.style)
-        .filter(prop => ALLOWED_STYLE_PROPS.has(prop))
-        .map(prop => `${prop}: ${htmlEl.style.getPropertyValue(prop)}`)
-        .join('; ');
-      if (allowedStyles) {
-        element.setAttribute('style', allowedStyles);
-      } else {
-        element.removeAttribute('style');
-      }
-      Array.from(element.attributes)
-        .filter(attribute => attribute.name.startsWith('data-'))
-        .forEach(attribute => element.removeAttribute(attribute.name));
-      return;
-    }
-
-    if (isEditorImageContainer) {
-      Array.from(element.attributes)
-        .filter(attribute => attribute.name.startsWith('data-') && !EDITOR_IMAGE_ALLOWED_DATA_ATTRS.has(attribute.name))
-        .forEach(attribute => element.removeAttribute(attribute.name));
-      element.removeAttribute('class');
-      return;
-    }
-
-    element.removeAttribute('class');
-    Array.from(element.attributes)
-      .filter(attribute => attribute.name.startsWith('data-'))
-      .forEach(attribute => element.removeAttribute(attribute.name));
-  });
-
-  return parsed.body.innerHTML;
-};
+const EMPTY_WORK = { chunks: 0, macro: 0, boundary: 0 };
 
 declare global {
   interface Window {
@@ -127,36 +45,30 @@ declare global {
 
 type PreviewState = {
   content: string | null;
-  editedContent: string;
   title: string;
   path: string;
   audioSrc: string | null;
   fileId: string | null;
   sourcePath: string;
   audioRelinkNeeded: boolean;
-  isCopied: boolean;
-  autosaveStatus: 'idle' | 'saving' | 'saved' | 'error';
   initAudio: { time?: number; playbackRate?: number; volume?: number };
   initScrollTop?: number;
 };
 
 const initialPreviewState: PreviewState = {
   content: null,
-  editedContent: '',
   title: '',
   path: '',
   audioSrc: null,
   fileId: null,
   sourcePath: '',
   audioRelinkNeeded: false,
-  isCopied: false,
-  autosaveStatus: 'idle',
   initAudio: {},
   initScrollTop: undefined,
 };
 
 export default function App() {
-  const [{ files, appState, currentPhase, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
+  const [{ files, structuralVersion, appState, currentPhase, activeProgress, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
 
   // --- Extracted hooks ---
   const { consoleLogs, appendConsole } = useConsole();
@@ -182,7 +94,6 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const filesRef = useRef<FileItem[]>([]);
   const appStateRef = useRef<AppStatus>('idle');
-  const lastPersistedPreviewRef = useRef('');
   const currentEditorSessionRef = useRef<EditorSession>({});
   const currentPreviewSessionKeyRef = useRef<string | null>(null);
 
@@ -199,7 +110,7 @@ export default function App() {
   }, [appState]);
 
   // --- Queue persistence ---
-  useQueuePersistence(files, dispatch, appendConsole);
+  useQueuePersistence(files, structuralVersion, dispatch, appendConsole);
 
   // --- File deduplication ---
   const getFileFingerprint = useCallback((file: Pick<FileItem, 'path' | 'name' | 'size' | 'duration'>) => {
@@ -274,11 +185,11 @@ export default function App() {
     }
   };
 
-  const removeFile = (id: string) => {
+  const removeFile = useCallback((id: string) => {
     if (appState !== 'idle') return;
     dispatch({ type: 'queue/remove', id });
     setClearAllConfirm(false);
-  };
+  }, [appState]);
 
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -391,7 +302,7 @@ export default function App() {
     } catch (error: any) { appendConsole(`❌ Impossibile ricollegare l'audio: ${error?.message || error}`); }
   }, [appendConsole, loadPreviewAudio, preview.fileId]);
 
-  const openPreview = async (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => {
+  const openPreview = useCallback(async (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => {
     if (window.pywebview?.api?.read_html_content) {
       appendConsole('Caricamento anteprima in corso...');
       try {
@@ -406,24 +317,20 @@ export default function App() {
           currentEditorSessionRef.current = { ...savedSession };
           setPreview({
             content: safeContent,
-            editedContent: safeContent,
             title: filename,
             path: htmlPath,
             fileId: fileId ?? null,
             sourcePath: sourcePath || '',
             audioSrc: null,
             audioRelinkNeeded: false,
-            isCopied: false,
-            autosaveStatus: 'idle',
             initAudio: { time: savedSession.audioTime, playbackRate: savedSession.playbackRate, volume: savedSession.volume },
             initScrollTop: savedSession.scrollTop,
           });
-          lastPersistedPreviewRef.current = safeContent;
           await loadPreviewAudio(sourcePath);
         } else { appendConsole(`❌ Errore anteprima: ${res.error}`); }
       } catch (e: any) { appendConsole(`❌ Errore JS anteprima: ${e.message || e}`); }
     } else { appendConsole('❌ Funzione anteprima non disponibile in questa versione.'); }
-  };
+  }, [appendConsole, loadPreviewAudio]);
 
   const closePreview = useCallback(() => {
     const sessionKey = currentPreviewSessionKeyRef.current;
@@ -435,23 +342,7 @@ export default function App() {
     currentEditorSessionRef.current = {};
     currentPreviewSessionKeyRef.current = null;
     setPreview(initialPreviewState);
-    lastPersistedPreviewRef.current = '';
   }, []);
-
-  const handleEditedContentChange = useCallback((v: string) => setPreview(prev => ({ ...prev, editedContent: v })), []);
-
-  const handleCopyForGoogleDocs = useCallback(async () => {
-    const normalizedHtml = normalizePreviewHtmlContent(preview.editedContent);
-    const temp = document.createElement('div');
-    temp.innerHTML = normalizedHtml;
-    try {
-      const htmlBlob = new Blob([normalizedHtml], { type: 'text/html' });
-      const textBlob = new Blob([temp.textContent || temp.innerText || ''], { type: 'text/plain' });
-      await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
-    } catch (_) { navigator.clipboard.writeText(temp.textContent || temp.innerText || ''); }
-    setPreview(prev => ({ ...prev, isCopied: true }));
-    setTimeout(() => setPreview(prev => ({ ...prev, isCopied: false })), 2000);
-  }, [preview.editedContent]);
 
   const handleAudioStateChange = useCallback(({ currentTime, playbackRate, volume }: { currentTime: number; playbackRate: number; volume: number }) => {
     currentEditorSessionRef.current = { ...currentEditorSessionRef.current, audioTime: currentTime, playbackRate, volume };
@@ -461,43 +352,22 @@ export default function App() {
     currentEditorSessionRef.current = { ...currentEditorSessionRef.current, scrollTop };
   }, []);
 
-  const openFile = async (path: string) => {
+  const openFile = useCallback(async (path: string) => {
     if (window.pywebview?.api) await window.pywebview.api.open_file(path);
-  };
+  }, []);
 
-  // --- Preview autosave ---
-  useEffect(() => {
-    if (!preview.path || preview.content === null) return;
-    if (preview.editedContent === lastPersistedPreviewRef.current) return;
-    setPreview(prev => ({ ...prev, autosaveStatus: 'saving' }));
-    const timeoutId = window.setTimeout(async () => {
-      if (!window.pywebview?.api?.save_html_content) return;
-      const contentToSave = preview.editedContent;
-      const res = await window.pywebview.api.save_html_content(preview.path, contentToSave);
-      if (res.ok) { lastPersistedPreviewRef.current = contentToSave; setPreview(prev => ({ ...prev, autosaveStatus: 'saved' })); }
-      else { setPreview(prev => ({ ...prev, autosaveStatus: 'error' })); }
-    }, 700);
-    return () => window.clearTimeout(timeoutId);
-  }, [preview.editedContent, preview.content, preview.path]);
-
-  useEffect(() => {
-    if (preview.autosaveStatus !== 'saved') return;
-    const timeoutId = window.setTimeout(() => setPreview(prev => ({ ...prev, autosaveStatus: 'idle' })), 1500);
-    return () => window.clearTimeout(timeoutId);
-  }, [preview.autosaveStatus]);
-
-  useEffect(() => {
-    if (preview.content === null) return;
-    const handleEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') closePreview(); };
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
-  }, [preview.content, closePreview]);
 
   // --- Computed values ---
-  const queuedCount = files.filter(f => f.status === 'queued').length;
-  const doneCount = files.filter(f => f.status === 'done').length;
-  const errorCount = files.filter(f => f.status === 'error').length;
-  const processingCount = files.filter(f => f.status === 'processing').length;
+  const { queuedCount, doneCount, errorCount, processingCount } = useMemo(() => {
+    let queuedCount = 0, doneCount = 0, errorCount = 0, processingCount = 0;
+    for (const f of files) {
+      if (f.status === 'queued') queuedCount++;
+      else if (f.status === 'done') doneCount++;
+      else if (f.status === 'error') errorCount++;
+      else if (f.status === 'processing') processingCount++;
+    }
+    return { queuedCount, doneCount, errorCount, processingCount };
+  }, [files]);
   const hasApiKey = Boolean(apiKey.trim());
   const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
   const canStart = queuedCount > 0 && hasApiKey && isApiKeyValid;
@@ -527,6 +397,8 @@ export default function App() {
 
   const titleGradient = { background: 'linear-gradient(90deg, var(--gradient-title-from), var(--gradient-title-to))', WebkitBackgroundClip: 'text' as const, WebkitTextFillColor: 'transparent' };
   const sGradient = { background: 'linear-gradient(90deg, var(--gradient-s-from), var(--gradient-s-to))', WebkitBackgroundClip: 'text' as const, WebkitTextFillColor: 'transparent' };
+
+  const sortableIds = useMemo(() => files.map(file => file.id), [files]);
 
   return (
     <div className="app-shell min-h-screen font-sans flex flex-col" style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)' }}>
@@ -559,7 +431,7 @@ export default function App() {
           <div className="flex items-center gap-3">
             {processingCount > 0 && (
               <span className="premium-badge" style={{ color: 'var(--processing-text)', borderColor: 'var(--processing-ring)', background: 'var(--processing-bg)' }}>
-                <span className="inline-flex h-2.5 w-2.5 rounded-full animate-pulse" style={{ background: 'var(--processing-dot)' }} />
+                <span className="inline-flex h-2.5 w-2.5 rounded-full animate-pulse" style={{ background: 'var(--processing-text)' }} />
                 {processingCount} sbobinatur{processingCount !== 1 ? 'e' : 'a'} in corso
               </span>
             )}
@@ -698,23 +570,27 @@ export default function App() {
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
-            <SortableContext items={files.map(f => f.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
               <AnimatePresence mode="popLayout" onExitComplete={() => { if (filesRef.current.length === 0) setShowEmptyState(true); }}>
-                {files.map((file) => (
-                  <QueueFileCard
-                    key={file.id}
-                    file={file}
-                    appState={appState}
-                    currentPhase={currentPhase}
-                    workDone={workDone}
-                    workTotals={workTotals}
-                    etaLabel={etaLabel}
-                    onRemove={removeFile}
-                    onPreview={openPreview}
-                    onOpenFile={openFile}
-                    onOpenDir={openFile}
-                  />
-                ))}
+                {files.map((file) => {
+                  const isActive = file.status === 'processing';
+                  return (
+                    <QueueFileCard
+                      key={file.id}
+                      file={file}
+                      appState={appState}
+                      currentPhase={isActive ? currentPhase : undefined}
+                      workDone={isActive ? workDone : EMPTY_WORK}
+                      workTotals={isActive ? workTotals : EMPTY_WORK}
+                      etaLabel={isActive ? etaLabel : null}
+                      activeProgress={isActive ? activeProgress : undefined}
+                      onRemove={removeFile}
+                      onPreview={openPreview}
+                      onOpenFile={openFile}
+                      onOpenDir={openFile}
+                    />
+                  );
+                })}
               </AnimatePresence>
             </SortableContext>
           </DndContext>
@@ -851,15 +727,11 @@ export default function App() {
         <PreviewModal
           previewContent={preview.content}
           previewTitle={preview.title}
-          editedContent={preview.editedContent}
-          onChange={handleEditedContentChange}
+          htmlPath={preview.path}
           onClose={closePreview}
           audioSrc={preview.audioSrc}
           audioRelinkNeeded={preview.audioRelinkNeeded}
           onRelink={relinkPreviewAudio}
-          autosaveStatus={preview.autosaveStatus}
-          isCopied={preview.isCopied}
-          onCopy={handleCopyForGoogleDocs}
           previewInitAudio={preview.initAudio}
           previewInitScrollTop={preview.initScrollTop}
           onAudioStateChange={handleAudioStateChange}

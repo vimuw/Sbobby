@@ -24,7 +24,8 @@ class LocalMediaServer:
         if len(cls._servers) < cls.MAX_ENTRIES:
             return
         # Pop oldest entry (dict preserves insertion order in Python 3.7+)
-        oldest_path, (oldest_server, _) = cls._servers.popitem(last=False)
+        oldest_path = next(iter(cls._servers))
+        oldest_server, _ = cls._servers.pop(oldest_path)
         threading.Thread(
             target=lambda: (oldest_server.shutdown(), oldest_server.server_close()),
             daemon=True,

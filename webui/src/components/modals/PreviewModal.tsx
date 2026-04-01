@@ -1,7 +1,8 @@
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Check, Copy, FileText, X } from 'lucide-react';
 import type { Heading } from '../../RichTextEditor';
+import { normalizePreviewHtmlContent } from '../../previewHtml';
 
 const LazyAudioPlayer = React.lazy(() => import('../../AudioPlayer').then(module => ({ default: module.AudioPlayer })));
 const LazyRichTextEditor = React.lazy(() => import('../../RichTextEditor').then(module => ({ default: module.RichTextEditor })));
@@ -9,15 +10,11 @@ const LazyRichTextEditor = React.lazy(() => import('../../RichTextEditor').then(
 interface PreviewModalProps {
   previewContent: string | null;
   previewTitle: string;
-  editedContent: string;
-  onChange: (content: string) => void;
+  htmlPath: string;
   onClose: () => void;
   audioSrc: string | null;
   audioRelinkNeeded: boolean;
   onRelink: () => void;
-  autosaveStatus: 'idle' | 'saving' | 'saved' | 'error';
-  isCopied: boolean;
-  onCopy: () => void;
   previewInitAudio: { time?: number; playbackRate?: number; volume?: number };
   previewInitScrollTop: number | undefined;
   onAudioStateChange: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
@@ -25,14 +22,101 @@ interface PreviewModalProps {
 }
 
 export function PreviewModal({
-  previewContent, previewTitle, editedContent, onChange, onClose,
+  previewContent, previewTitle, htmlPath, onClose,
   audioSrc, audioRelinkNeeded, onRelink,
-  autosaveStatus, isCopied, onCopy,
   previewInitAudio, previewInitScrollTop,
   onAudioStateChange, onScrollTopChange,
 }: PreviewModalProps) {
   const [isTocOpen, setIsTocOpen] = useState(false);
   const [headings, setHeadings] = useState<Heading[]>([]);
+  const [isCopied, setIsCopied] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const getHtmlRef = useRef<(() => string) | null>(null);
+  const isDirtyRef = useRef(false);
+  const lastPersistedRef = useRef(previewContent ?? '');
+  const autosaveTimerRef = useRef<number | null>(null);
+  const htmlPathRef = useRef(htmlPath);
+  useEffect(() => { htmlPathRef.current = htmlPath; }, [htmlPath]);
+
+  useEffect(() => {
+    lastPersistedRef.current = previewContent ?? '';
+    isDirtyRef.current = false;
+    setIsCopied(false);
+    setAutosaveStatus('idle');
+  }, [previewContent]);
+
+  useEffect(() => {
+    return () => {
+      if (!isDirtyRef.current) return;
+      if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
+      const path = htmlPathRef.current;
+      const snap = getHtmlRef.current?.() ?? '';
+      if (path && snap && snap !== lastPersistedRef.current) {
+        void window.pywebview?.api?.save_html_content(path, snap);
+      }
+    };
+  }, []); // empty deps: runs cleanup only on unmount
+
+  const flushAndClose = useCallback(async () => {
+    if (isDirtyRef.current) {
+      if (autosaveTimerRef.current) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
+      const path = htmlPathRef.current;
+      const snap = getHtmlRef.current?.() ?? '';
+      if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
+        setAutosaveStatus('saving');
+        try {
+          const res = await window.pywebview.api.save_html_content(path, snap);
+          if (res.ok) { lastPersistedRef.current = snap; isDirtyRef.current = false; }
+          else { setAutosaveStatus('error'); return; }
+        } catch { setAutosaveStatus('error'); return; }
+      }
+    }
+    onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (previewContent === null) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') void flushAndClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [flushAndClose, previewContent]);
+
+  const scheduleAutosave = useCallback(() => {
+    if (!htmlPath || previewContent === null) return;
+    isDirtyRef.current = true;
+    if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
+    const savedForPath = htmlPath;
+    autosaveTimerRef.current = window.setTimeout(async () => {
+      if (!isDirtyRef.current || !window.pywebview?.api?.save_html_content) return;
+      const snap = getHtmlRef.current?.() ?? '';
+      if (snap === lastPersistedRef.current) { isDirtyRef.current = false; return; }
+      setAutosaveStatus('saving');
+      const res = await window.pywebview.api.save_html_content(savedForPath, snap);
+      if (htmlPathRef.current !== savedForPath) return;
+      if (res.ok) { lastPersistedRef.current = snap; isDirtyRef.current = false; setAutosaveStatus('saved'); }
+      else setAutosaveStatus('error');
+    }, 700);
+  }, [htmlPath, previewContent]);
+
+  useEffect(() => {
+    if (autosaveStatus !== 'saved') return;
+    let cancelled = false;
+    const id = window.setTimeout(() => { if (!cancelled) setAutosaveStatus('idle'); }, 1500);
+    return () => { cancelled = true; window.clearTimeout(id); };
+  }, [autosaveStatus]);
+
+  const handleCopy = async () => {
+    const normalizedHtml = normalizePreviewHtmlContent(getHtmlRef.current?.() ?? lastPersistedRef.current);
+    const temp = document.createElement('div');
+    temp.innerHTML = normalizedHtml;
+    try {
+      const htmlBlob = new Blob([normalizedHtml], { type: 'text/html' });
+      const textBlob = new Blob([temp.textContent || temp.innerText || ''], { type: 'text/plain' });
+      await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
+    } catch (_) { navigator.clipboard.writeText(temp.textContent || temp.innerText || ''); }
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
 
   const scrollToHeading = (heading: Heading) => {
     const { text, level, id } = heading;
@@ -54,7 +138,7 @@ export function PreviewModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={onClose}
+          onClick={() => void flushAndClose()}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
           style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(10px)' }}
         >
@@ -84,7 +168,7 @@ export function PreviewModal({
                 </span>
                 <div className="relative">
                   <button
-                    onClick={onCopy}
+                    onClick={handleCopy}
                     className="icon-button h-9 w-9 rounded-[12px]"
                     style={isCopied ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : { color: 'var(--text-muted)' }}
                     title={isCopied ? 'Copiato!' : 'Copia per Google Docs'}
@@ -92,7 +176,7 @@ export function PreviewModal({
                     {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
-                <button onClick={onClose} className="icon-button h-11 w-11 rounded-[14px]" style={{ color: 'var(--text-muted)' }}>
+                <button onClick={() => void flushAndClose()} className="icon-button h-11 w-11 rounded-[14px]" style={{ color: 'var(--text-muted)' }}>
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -105,7 +189,8 @@ export function PreviewModal({
                   <Suspense fallback={<div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
                     <LazyRichTextEditor
                       initialContent={previewContent || ''}
-                      onChange={onChange}
+                      onChange={scheduleAutosave}
+                      onEditorReady={getHtml => { getHtmlRef.current = getHtml; }}
                       initialScrollTop={previewInitScrollTop}
                       onScrollTopChange={onScrollTopChange}
                       onHeadingsChange={setHeadings}

@@ -77,8 +77,10 @@ export type StepMetricEntry = {
 
 export type ProcessingState = {
   files: FileItem[];
+  structuralVersion: number;
   appState: AppStatus;
   currentPhase: string;
+  activeProgress: number;
   workTotals: {
     chunks: number;
     macro: number;
@@ -117,8 +119,10 @@ export type ProcessingAction =
 
 export const initialProcessingState: ProcessingState = {
   files: [],
+  structuralVersion: 0,
   appState: 'idle',
   currentPhase: '',
+  activeProgress: 0,
   workTotals: { chunks: 0, macro: 0, boundary: 0 },
   workDone: { chunks: 0, macro: 0, boundary: 0 },
   stepMetrics: { chunks: null, macro: null, boundary: null },
@@ -127,9 +131,9 @@ export const initialProcessingState: ProcessingState = {
 export function processingReducer(state: ProcessingState, action: ProcessingAction): ProcessingState {
   switch (action.type) {
     case 'queue/add':
-      return { ...state, files: [...state.files, ...action.files] };
+      return { ...state, structuralVersion: state.structuralVersion + 1, files: [...state.files, ...action.files] };
     case 'queue/remove':
-      return { ...state, files: state.files.filter(file => file.id !== action.id) };
+      return { ...state, structuralVersion: state.structuralVersion + 1, files: state.files.filter(file => file.id !== action.id) };
     case 'queue/reorder': {
       const { fromIndex, toIndex } = action;
       if (fromIndex === toIndex) return state;
@@ -138,11 +142,12 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
       const files = [...state.files];
       const [moved] = files.splice(fromIndex, 1);
       files.splice(toIndex, 0, moved);
-      return { ...state, files };
+      return { ...state, structuralVersion: state.structuralVersion + 1, files };
     }
     case 'queue/update_source':
       return {
         ...state,
+        structuralVersion: state.structuralVersion + 1,
         files: state.files.map(file =>
           file.id === action.id
             ? {
@@ -156,10 +161,11 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         ),
       };
     case 'queue/clear_completed':
-      return { ...state, files: state.files.filter(file => file.status !== 'done') };
+      return { ...state, structuralVersion: state.structuralVersion + 1, files: state.files.filter(file => file.status !== 'done') };
     case 'queue/retry_failed':
       return {
         ...state,
+        structuralVersion: state.structuralVersion + 1,
         files: state.files.map(file =>
           file.status === 'error'
             ? { ...file, status: 'queued', progress: 0, phase: 0, phaseText: undefined, errorText: undefined }
@@ -167,25 +173,20 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         ),
       };
     case 'queue/clear_all':
-      return { ...state, files: [] };
+      return { ...state, structuralVersion: state.structuralVersion + 1, files: [] };
     case 'app/set_status':
       return { ...state, appState: action.status };
     case 'bridge/update_progress':
-      return {
-        ...state,
-        files: state.files.map(file =>
-          file.status === 'processing'
-            ? { ...file, progress: Math.round(action.value * 100) }
-            : file,
-        ),
-      };
+      return { ...state, activeProgress: Math.round(action.value * 100) };
     case 'bridge/update_phase':
       return { ...state, currentPhase: action.text };
     case 'bridge/process_done':
       return {
         ...state,
+        structuralVersion: action.data?.cancelled ? state.structuralVersion + 1 : state.structuralVersion,
         appState: 'idle',
         currentPhase: '',
+        activeProgress: action.data?.cancelled ? 0 : state.activeProgress,
         workTotals: action.data?.cancelled ? { chunks: 0, macro: 0, boundary: 0 } : state.workTotals,
         workDone: action.data?.cancelled ? { chunks: 0, macro: 0, boundary: 0 } : state.workDone,
         stepMetrics: action.data?.cancelled ? { chunks: null, macro: null, boundary: null } : state.stepMetrics,
@@ -232,8 +233,10 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
     case 'bridge/set_current_file':
       return {
         ...state,
+        structuralVersion: state.structuralVersion + 1,
         appState: 'processing',
         currentPhase: '',
+        activeProgress: 0,
         stepMetrics: { chunks: null, macro: null, boundary: null },
         files: state.files.map(file =>
           file.id === action.data.id
@@ -244,6 +247,8 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
     case 'bridge/file_done':
       return {
         ...state,
+        structuralVersion: state.structuralVersion + 1,
+        activeProgress: 0,
         files: state.files.map(file =>
           file.id === action.data.id
             ? {
@@ -262,6 +267,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
     case 'bridge/file_failed':
       return {
         ...state,
+        structuralVersion: state.structuralVersion + 1,
         files: state.files.map(file =>
           file.id === action.data.id
             ? {

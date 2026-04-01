@@ -47,6 +47,7 @@ from el_sbobinator.bridge_types import (
 )
 from el_sbobinator.file_ops import (
     export_doc_html,
+    extract_html_shell,
     open_path_with_default_app,
     read_html_content as read_html_file_content,
     save_html_body_content,
@@ -343,6 +344,7 @@ class ElSbobinatorApi:
         self._cancel_event = threading.Event()
         self._adapter = PipelineAdapter(None, self._cancel_event)
         self._processing_thread: threading.Thread | None = None
+        self._html_shell_cache: dict[str, tuple[str, str]] = {}
         configure_logging()
         self._logger = get_logger("el_sbobinator.webview")
 
@@ -430,7 +432,8 @@ class ElSbobinatorApi:
             )
         if not file_paths:
             return []
-        return [self._build_file_descriptor(path) for path in file_paths]
+        selected_paths = list(file_paths) if isinstance(file_paths, (list, tuple)) else [file_paths]
+        return [self._build_file_descriptor(path) for path in selected_paths]
 
     def ask_media_file(self) -> BridgeFileItem | None:
         """Open a native file dialog for a single media file."""
@@ -453,7 +456,8 @@ class ElSbobinatorApi:
             )
         if not file_paths:
             return None
-        return self._build_file_descriptor(file_paths[0])
+        selected_path = file_paths[0] if isinstance(file_paths, (list, tuple)) else file_paths
+        return self._build_file_descriptor(selected_path)
 
     def check_path_exists(self, path: str) -> dict:
         """Check whether a persisted source path still exists on disk."""
@@ -515,10 +519,14 @@ class ElSbobinatorApi:
             active_api_key = api_key
             completed_count = 0
             failed_count = 0
+            current_index: int | None = None
+            current_file_id = ""
             try:
                 for idx, file_info in enumerate(files):
                     if self._cancel_event.is_set():
                         break
+                    current_index = idx
+                    current_file_id = str(file_info.get("id", "") or "")
                     self._adapter.reset_run_state(active_api_key)
                     file_path = file_info.get("path", "")
                     if not file_path or not os.path.exists(file_path):
@@ -530,6 +538,8 @@ class ElSbobinatorApi:
                         }
                         self._adapter.emit("fileFailed", payload, batched=False)
                         failed_count += 1
+                        current_index = None
+                        current_file_id = ""
                         continue
 
                     self._push_console(f"\n{'='*50}")
@@ -575,7 +585,18 @@ class ElSbobinatorApi:
                         }
                         self._adapter.emit("fileFailed", payload, batched=False)
                         failed_count += 1
+                    current_index = None
+                    current_file_id = ""
             except Exception as e:
+                if current_index is not None:
+                    payload = {
+                        "index": current_index,
+                        "id": current_file_id,
+                        "error": str(e) or "Errore fatale.",
+                    }
+                    self._adapter.set_run_result("failed", str(e))
+                    self._adapter.emit("fileFailed", payload, batched=False)
+                    failed_count += 1
                 self._push_console(f"[!] Errore fatale: {e}")
             finally:
                 self._adapter.is_running = False
@@ -652,6 +673,9 @@ class ElSbobinatorApi:
             return {"ok": False, "error": "File non trovato."}
         try:
             content = read_html_file_content(real_path)
+            shell = extract_html_shell(content)
+            if shell is not None:
+                self._html_shell_cache[real_path] = shell
             return {"ok": True, "content": content}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -676,7 +700,8 @@ class ElSbobinatorApi:
         if not os.path.isfile(real_path):
             return {"ok": False, "error": "File non trovato."}
         try:
-            save_html_body_content(real_path, content)
+            shell = self._html_shell_cache.get(real_path)
+            save_html_body_content(real_path, content, shell=shell)
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}

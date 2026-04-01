@@ -10,7 +10,11 @@ import html as _html
 import re
 
 import markdown
-import nh3
+
+try:
+    import nh3 as _nh3
+except ImportError:  # pragma: no cover
+    _nh3 = None  # type: ignore[assignment]
 
 
 _ALLOWED_TAGS: frozenset[str] = frozenset({
@@ -38,7 +42,11 @@ _ALLOWED_URL_SCHEMES: frozenset[str] = frozenset({"http", "https", "mailto", "da
 def sanitize_html_basic(html: str) -> str:
     # Sanitizzazione tramite allowlist (nh3/ammonia) — blocca tag/attributi non permessi
     # e schemi URL pericolosi (javascript:, vbscript:). data: è permesso per src img inline.
-    return nh3.clean(
+    if _nh3 is None:  # pragma: no cover
+        raise ImportError(
+            "nh3 is required for HTML sanitization. Install it with: pip install nh3"
+        )
+    return _nh3.clean(
         html or "",
         tags=_ALLOWED_TAGS,
         attributes=_ALLOWED_ATTRS,

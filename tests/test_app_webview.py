@@ -8,9 +8,13 @@ from el_sbobinator.app_webview import ElSbobinatorApi, PipelineAdapter
 class _FakeWindow:
     def __init__(self):
         self.calls = []
+        self.dialog_result = None
 
     def evaluate_js(self, script):
         self.calls.append(script)
+
+    def create_file_dialog(self, *_args, **_kwargs):
+        return self.dialog_result
 
 
 class AppWebviewTests(unittest.TestCase):
@@ -74,6 +78,32 @@ class AppWebviewTests(unittest.TestCase):
         api = ElSbobinatorApi()
         result = api.save_html_content("/tmp/nonexistent_file_xyz.html", "<p>x</p>")
         self.assertFalse(result["ok"])
+
+    def test_ask_media_file_accepts_string_dialog_result(self):
+        api = ElSbobinatorApi()
+        window = _FakeWindow()
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            window.dialog_result = tmp.name
+        api.set_window(window)
+
+        result = api.ask_media_file()
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["path"], window.dialog_result)
+        self.assertEqual(result["name"], __import__("os").path.basename(window.dialog_result))
+
+    def test_ask_files_accepts_string_dialog_result(self):
+        api = ElSbobinatorApi()
+        window = _FakeWindow()
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            window.dialog_result = tmp.name
+        api.set_window(window)
+
+        result = api.ask_files()
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["path"], window.dialog_result)
+        self.assertEqual(result[0]["name"], __import__("os").path.basename(window.dialog_result))
 
     @patch("el_sbobinator.validation_service.validate_environment")
     def test_validate_environment_returns_backend_result(self, mock_validate):

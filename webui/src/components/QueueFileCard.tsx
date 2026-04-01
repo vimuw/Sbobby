@@ -13,6 +13,7 @@ interface QueueFileCardProps {
   workDone: { chunks: number; macro: number; boundary: number };
   workTotals: { chunks: number; macro: number; boundary: number };
   etaLabel: string | null;
+  activeProgress?: number;
   onRemove: (id: string) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => void;
   onOpenFile: (path: string) => void;
@@ -40,8 +41,8 @@ function getProcessingDetails(phaseText?: string) {
   };
 }
 
-export function QueueFileCard({
-  file, appState, currentPhase, workDone, workTotals, etaLabel,
+function QueueFileCardInner({
+  file, appState, currentPhase, workDone, workTotals, etaLabel, activeProgress,
   onRemove, onPreview, onOpenFile, onOpenDir,
 }: QueueFileCardProps) {
   const processingDetails = file.status === 'processing' ? getProcessingDetails(currentPhase) : null;
@@ -245,14 +246,14 @@ export function QueueFileCard({
               style={{ color: 'var(--text-muted)' }}
             >
               <span>{isCanceling ? 'In attesa di interruzione' : (processingDetails?.title ?? 'Generazione sbobina')}</span>
-              <span style={{ color: 'var(--text-primary)' }}>{file.progress}%</span>
+              <span style={{ color: 'var(--text-primary)' }}>{activeProgress ?? file.progress}%</span>
             </div>
             <div className="processing-progress h-2 w-full rounded-full overflow-hidden" style={{ background: 'var(--progress-bg)' }}>
               <motion.div
                 className="processing-progress-fill h-full rounded-full"
                 style={{ background: isCanceling ? 'linear-gradient(90deg, var(--warning-bg), var(--warning-text))' : 'linear-gradient(90deg, var(--accent-gradient-start), var(--accent-gradient-end))' }}
                 initial={{ width: 0 }}
-                animate={{ width: `${file.progress}%` }}
+                animate={{ width: `${activeProgress ?? file.progress}%` }}
                 transition={{ ease: 'linear', duration: 0.3 }}
               />
             </div>
@@ -272,3 +273,5 @@ export function QueueFileCard({
     </div>
   );
 }
+
+export const QueueFileCard = React.memo(QueueFileCardInner);

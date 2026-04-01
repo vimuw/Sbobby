@@ -31,7 +31,8 @@ export interface Heading {
 
 interface RichTextEditorProps {
   initialContent: string;
-  onChange: (html: string) => void;
+  onChange?: (html: string) => void;
+  onEditorReady?: (getHtml: () => string) => void;
   initialScrollTop?: number;
   onScrollTopChange?: (scrollTop: number) => void;
   onHeadingsChange?: (headings: Heading[]) => void;
@@ -137,6 +138,10 @@ const SearchHighlight = Extension.create({
 
             if (!searchTerm) {
               return { searchTerm: '', currentIndex: -1, matchCase: false, decorations: DecorationSet.empty };
+            }
+
+            if (meta === undefined && !tr.docChanged) {
+              return { searchTerm, currentIndex, matchCase, decorations: value.decorations.map(tr.mapping, tr.doc) };
             }
 
             const decorations: Decoration[] = [];
@@ -409,37 +414,25 @@ const FontFamilySelect = ({ editor }: { editor: any }) => {
   );
 };
 
+// Matches CSS: h1=1.5rem, h2=1.25rem, h3=1.1rem, h4=1rem, h5=0.9rem at 16px root
+const HEADING_PX: Record<number, number> = { 1: 24, 2: 20, 3: 18, 4: 16, 5: 14 };
+
 const FontSizeSelect = ({ editor }: { editor: any }) => {
   const getCurrentSize = () => {
     if (!editor) return '';
-    
-    // 1. Check for inline fontSize mark first
+
+    // 1. Explicit inline fontSize mark
     const fontSize = editor.getAttributes('textStyle').fontSize;
     if (fontSize) return fontSize.replace('px', '');
 
-    // 2. Check heading level – walk up from the cursor's DOM node to find
-    //    the exact heading element the cursor lives in (not the first in DOM)
+    // 2. Heading level — static lookup matching CSS rem values, no DOM read
     for (let i = 1; i <= 5; i++) {
-      if (editor.isActive('heading', { level: i })) {
-        try {
-          const { from } = editor.state.selection;
-          const { node: domNode } = editor.view.domAtPos(from);
-          let el: Element | null = domNode instanceof Element ? domNode : domNode.parentElement;
-          while (el && !/^H[1-5]$/.test(el.tagName)) el = el.parentElement;
-          if (el instanceof HTMLElement) {
-            return String(Math.round(parseFloat(window.getComputedStyle(el).fontSize)));
-          }
-        } catch (_) { /* fall through to rem fallback */ }
-        const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-        const rems: Record<number, number> = { 1: 2.25, 2: 1.5, 3: 1.25, 4: 1.0, 5: 0.875 };
-        return String(Math.round(rems[i] * rootPx));
-      }
+      if (editor.isActive('heading', { level: i })) return String(HEADING_PX[i]);
     }
 
-    // 3. For any other text (paragraph, list, etc.), read computed size from the editor root
-    const editorEl = editor.view.dom as HTMLElement;
-    const rootSize = parseFloat(window.getComputedStyle(editorEl).fontSize);
-    return String(Math.round(rootSize));
+    // 3. Body text has no explicit size (11pt ≈ 14.67px, not in the dropdown)
+    // Return '' so the select shows '—' rather than a wrong hardcoded value
+    return '';
   };
 
   const currentSize = getCurrentSize();
@@ -969,14 +962,18 @@ const WordCount = ({ editor }: { editor: any }) => {
   const [counts, setCounts] = React.useState({ words: 0, chars: 0 });
   React.useEffect(() => {
     if (!editor) return;
+    let timer: number | null = null;
     const update = () => {
-      const text = editor.state.doc.textContent;
-      const words = text.trim() ? text.trim().split(/\s+/).length : 0;
-      setCounts({ words, chars: text.length });
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const text = editor.state.doc.textContent;
+        const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+        setCounts({ words, chars: text.length });
+      }, 500);
     };
     editor.on('update', update);
     update();
-    return () => editor.off('update', update);
+    return () => { editor.off('update', update); if (timer !== null) window.clearTimeout(timer); };
   }, [editor]);
 
   return (
@@ -988,7 +985,7 @@ const WordCount = ({ editor }: { editor: any }) => {
   );
 };
 
-export function RichTextEditor({ initialContent, onChange, initialScrollTop, onScrollTopChange, onHeadingsChange, isTocOpen = false, onTocToggle, tocHeadings = [], onScrollToHeading }: RichTextEditorProps) {
+export function RichTextEditor({ initialContent, onChange, onEditorReady, initialScrollTop, onScrollTopChange, onHeadingsChange, isTocOpen = false, onTocToggle, tocHeadings = [], onScrollToHeading }: RichTextEditorProps) {
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
   const [findMode, setFindMode] = useState<null | 'find' | 'replace'>(null);
   const [findFocusTrigger, setFindFocusTrigger] = useState(0);
@@ -1007,6 +1004,9 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
   const tocHeadingsRef = useRef(tocHeadings);
   useEffect(() => { tocHeadingsRef.current = tocHeadings; }, [tocHeadings]);
   const tocNavRef = useRef<HTMLElement>(null);
+  const headingElsCacheRef = useRef<HTMLElement[] | null>(null);
+  useEffect(() => { headingElsCacheRef.current = null; }, [tocHeadings]);
+  const tocScrollRafRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!activeHeadingId || !tocNavRef.current) return;
@@ -1026,34 +1026,43 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
     const container = scrollContainerRef.current;
     if (!container) return;
     const handleScroll = () => {
-      const containerTop = container.getBoundingClientRect().top;
-      const headingEls = Array.from(
-        container.querySelectorAll<HTMLElement>(
-          '.tiptap-editor h1,.tiptap-editor h2,.tiptap-editor h3,.tiptap-editor h4,.tiptap-editor h5'
-        )
-      );
-      let activeEl: HTMLElement | null = null;
-      for (const el of headingEls) {
-        if (el.getBoundingClientRect().top - containerTop <= 64) {
-          activeEl = el;
-        } else {
-          break;
+      if (tocScrollRafRef.current !== null) return;
+      tocScrollRafRef.current = requestAnimationFrame(() => {
+        tocScrollRafRef.current = null;
+        if (!headingElsCacheRef.current) {
+          headingElsCacheRef.current = Array.from(
+            container.querySelectorAll<HTMLElement>(
+              '.tiptap-editor h1,.tiptap-editor h2,.tiptap-editor h3,.tiptap-editor h4,.tiptap-editor h5'
+            )
+          );
         }
-      }
-      if (activeEl) {
-        const text = activeEl.textContent?.trim() ?? '';
-        const level = parseInt(activeEl.tagName[1]);
-        const match = tocHeadingsRef.current.find(
-          h => h.level === level && h.text.trim() === text
-        );
-        setActiveHeadingId(match?.id ?? null);
-      } else {
-        setActiveHeadingId(null);
-      }
+        const containerTop = container.getBoundingClientRect().top;
+        let activeEl: HTMLElement | null = null;
+        for (const el of headingElsCacheRef.current) {
+          if (el.getBoundingClientRect().top - containerTop <= 64) {
+            activeEl = el;
+          } else {
+            break;
+          }
+        }
+        if (activeEl) {
+          const text = activeEl.textContent?.trim() ?? '';
+          const level = parseInt(activeEl.tagName[1]);
+          const match = tocHeadingsRef.current.find(
+            h => h.level === level && h.text.trim() === text
+          );
+          setActiveHeadingId(match?.id ?? null);
+        } else {
+          setActiveHeadingId(null);
+        }
+      });
     };
     container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, []); // attach once, reads tocHeadingsRef
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (tocScrollRafRef.current !== null) cancelAnimationFrame(tocScrollRafRef.current);
+    };
+  }, []); // attach once, reads tocHeadingsRef via refs
 
   const insertImageFiles = useCallback(async (inputFiles: FileList | File[]) => {
     const activeEditor = editorRef.current;
@@ -1129,10 +1138,11 @@ export function RichTextEditor({ initialContent, onChange, initialScrollTop, onS
     content: initialContent,
     onCreate: ({ editor }) => {
       editorRef.current = editor;
+      onEditorReady?.(() => editorRef.current!.getHTML());
       onHeadingsChangeRef.current?.(extractHeadings(editor));
     },
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      onChange?.(editor.getHTML());
       if (headingsDebounceRef.current) clearTimeout(headingsDebounceRef.current);
       headingsDebounceRef.current = setTimeout(() => {
         onHeadingsChangeRef.current?.(extractHeadings(editor));

@@ -63,6 +63,14 @@ describe('processingReducer', () => {
     expect(state.files[2].status).toBe('queued');
   });
 
+  it('bridge/update_progress updates activeProgress without mutating files identity', () => {
+    const file = makeFile({ id: 'x', status: 'processing' });
+    const s0 = processingReducer(initialProcessingState, { type: 'queue/add', files: [file] });
+    const s1 = processingReducer(s0, { type: 'bridge/update_progress', value: 0.55 });
+    expect(s1.activeProgress).toBe(55);
+    expect(s1.files).toBe(s0.files); // same array reference
+  });
+
   it('resets processing files to queued on cancelled batch completion', () => {
     const file = makeFile({ status: 'processing', progress: 50, phase: 1 });
     const state = processingReducer(

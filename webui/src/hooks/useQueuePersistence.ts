@@ -1,14 +1,17 @@
-import { type Dispatch, useEffect, useMemo, useRef } from 'react';
+import { type Dispatch, useEffect, useRef } from 'react';
 import type { FileItem, ProcessingAction } from '../appState';
 
 const QUEUE_STORAGE_KEY = 'el-sbobinator.queue.v1';
 
 export function useQueuePersistence(
   files: FileItem[],
+  structuralVersion: number,
   dispatch: Dispatch<ProcessingAction>,
   appendConsole: (msg: string) => void,
 ) {
   const hasRestoredQueueRef = useRef(false);
+  const filesRef = useRef(files);
+  filesRef.current = files;
 
   useEffect(() => {
     if (hasRestoredQueueRef.current) return;
@@ -39,18 +42,14 @@ export function useQueuePersistence(
     }
   }, [appendConsole]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const queueStructuralKey = useMemo(() =>
-    files.map(f => `${f.id}|${f.status}|${f.outputHtml ?? ''}|${f.outputDir ?? ''}|${f.path ?? ''}`).join(','),
-    [files]
-  );
-
   useEffect(() => {
     try {
-      if (files.length === 0) {
+      const currentFiles = filesRef.current;
+      if (currentFiles.length === 0) {
         window.localStorage.removeItem(QUEUE_STORAGE_KEY);
         return;
       }
-      const persisted = files.map(file => ({
+      const persisted = currentFiles.map(file => ({
         id: file.id,
         name: file.name,
         size: file.size,
@@ -64,5 +63,5 @@ export function useQueuePersistence(
     } catch (error) {
       console.error('Queue persist failed:', error);
     }
-  }, [queueStructuralKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [structuralVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 }
