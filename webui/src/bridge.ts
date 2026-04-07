@@ -55,7 +55,7 @@ export interface PywebviewApi {
   open_file?: (path: string) => Promise<{ ok: boolean; error?: string }>;
   open_url?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   read_html_content?: (path: string) => Promise<{ ok: boolean; content?: string; error?: string }>;
-  save_html_content?: (path: string, content: string) => Promise<{ ok: boolean; error?: string }>;
+  save_html_content?: (path: string, content: string, generation?: number) => Promise<{ ok: boolean; error?: string }>;
   stream_media_file?: (path: string) => Promise<{ ok: boolean; url?: string; error?: string }>;
   export_docx?: (filename: string, docxHtml: string) => Promise<{ ok: boolean; error?: string }>;
   show_notification?: (title: string, message: string) => Promise<void>;

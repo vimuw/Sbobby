@@ -86,7 +86,6 @@ export default function App() {
 
   // --- UI state ---
   const [isDragging, setIsDragging] = useState(false);
-  const [clearAllConfirm, setClearAllConfirm] = useState(false);
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
   const [showEmptyState, setShowEmptyState] = useState(() => files.length === 0);
 
@@ -204,7 +203,6 @@ export default function App() {
   const removeFile = useCallback((id: string) => {
     if (appState !== 'idle') return;
     dispatch({ type: 'queue/remove', id });
-    setClearAllConfirm(false);
   }, [appState]);
 
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -218,16 +216,6 @@ export default function App() {
     dispatch({ type: 'queue/reorder', fromIndex, toIndex });
   }, [appState, files]);
 
-  const clearAllFiles = () => {
-    if (appState !== 'idle') return;
-    dispatch({ type: 'queue/clear_all' });
-    setClearAllConfirm(false);
-  };
-
-  const clearCompletedFiles = () => {
-    if (appState !== 'idle') return;
-    dispatch({ type: 'queue/clear_completed' });
-  };
 
   const resolveQueuedFilesForProcessing = useCallback(async () => {
     const api = window.pywebview?.api;
@@ -551,34 +539,11 @@ export default function App() {
                 </span>
               )}
             </div>
-            <div className="flex flex-col items-end gap-2">
-              <AnimatePresence mode="wait">
-                {files.length > 0 && appState === 'idle' && !clearAllConfirm && (
-                  <motion.div key="clear-btn" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
-                    {errorCount > 0 && (
-                      <button onClick={() => dispatch({ type: 'queue/retry_failed' })} className="premium-button-secondary compact-button" style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)' }}>
-                        Riprova falliti ({errorCount})
-                      </button>
-                    )}
-                    {doneCount > 0 && (
-                      <button onClick={clearCompletedFiles} className="premium-button-secondary compact-button">
-                        Rimuovi completati
-                      </button>
-                    )}
-                    <button onClick={() => setClearAllConfirm(true)} className="premium-button-secondary compact-button" style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}>
-                      Svuota tutto
-                    </button>
-                  </motion.div>
-                )}
-                {files.length > 0 && appState === 'idle' && clearAllConfirm && (
-                  <motion.div key="clear-confirm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
-                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Sei sicuro?</span>
-                    <button onClick={clearAllFiles} className="premium-button-secondary compact-button" style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}>Sì, svuota</button>
-                    <button onClick={() => setClearAllConfirm(false)} className="premium-button-secondary compact-button">Annulla</button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            {errorCount > 0 && appState === 'idle' && (
+              <button onClick={() => dispatch({ type: 'queue/retry_failed' })} className="premium-button-secondary compact-button" style={{ color: 'var(--warning-text)', borderColor: 'var(--warning-ring)', background: 'var(--warning-subtle)' }}>
+                Riprova falliti ({errorCount})
+              </button>
+            )}
           </div>
 
           <DndContext

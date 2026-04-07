@@ -35,6 +35,7 @@ export function PreviewModal({
   const isDirtyRef = useRef(false);
   const lastPersistedRef = useRef(previewContent ?? '');
   const autosaveTimerRef = useRef<number | null>(null);
+  const autosaveGenRef = useRef(0);
   const htmlPathRef = useRef(htmlPath);
   useEffect(() => { htmlPathRef.current = htmlPath; }, [htmlPath]);
 
@@ -52,7 +53,7 @@ export function PreviewModal({
       const path = htmlPathRef.current;
       const snap = getHtmlRef.current?.() ?? '';
       if (path && snap && snap !== lastPersistedRef.current) {
-        void window.pywebview?.api?.save_html_content(path, snap);
+        void window.pywebview?.api?.save_html_content(path, snap, ++autosaveGenRef.current);
       }
     };
   }, []); // empty deps: runs cleanup only on unmount
@@ -79,7 +80,7 @@ export function PreviewModal({
       if (path && snap && snap !== lastPersistedRef.current && window.pywebview?.api?.save_html_content) {
         setAutosaveStatus('saving');
         try {
-          const res = await window.pywebview.api.save_html_content(path, snap);
+          const res = await window.pywebview.api.save_html_content(path, snap, ++autosaveGenRef.current);
           if (res.ok) { lastPersistedRef.current = snap; isDirtyRef.current = false; }
           else { setAutosaveStatus('error'); return; }
         } catch { setAutosaveStatus('error'); return; }
@@ -100,16 +101,18 @@ export function PreviewModal({
     isDirtyRef.current = true;
     if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
     const savedForPath = htmlPath;
+    const gen = ++autosaveGenRef.current;
     autosaveTimerRef.current = window.setTimeout(async () => {
       if (!isDirtyRef.current || !window.pywebview?.api?.save_html_content) return;
       const snap = getHtmlRef.current?.() ?? '';
       if (snap === lastPersistedRef.current) { isDirtyRef.current = false; return; }
       setAutosaveStatus('saving');
-      const res = await window.pywebview.api.save_html_content(savedForPath, snap);
+      const res = await window.pywebview.api.save_html_content(savedForPath, snap, gen);
       if (htmlPathRef.current !== savedForPath) return;
+      if (gen !== autosaveGenRef.current) return;
       if (res.ok) { lastPersistedRef.current = snap; isDirtyRef.current = false; setAutosaveStatus('saved'); }
       else setAutosaveStatus('error');
-    }, 700);
+    }, 300);
   }, [htmlPath, previewContent]);
 
   useEffect(() => {

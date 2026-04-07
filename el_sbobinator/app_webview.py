@@ -685,7 +685,7 @@ class ElSbobinatorApi:
         from el_sbobinator.shared import SESSION_ROOT
         return SESSION_ROOT
 
-    def save_html_content(self, path: str, content: str) -> dict:
+    def save_html_content(self, path: str, content: str, generation: int | None = None) -> dict:
         """Aggiorna solo il contenuto del <body>, preservando head, stile e CSP dell'export originale."""
         if not isinstance(path, str) or not path.lower().endswith(".html"):
             return {"ok": False, "error": "Path non valido: deve essere un file .html."}
@@ -701,7 +701,8 @@ class ElSbobinatorApi:
             return {"ok": False, "error": "File non trovato."}
         try:
             shell = self._html_shell_cache.get(real_path)
-            save_html_body_content(real_path, content, shell=shell)
+            gen = int(generation) if generation is not None else None
+            save_html_body_content(real_path, content, shell=shell, generation=gen)
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -1064,22 +1065,6 @@ def main():
 
     def _on_closing():
         LocalMediaServer.shutdown_all()
-        # Flush any unsaved editor HTML before the window is destroyed.
-        # evaluate_js is synchronous here; save_html_content is a direct file write.
-        try:
-            window_ref = api._window
-            if window_ref is not None:
-                dirty = window_ref.evaluate_js(
-                    "typeof window.__elSbobinatorGetDirtyEditorContent === 'function'"
-                    " ? window.__elSbobinatorGetDirtyEditorContent() : null"
-                )
-                if dirty and isinstance(dirty, dict):
-                    _path = dirty.get("path", "")
-                    _content = dirty.get("content", "")
-                    if _path:
-                        api.save_html_content(_path, _content)
-        except Exception:
-            pass
 
     window.events.closing += _on_closing
 

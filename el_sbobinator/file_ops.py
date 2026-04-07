@@ -6,8 +6,21 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 
 from el_sbobinator.html_export import sanitize_html_basic
+
+
+_html_write_locks: dict[str, threading.Lock] = {}
+_html_last_gen: dict[str, int] = {}
+_html_write_locks_meta = threading.Lock()
+
+
+def _html_write_lock(path: str) -> threading.Lock:
+    with _html_write_locks_meta:
+        if path not in _html_write_locks:
+            _html_write_locks[path] = threading.Lock()
+        return _html_write_locks[path]
 
 
 _ALLOWED_OPEN_EXTENSIONS: frozenset[str] = frozenset({
@@ -79,7 +92,10 @@ def save_html_body_content(
     path: str,
     content: str,
     shell: tuple[str, str] | None = None,
-) -> None:
+    generation: int | None = None,
+) -> bool:
+    """Write body content to *path*. Returns False (without writing) if *generation*
+    is provided and an equal-or-newer generation has already been committed."""
     if not path or not os.path.exists(path):
         raise FileNotFoundError("File originale non trovato.")
 
@@ -106,9 +122,15 @@ def save_html_body_content(
         )
 
     tmp_path = path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as handle:
-        handle.write(updated_html)
-    os.replace(tmp_path, path)
+    with _html_write_lock(path):
+        if generation is not None and generation <= _html_last_gen.get(path, 0):
+            return False
+        with open(tmp_path, "w", encoding="utf-8") as handle:
+            handle.write(updated_html)
+        os.replace(tmp_path, path)
+        if generation is not None:
+            _html_last_gen[path] = generation
+    return True
 
 
 def export_doc_html(path: str, doc_html: str) -> str:

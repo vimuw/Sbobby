@@ -5,7 +5,7 @@
 :root {
   --font-display: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
 
-  --bg-base: #d8dce5;
+  --bg-base: #e8ecf4;
   --bg-surface: rgba(255, 255, 255, 0.97);
   --bg-panel: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(248, 250, 252, 0.97));
   --bg-elevated: #ffffff;
