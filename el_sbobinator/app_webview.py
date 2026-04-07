@@ -1008,16 +1008,22 @@ def main():
                 stored_mtime = _f.read().strip()
         if stored_mtime != current_mtime:
             default_profile = os.path.join(storage_dir, "EBWebView", "Default")
+            _cleared = False
+            _failed = False
             for cache_name in ("Cache", "Code Cache"):
                 cache_dir = os.path.join(default_profile, cache_name)
                 if os.path.exists(cache_dir):
                     try:
                         shutil.rmtree(cache_dir)
-                        print("[*] Cache WebView2 svuotata (nuova build rilevata).")
+                        _cleared = True
                     except Exception as _e:
-                        print(f"[!] Impossibile svuotare cache WebView2: {_e}")
-            with open(mtime_file, "w", encoding="utf-8") as _f:
-                _f.write(current_mtime)
+                        _failed = True
+                        print(f"[!] Impossibile svuotare cache WebView2 ({cache_name}): {_e}")
+            if _cleared:
+                print("[*] Cache WebView2 svuotata (nuova build rilevata).")
+            if not _failed:
+                with open(mtime_file, "w", encoding="utf-8") as _f:
+                    _f.write(current_mtime)
     except Exception:
         pass
 
