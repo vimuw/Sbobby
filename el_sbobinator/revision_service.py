@@ -24,15 +24,25 @@ from el_sbobinator.pipeline_session import record_step_metric
 from el_sbobinator.session_store import _update_session
 from el_sbobinator.shared import PROMPT_REVISIONE_CONFINE, _atomic_write_text
 
+BOUNDARY_CHAR_BUDGET = 3000
+
 
 def build_macro_blocks(text: str, macro_char_limit: int) -> list[str]:
     paragraphs = text.split("\n\n")
     blocks: list[str] = []
     current_parts: list[str] = []
     current_len = 0
+    _h_re = re.compile(r"^\s*#{1,3}\s+\S")
     for paragraph in paragraphs:
         seg = paragraph + "\n\n"
+        is_h = bool(_h_re.match(paragraph))
+        past_soft = current_len > macro_char_limit * 0.70
+        has_content = current_len > 500
         if current_len + len(paragraph) > macro_char_limit and current_parts:
+            blocks.append("".join(current_parts))
+            current_parts = [seg]
+            current_len = len(seg)
+        elif is_h and past_soft and has_content and current_parts:
             blocks.append("".join(current_parts))
             current_parts = [seg]
             current_len = len(seg)
@@ -185,6 +195,24 @@ def process_macro_revision_phase(
     return client, revised_text
 
 
+def _paragraphs_within_budget(parts: list[str], budget: int, *, from_end: bool) -> list[str]:
+    """Return paragraphs from parts that fit within a character budget.
+
+    If from_end=True, collects from the end of the list (tail window).
+    If from_end=False, collects from the start (head window).
+    Always returns paragraphs in their original order.
+    """
+    selected: list[str] = []
+    total = 0
+    source = reversed(parts) if from_end else iter(parts)
+    for p in source:
+        if total + len(p) > budget and selected:
+            break
+        selected.append(p)
+        total += len(p)
+    return list(reversed(selected)) if from_end else selected
+
+
 def process_boundary_revision_phase(  # noqa: C901
     *,
     client,
@@ -251,21 +279,30 @@ def process_boundary_revision_phase(  # noqa: C901
             return False
         if tail == head:
             return True
-        return head in tail and (len(head) / max(1, len(tail))) >= 0.92
+        if head in tail and (len(head) / max(1, len(tail))) >= 0.92:
+            return True
+        return tail in head and (len(tail) / max(1, len(head))) >= 0.92
 
     def max_similarity(tail_list: list[str], head_list: list[str]) -> float:
         best = 0.0
-        for tail_p in tail_list:
-            tail = normalize_paragraph(tail_p)
-            if len(tail) < 120:
-                continue
-            for head_p in head_list:
-                if is_heading(head_p):
+        max_window = min(len(tail_list), len(head_list))
+        for length in range(1, max_window + 1):
+            tail_window = tail_list[-length:]
+            head_window = head_list[:length]
+            weighted_sum = 0.0
+            total_weight = 0.0
+            for tp, hp in zip(tail_window, head_window):
+                if is_heading(tp) or is_heading(hp):
                     continue
-                head = normalize_paragraph(head_p)
-                if len(head) < 120:
+                t = normalize_paragraph(tp)
+                h = normalize_paragraph(hp)
+                if len(t) < 120 or len(h) < 120:
                     continue
-                best = max(best, difflib.SequenceMatcher(a=tail, b=head).ratio())
+                weight = float(len(t) + len(h))
+                weighted_sum += difflib.SequenceMatcher(a=t, b=h).ratio() * weight
+                total_weight += weight
+            if total_weight > 0.0:
+                best = max(best, weighted_sum / total_weight)
         return best
 
     for pair_idx in range(next_pair, pairs_total + 1):
@@ -303,10 +340,10 @@ def process_boundary_revision_phase(  # noqa: C901
             record_step_metric(session, "boundary", _bsecs, done=pair_idx, total=pairs_total)
             continue
 
-        tail_count = min(6, len(left_parts))
-        head_count = min(6, len(right_parts))
-        tail_list = left_parts[-tail_count:]
-        head_list = right_parts[:head_count]
+        tail_list = _paragraphs_within_budget(left_parts, BOUNDARY_CHAR_BUDGET, from_end=True)
+        head_list = _paragraphs_within_budget(right_parts, BOUNDARY_CHAR_BUDGET, from_end=False)
+        tail_count = len(tail_list)
+        head_count = len(head_list)
 
         overlap = 0
         max_try = min(len(tail_list), len(head_list))
@@ -407,5 +444,16 @@ def process_boundary_revision_phase(  # noqa: C901
             return client
         except Exception as exc:
             print(f"      [Errore confine {pair_idx} dopo tutti i tentativi: {exc}]")
+            log.error(
+                "Boundary revision failed for pair %d/%d: %s",
+                pair_idx, pairs_total, exc,
+                extra={"stage": "boundary"},
+            )
+            _update_session(session, {
+                "boundary": {**session.get("boundary", {}), "next_pair": int(pair_idx)},
+                "last_error": "boundary_ai_failed",
+            })
+            save_session()
+            return client
 
     return client

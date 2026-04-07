@@ -373,7 +373,9 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
                 request_fallback_key=request_fallback_key,
                 logger=logger,
             )
-            if runtime.cancelled() or session.get("last_error") == "quota_daily_limit_boundary":
+            if runtime.cancelled() or session.get("last_error") in (
+                "quota_daily_limit_boundary", "boundary_ai_failed"
+            ):
                 return
             _update_session(session, {"stage": "done", "last_error": None})
             save_session()
