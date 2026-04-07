@@ -333,7 +333,7 @@ def process_phase1_transcription(  # noqa: C901
                     record_step_metric(session, "chunks", _step_secs, done=chunk_idx, total=total_chunks)
 
             except QuotaDailyLimitError:
-                session["last_error"] = "rate_limit_phase1"
+                session["last_error"] = "quota_daily_limit_phase1"
                 save_session()
                 print("[*] Interruzione: progressi salvati. Potrai riprendere piu' tardi.")
                 return client, None, prev_memory

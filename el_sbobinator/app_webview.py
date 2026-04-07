@@ -972,7 +972,7 @@ def build_missing_webview2_html() -> str:
 """
 
 
-def main():
+def main():  # noqa: C901
     api = ElSbobinatorApi()
 
     # Intercept stdout/stderr to forward to React console

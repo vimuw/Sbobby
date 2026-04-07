@@ -79,7 +79,7 @@ def try_rotate_key(current_client, fallback_keys: list[str], model_name: str, lo
             new_client = genai.Client(api_key=key)
             new_client.models.get(model=model_name)
             log.info("Chiave di fallback valida, rotazione completata.", extra={"stage": "key_rotation"})
-            print(f"   ✅ Chiave di riserva valida! ({len(fallback_keys)} rimanenti)")
+            print(f"   [OK] Chiave di riserva valida! ({len(fallback_keys)} rimanenti)")
             return new_client, True, key
         except Exception as err:
             log.warning("Chiave di fallback non valida.", extra={"stage": "key_rotation"})
@@ -202,8 +202,10 @@ def retry_with_quota(
                         return client, None
                     attempts += 1
                     continue
+                elif not is_daily:
+                    raise
 
-                print("\n⛔ LIMITE GIORNALIERO RAGGIUNTO!")
+                print("\n[!!] LIMITE GIORNALIERO RAGGIUNTO!")
                 new_c, rotated, rotated_key = try_rotate_key(client, fallback_keys, model_name, logger=log)
                 if rotated:
                     client = new_c
@@ -223,7 +225,7 @@ def retry_with_quota(
                         if on_key_rotated is not None:
                             on_key_rotated(client)
                         attempts = 0
-                        print("   ✅ Nuova API Key valida! Ripresa automatica...")
+                        print("   [OK] Nuova API Key valida! Ripresa automatica...")
                         continue
                     except Exception as err:
                         print(f"   [!] Chiave non valida fornita: {err}")
