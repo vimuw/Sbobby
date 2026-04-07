@@ -162,9 +162,15 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
                     
                     regenerate_mode = "completed" if stage == "done" else "resume"
                     if runtime.ask_regenerate(os.path.basename(input_path), on_answer, regenerate_mode):
-                        if event.wait(timeout=_REGENERATE_DIALOG_TIMEOUT_SECONDS):
-                            return outcome["rigenera"]
-                        return False  # timeout fallback: don't regenerate
+                        deadline = time.monotonic() + _REGENERATE_DIALOG_TIMEOUT_SECONDS
+                        while not event.is_set():
+                            if runtime.cancelled():
+                                return False
+                            remaining = deadline - time.monotonic()
+                            if remaining <= 0:
+                                return False  # timeout fallback: don't regenerate
+                            event.wait(min(0.2, remaining))
+                        return outcome["rigenera"]
 
                 ans = runtime.ask_confirmation(
                     "File gia' completato",
@@ -180,6 +186,9 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
 
             _is_regen = ask_should_regenerate()
             print(f"[*] Risposta Rigenerare dal JS: {_is_regen}")
+            if _is_regen is None:
+                runtime.set_run_result("cancelled", "Prompt di ripresa chiuso.")
+                return
             if _is_regen:
                 print(f"[*] L'utente ha scelto di rigenerare il file {os.path.basename(input_path)}. Pulizia sessione precedente...")
                 reset_for_regeneration(session_ctx)
@@ -460,7 +469,7 @@ def _esegui_sbobinatura_impl(input_path, api_key_value, app_instance, session_di
     finally:
         runtime.set_effective_api_key(extract_client_api_key(locals().get("client")) or getattr(app_instance, "effective_api_key", None))
         runtime.cleanup_temp_files()
-        if runtime.cancelled():
+        if runtime.cancelled() or getattr(app_instance, "last_run_status", None) == "cancelled":
             runtime.phase("Fase: annullato")
             runtime.set_run_result("cancelled", getattr(app_instance, "last_run_error", None) or "cancelled")
         else:

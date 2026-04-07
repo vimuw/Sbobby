@@ -299,11 +299,12 @@ function CompletedFileCardInner({ file, appState, isNewest, onRemove, onPreview,
           {file.outputHtml && (
             <button
               onClick={(e) => { e.stopPropagation(); onPreview(file.outputHtml!, file.name, file.path, file.id); }}
-              className="premium-button-secondary compact-button text-xs flex items-center gap-1.5"
-              style={{ color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+              className="icon-button compact-icon-button"
+              style={{ color: 'var(--text-muted)' }}
+              title="Apri editor"
+              aria-label="Apri editor"
             >
               <Eye className="w-3.5 h-3.5" />
-              Apri editor
             </button>
           )}
           <div className="flex items-center gap-1">

@@ -56,12 +56,13 @@ from el_sbobinator.logging_utils import configure_logging, get_logger
 from el_sbobinator.media_server import LocalMediaServer
 from el_sbobinator.shared import (
     DEFAULT_MODEL,
+    cleanup_orphan_temp_chunks,
+    cleanup_orphan_sessions,
     get_desktop_dir,
+    get_session_storage_info,
     load_config,
     save_config,
-    cleanup_orphan_temp_chunks,
-    get_session_storage_info,
-    cleanup_orphan_sessions,
+    SESSION_CLEANUP_MAX_AGE_DAYS,
 )
 
 # ---------------------------------------------------------------------------
@@ -309,10 +310,12 @@ class PipelineAdapter:
             self._new_key_callback = callback
         self._emit_js("askNewKey", {}, batched=False)
 
-    def answer_regenerate(self, regenerate: bool):
+    def answer_regenerate(self, regenerate: bool | None):
         with self._lock:
             cb = self._regenerate_callback
             self._regenerate_callback = None
+        if regenerate is None:
+            self.cancel_event.set()
         if cb:
             cb({"regenerate": regenerate})
 
@@ -322,6 +325,17 @@ class PipelineAdapter:
             self._new_key_callback = None
         if cb:
             cb({"key": key})
+
+    def cancel_pending_prompts(self):
+        with self._lock:
+            regenerate_cb = self._regenerate_callback
+            new_key_cb = self._new_key_callback
+            self._regenerate_callback = None
+            self._new_key_callback = None
+        if regenerate_cb:
+            regenerate_cb({"regenerate": False})
+        if new_key_cb:
+            new_key_cb({"key": ""})
 
     # --- Internal helper ---
 
@@ -381,7 +395,7 @@ class ElSbobinatorApi:
         except Exception as e:
             return {"ok": False, "error": str(e), "total_bytes": 0, "total_sessions": 0}
 
-    def cleanup_old_sessions(self, max_age_days: int = 30) -> dict:
+    def cleanup_old_sessions(self, max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS) -> dict:
         """Delete session folders older than max_age_days days."""
         try:
             result = cleanup_orphan_sessions(max(1, int(max_age_days)))
@@ -612,7 +626,7 @@ class ElSbobinatorApi:
         self._processing_thread.start()
         return {"ok": True}
 
-    def answer_regenerate(self, regenerate: bool) -> dict:
+    def answer_regenerate(self, regenerate: bool | None) -> dict:
         """Called by React when user clicks Use Saved or Regenerate."""
         self._adapter.answer_regenerate(regenerate)
         return {"ok": True}
@@ -625,6 +639,16 @@ class ElSbobinatorApi:
     def stop_processing(self) -> dict:
         """Request cancellation."""
         self._cancel_event.set()
+        self._adapter.cancel_pending_prompts()
+        thread = self._processing_thread
+        if not self._adapter.is_running and (thread is None or not thread.is_alive()):
+            payload: ProcessDonePayload = {
+                "cancelled": True,
+                "completed": 0,
+                "failed": 0,
+                "total": 0,
+            }
+            self._adapter.emit("processDone", payload, batched=False)
         return {"ok": True}
 
     def validate_environment(self, api_key: str | None = None, check_api_key: bool = False) -> dict:

@@ -33,6 +33,7 @@ import { CompletedFileCard, QueueFileCard } from './components/QueueFileCard';
 import { RegenerateModal } from './components/modals/RegenerateModal';
 import { NewKeyModal } from './components/modals/NewKeyModal';
 import { SettingsModal } from './components/modals/SettingsModal';
+import { ConfirmActionModal } from './components/modals/ConfirmActionModal';
 import { loadEditorSession, saveEditorSession, type EditorSession } from './editorSessions';
 import { normalizePreviewHtmlContent } from './previewHtml';
 const PreviewModal = React.lazy(() => import('./components/modals/PreviewModal').then(m => ({ default: m.PreviewModal })));
@@ -71,6 +72,10 @@ const initialPreviewState: PreviewState = {
 };
 
 type UiMode = 'setup' | 'ready-empty' | 'ready-with-files' | 'processing' | 'canceling';
+type ConfirmActionState =
+  | { type: 'stop-processing' }
+  | { type: 'remove-file'; fileId: string; fileName: string }
+  | { type: 'clear-completed'; count: number };
 
 export default function App() {
   const [{ files, structuralVersion, appState, currentPhase, activeProgress, currentFileIndex, currentBatchTotal, workTotals, workDone, stepMetrics }, dispatch] = useReducer(processingReducer, initialProcessingState);
@@ -85,6 +90,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [regeneratePrompt, setRegeneratePrompt] = useState<{ filename: string; mode?: 'completed' | 'resume' } | null>(null);
   const [askNewKeyPrompt, setAskNewKeyPrompt] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<ConfirmActionState | null>(null);
 
   // --- Preview state ---
   const [preview, setPreview] = useState<PreviewState>(initialPreviewState);
@@ -159,7 +165,7 @@ export default function App() {
   useBridgeCallbacks({ dispatch, appendConsole, filesRef, appStateRef, enqueueUniqueFiles, setRegeneratePrompt, setAskNewKeyPrompt });
 
   // --- Body scroll lock ---
-  const isModalOpen = isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt;
+  const isModalOpen = isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt || confirmAction !== null;
   useBodyScrollLock(isModalOpen);
 
   // --- Handlers ---
@@ -206,9 +212,11 @@ export default function App() {
     }
   };
 
-  const removeFile = useCallback((id: string) => {
+  const requestRemoveFile = useCallback((id: string) => {
     if (appState !== 'idle') return;
-    dispatch({ type: 'queue/remove', id });
+    const targetFile = filesRef.current.find(file => file.id === id);
+    if (!targetFile) return;
+    setConfirmAction({ type: 'remove-file', fileId: id, fileName: targetFile.name });
   }, [appState]);
 
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -276,13 +284,34 @@ export default function App() {
     }
   };
 
-  const stopProcessing = async () => {
+  const confirmStopProcessing = async () => {
+    setConfirmAction(null);
     dispatch({ type: 'app/set_status', status: 'canceling' });
     appendConsole('[!] Annullamento in corso, attendere prego...');
     if (window.pywebview?.api) await window.pywebview.api.stop_processing?.();
   };
 
-  const handleRegenerateAnswer = async (ans: boolean) => {
+  const confirmClearCompleted = useCallback(() => {
+    setConfirmAction(null);
+    dispatch({ type: 'queue/clear_completed' });
+    setCompletedSearch('');
+  }, []);
+
+  const handleConfirmAction = useCallback(() => {
+    if (!confirmAction) return;
+    if (confirmAction.type === 'stop-processing') {
+      void confirmStopProcessing();
+      return;
+    }
+    if (confirmAction.type === 'remove-file') {
+      dispatch({ type: 'queue/remove', id: confirmAction.fileId });
+      setConfirmAction(null);
+      return;
+    }
+    confirmClearCompleted();
+  }, [confirmAction, confirmClearCompleted]);
+
+  const handleRegenerateAnswer = async (ans: boolean | null) => {
     setRegeneratePrompt(null);
     try {
       if (window.pywebview?.api?.answer_regenerate) await window.pywebview.api.answer_regenerate(ans);
@@ -354,6 +383,12 @@ export default function App() {
     setPreview(initialPreviewState);
   }, []);
 
+  useEffect(() => {
+    if (appState !== 'processing' && confirmAction?.type === 'stop-processing') {
+      setConfirmAction(null);
+    }
+  }, [appState, confirmAction]);
+
   const handleAudioStateChange = useCallback(({ currentTime, playbackRate, volume }: { currentTime: number; playbackRate: number; volume: number }) => {
     currentEditorSessionRef.current = { ...currentEditorSessionRef.current, audioTime: currentTime, playbackRate, volume };
   }, []);
@@ -420,6 +455,33 @@ export default function App() {
       : doneFiles,
     [doneFiles, completedSearch],
   );
+  const confirmModalCopy = useMemo(() => {
+    if (!confirmAction) return null;
+    if (confirmAction.type === 'stop-processing') {
+      return {
+        title: 'Interrompere la sbobinatura?',
+        description: "Stai per fermare l'elaborazione in corso. Il processo verrà interrotto e il file attuale tornerà in coda. Vuoi continuare?",
+        confirmLabel: 'Conferma stop',
+        cancelLabel: 'Continua elaborazione',
+      };
+    }
+    if (confirmAction.type === 'remove-file') {
+      return {
+        title: 'Rimuovere questo elemento?',
+        description: `"${confirmAction.fileName}" verrà rimosso dalla lista. Vuoi continuare?`,
+        confirmLabel: 'Conferma rimozione',
+        cancelLabel: 'Tieni elemento',
+      };
+    }
+    return {
+      title: 'Pulire le sbobine completate?',
+      description: confirmAction.count === 1
+        ? 'La sbobina completata verrà rimossa dalla lista. Vuoi continuare?'
+        : `Le ${confirmAction.count} sbobine completate verranno rimosse dalla lista. Vuoi continuare?`,
+      confirmLabel: 'Conferma pulizia',
+      cancelLabel: 'Mantieni lista',
+    };
+  }, [confirmAction]);
 
   const sortableIds = useMemo(() => pendingFiles.map(f => f.id), [pendingFiles]);
 
@@ -613,7 +675,7 @@ export default function App() {
                       workTotals={isActive ? workTotals : EMPTY_WORK}
                       etaLabel={isActive ? etaLabel : null}
                       activeProgress={isActive ? activeProgress : undefined}
-                      onRemove={removeFile}
+                      onRemove={requestRemoveFile}
                       onPreview={openPreview}
                       onOpenFile={openFile}
                       onOpenDir={openFile}
@@ -656,7 +718,7 @@ export default function App() {
                 )}
                 {appState === 'processing' && (
                   <motion.div key="processing" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex justify-end">
-                    <button onClick={stopProcessing} className="premium-button-secondary compact-button px-5 py-2" style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--bg-elevated)' }}>
+                    <button onClick={() => setConfirmAction({ type: 'stop-processing' })} className="premium-button-secondary compact-button px-5 py-2" style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--bg-elevated)' }}>
                       <Square className="w-3.5 h-3.5 fill-current" /> Stop
                     </button>
                   </motion.div>
@@ -709,9 +771,9 @@ export default function App() {
                       />
                     </div>
                   )}
-                  {appState !== 'processing' && (
+                  {appState === 'idle' && (
                     <button
-                      onClick={() => { dispatch({ type: 'queue/clear_completed' }); setCompletedSearch(''); }}
+                      onClick={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
                       className="premium-button-secondary compact-button text-xs"
                       style={{ color: 'var(--text-muted)', borderColor: 'var(--border-default)' }}
                     >
@@ -728,7 +790,7 @@ export default function App() {
                     file={file}
                     appState={appState}
                     isNewest={file.id === doneFiles[0]?.id}
-                    onRemove={removeFile}
+                    onRemove={requestRemoveFile}
                     onPreview={openPreview}
                     onOpenFile={openFile}
                     onOpenDir={openFile}
@@ -754,9 +816,9 @@ export default function App() {
         {/* Console */}
         <div className="console-shell console-shell-subtle">
           <div className="px-5 py-3 flex items-center justify-between" style={{ background: 'var(--console-header)', borderBottom: '1px solid var(--border-subtle)' }}>
-            <h2 className="text-xs font-medium uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-faint)' }}>
-              <span className={`w-2 h-2 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`} style={appState !== 'processing' ? { background: 'var(--text-faint)' } : { background: 'var(--processing-dot)' }} />
-              Dettagli tecnici
+            <h2 className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--console-heading)' }}>
+              <span className={`w-2 h-2 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`} style={appState !== 'processing' ? { background: 'var(--console-heading)' } : { background: 'var(--processing-dot)' }} />
+              Console
             </h2>
             <div className="flex items-center gap-2">
               <button onClick={() => setIsConsoleExpanded(prev => !prev)} className="premium-button-secondary compact-button px-2.5 py-1.5 text-[11px] rounded-[13px]" style={{ borderColor: 'var(--border-default)' }}>
@@ -812,8 +874,23 @@ export default function App() {
       </footer>
 
       {/* Modals */}
-      <RegenerateModal prompt={regeneratePrompt} onAnswer={handleRegenerateAnswer} />
+      <RegenerateModal
+        prompt={regeneratePrompt}
+        onAnswer={handleRegenerateAnswer}
+        onDismiss={() => void handleRegenerateAnswer(null)}
+      />
       <NewKeyModal isOpen={askNewKeyPrompt} onClose={() => setAskNewKeyPrompt(false)} />
+      {confirmModalCopy && (
+        <ConfirmActionModal
+          isOpen={confirmAction !== null}
+          title={confirmModalCopy.title}
+          description={confirmModalCopy.description}
+          confirmLabel={confirmModalCopy.confirmLabel}
+          cancelLabel={confirmModalCopy.cancelLabel}
+          onClose={() => setConfirmAction(null)}
+          onConfirm={handleConfirmAction}
+        />
+      )}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}

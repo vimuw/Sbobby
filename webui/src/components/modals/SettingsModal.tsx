@@ -4,6 +4,8 @@ import { AlertCircle, Eye, EyeOff, HardDrive, Settings, X } from 'lucide-react';
 import type { ValidationResult } from '../../bridge';
 import { formatSize, GEMINI_KEY_PATTERN } from '../../utils';
 
+const SESSION_CLEANUP_DAYS = 14;
+
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -42,7 +44,7 @@ export function SettingsModal({
     setIsCleaningSession(true);
     setCleanupResult(null);
     try {
-      const res = await window.pywebview.api.cleanup_old_sessions(30);
+      const res = await window.pywebview.api.cleanup_old_sessions(SESSION_CLEANUP_DAYS);
       if (res?.ok) {
         setCleanupResult({ removed: res.removed ?? 0, freed_bytes: res.freed_bytes ?? 0 });
         if (window.pywebview?.api?.get_session_storage_info) {
@@ -114,7 +116,7 @@ export function SettingsModal({
               </h2>
               <button
                 onClick={onClose}
-                className="icon-button h-10 w-10 rounded-[14px]"
+                className="icon-button modal-icon-button"
                 style={{ color: 'var(--text-muted)' }}
                 aria-label="Chiudi impostazioni"
               >
@@ -128,7 +130,7 @@ export function SettingsModal({
                   <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Google Gemini API Key (Principale)</label>
                   <button
                     onClick={() => setShowApiKeys(!showApiKeys)}
-                    className="icon-button h-9 w-9"
+                    className="icon-button modal-icon-button"
                     style={{ color: 'var(--text-muted)' }}
                     title={showApiKeys ? 'Nascondi chiave' : 'Mostra chiave'}
                   >
@@ -167,7 +169,7 @@ export function SettingsModal({
                   <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>API Keys di Riserva (Fallback)</label>
                   <button
                     onClick={() => setShowApiKeys(!showApiKeys)}
-                    className="icon-button h-9 w-9"
+                    className="icon-button modal-icon-button"
                     style={{ color: 'var(--text-muted)' }}
                     title={showApiKeys ? 'Nascondi chiavi' : 'Mostra chiavi'}
                   >
@@ -209,10 +211,10 @@ export function SettingsModal({
                     <button
                       onClick={handleCleanupSessions}
                       disabled={isCleaningSession || isLoadingSessionInfo}
-                      className="premium-button-secondary compact-button px-3 py-1.5 text-[11px] rounded-[13px] disabled:opacity-50"
-                      style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+                      className="modal-action-button is-compact disabled:opacity-50"
+                      style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
                     >
-                      {isCleaningSession ? 'Pulizia…' : 'Pulisci (> 30 giorni)'}
+                      {isCleaningSession ? 'Pulizia…' : `Pulisci (> ${SESSION_CLEANUP_DAYS} giorni)`}
                     </button>
                   </div>
                   {cleanupResult !== null && (
@@ -223,7 +225,7 @@ export function SettingsModal({
                     </p>
                   )}
                   <p className="text-xs" style={{ color: 'var(--text-faint, var(--text-muted))' }}>
-                    Progressi intermedi per riprendere elaborazioni interrotte. La pulizia rimuove le sessioni non toccate da oltre 30 giorni.
+                    Progressi intermedi per riprendere elaborazioni interrotte. La pulizia rimuove le sessioni non toccate da oltre {SESSION_CLEANUP_DAYS} giorni.
                   </p>
                 </div>
               </div>
@@ -235,8 +237,8 @@ export function SettingsModal({
                   <button
                     onClick={runEnvironmentValidation}
                     disabled={isValidatingEnvironment}
-                    className="premium-button-secondary compact-button px-3 py-1.5 text-[11px] rounded-[13px]"
-                    style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)', borderColor: 'var(--border-subtle)' }}
+                    className="modal-action-button is-compact"
+                    style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}
                   >
                     {isValidatingEnvironment ? 'Verifica...' : 'Verifica ambiente'}
                   </button>
@@ -273,8 +275,7 @@ export function SettingsModal({
             <div className="px-5 py-4 shrink-0" style={{ background: 'var(--bg-elevated)', borderTop: '1px solid var(--border-subtle)' }}>
               <button
                 onClick={saveSettings}
-                className="w-full py-3 font-medium rounded-xl transition-colors"
-                style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)' }}
+                className="modal-action-button is-primary w-full"
               >
                 Salva e Chiudi
               </button>

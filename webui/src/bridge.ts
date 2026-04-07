@@ -50,7 +50,7 @@ export interface PywebviewApi {
   collect_dropped_files?: (names: string[]) => Promise<{ ok: boolean }>;
   start_processing?: (files: FileDescriptor[], apiKey: string, resumeSession: boolean) => Promise<{ ok: boolean; error?: string }>;
   stop_processing?: () => Promise<{ ok: boolean }>;
-  answer_regenerate?: (regenerate: boolean) => Promise<{ ok: boolean }>;
+  answer_regenerate?: (regenerate: boolean | null) => Promise<{ ok: boolean }>;
   answer_new_key?: (key: string) => Promise<{ ok: boolean }>;
   open_file?: (path: string) => Promise<{ ok: boolean; error?: string }>;
   open_url?: (url: string) => Promise<{ ok: boolean; error?: string }>;

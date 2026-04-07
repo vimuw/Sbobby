@@ -4,9 +4,10 @@ import { AlertCircle, X } from 'lucide-react';
 interface RegenerateModalProps {
   prompt: { filename: string; mode?: 'completed' | 'resume' } | null;
   onAnswer: (yes: boolean) => void;
+  onDismiss: () => void;
 }
 
-export function RegenerateModal({ prompt, onAnswer }: RegenerateModalProps) {
+export function RegenerateModal({ prompt, onAnswer, onDismiss }: RegenerateModalProps) {
   return (
     <AnimatePresence>
       {prompt && (
@@ -15,7 +16,7 @@ export function RegenerateModal({ prompt, onAnswer }: RegenerateModalProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => onAnswer(false)}
+            onClick={onDismiss}
             className="absolute inset-0"
             style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(10px)' }}
           />
@@ -33,8 +34,8 @@ export function RegenerateModal({ prompt, onAnswer }: RegenerateModalProps) {
                 </h2>
               </div>
               <button
-                onClick={() => onAnswer(false)}
-                className="icon-button h-10 w-10 rounded-[14px]"
+                onClick={onDismiss}
+                className="icon-button modal-icon-button"
                 style={{ color: 'var(--text-muted)' }}
                 aria-label="Chiudi finestra"
               >
@@ -54,10 +55,10 @@ export function RegenerateModal({ prompt, onAnswer }: RegenerateModalProps) {
               </p>
             </div>
             <div className="px-5 py-4 flex gap-3 shrink-0" style={{ background: 'var(--bg-elevated)', borderTop: '1px solid var(--border-subtle)' }}>
-              <button onClick={() => onAnswer(false)} className="premium-button-secondary flex-1 justify-center">
+              <button onClick={() => onAnswer(false)} className="modal-action-button flex-1">
                 {prompt.mode === 'completed' ? 'Usa versione pronta' : 'Riprendi da dove eri rimasto'}
               </button>
-              <button onClick={() => onAnswer(true)} className="premium-button flex-1 justify-center">
+              <button onClick={() => onAnswer(true)} className="modal-action-button is-danger flex-1">
                 {prompt.mode === 'completed' ? 'Rigenera da zero' : 'Ricomincia da zero'}
               </button>
             </div>

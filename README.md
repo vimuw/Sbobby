@@ -94,7 +94,7 @@ El Sbobinator 🤠 salva automaticamente i progressi mentre lavora e le modifich
 Se chiudi l'app per sbaglio, se il PC si spegne, o se finisci la quota giornaliera dell'API, **non perdi quasi nulla**.
 Quando riaprirai l'app e ricaricherai lo stesso file audio, El Sbobinator 🤠 ti chiederà se vuoi "riutilizzare" i risultati salvati per riprendere esattamente da dove si era interrotto, o se vuoi ricominciare da capo.
 
-I dati di sessione (blocchi di testo già elaborati, progressi parziali) vengono salvati in una cartella nascosta sul tuo computer (`~/.el_sbobinator_sessions/`). Questa cartella può crescere nel tempo se elabori molti file. Nelle **Impostazioni** trovi il tasto **"Pulisci sessioni vecchie"** per eliminare automaticamente i dati più vecchi di 30 giorni e liberare spazio.
+I dati di sessione (blocchi di testo già elaborati, progressi parziali) vengono salvati in una cartella nascosta sul tuo computer (`~/.el_sbobinator_sessions/`). Questa cartella può crescere nel tempo se elabori molti file. Nelle **Impostazioni** trovi il tasto **"Pulisci sessioni vecchie"** per eliminare automaticamente i dati più vecchi di 14 giorni e liberare spazio.
 
 ---
 

@@ -169,19 +169,26 @@ def load_fallback_keys() -> list[str]:
     return []
 
 
-def try_rotate_key(current_client, fallback_keys: list[str], model_name: str, logger=None):
+def try_rotate_key(current_client, fallback_keys: list[str], model_name: str, logger=None, cancelled: Callable[[], bool] | None = None):
     log = logger or get_logger("el_sbobinator.generation")
     while fallback_keys:
-        key = fallback_keys.pop(0).strip()
+        if cancelled is not None and cancelled():
+            return current_client, False, None
+        key = fallback_keys[0].strip()
         if not key:
+            fallback_keys.pop(0)
             continue
         try:
             new_client = genai.Client(api_key=key)
             new_client.models.get(model=model_name)
+            if cancelled is not None and cancelled():
+                return current_client, False, None
+            fallback_keys.pop(0)
             log.info("Chiave di fallback valida, rotazione completata.", extra={"stage": "key_rotation"})
             print(f"   [OK] Chiave di riserva valida! ({len(fallback_keys)} rimanenti)")
             return new_client, True, key
         except Exception as err:
+            fallback_keys.pop(0)
             log.warning("Chiave di fallback non valida.", extra={"stage": "key_rotation"})
             print(f"   [!] Chiave di riserva non valida: {err}")
     return current_client, False, None
@@ -280,10 +287,15 @@ def retry_with_quota(
     log = logger or get_logger("el_sbobinator.generation")
     attempts = 0
     while attempts < max_attempts:
+        if cancelled():
+            return client, None
         try:
             result = callable_fn(client)
             return client, result
         except Exception as exc:
+            if cancelled():
+                print("   [*] Operazione annullata dall'utente.")
+                return client, None
             error = _error_text(exc)
             error_code = _error_code(exc)
             is_quota_related = (
@@ -308,7 +320,16 @@ def retry_with_quota(
                     raise
 
                 print("\n[!!] CHIAVE API ESAURITA O QUOTA GIORNALIERA RAGGIUNTA!")
-                new_c, rotated, rotated_key = try_rotate_key(client, fallback_keys, model_name, logger=log)
+                if cancelled():
+                    print("   [*] Operazione annullata dall'utente.")
+                    return client, None
+                new_c, rotated, rotated_key = try_rotate_key(
+                    client,
+                    fallback_keys,
+                    model_name,
+                    logger=log,
+                    cancelled=cancelled,
+                )
                 if rotated:
                     client = new_c
                     runtime.set_effective_api_key(rotated_key)
@@ -317,6 +338,9 @@ def retry_with_quota(
                     attempts = 0
                     continue
 
+                if cancelled():
+                    print("   [*] Operazione annullata dall'utente.")
+                    return client, None
                 new_api_key = request_fallback_key()
                 if new_api_key and new_api_key.strip():
                     try:

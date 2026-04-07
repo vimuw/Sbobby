@@ -22,9 +22,11 @@ from datetime import datetime
 
 
 DEFAULT_MODEL = "gemini-2.5-flash"
+SESSION_CLEANUP_MAX_AGE_DAYS = 14
 
 __all__ = [
     "DEFAULT_MODEL",
+    "SESSION_CLEANUP_MAX_AGE_DAYS",
     "debug_log",
     "cleanup_orphan_temp_chunks",
     "USER_HOME",
@@ -771,7 +773,7 @@ def invalidate_session_storage_cache() -> None:
         _storage_info_cache_time = 0.0
 
 
-def cleanup_orphan_sessions(max_age_days: int = 30) -> dict:
+def cleanup_orphan_sessions(max_age_days: int = SESSION_CLEANUP_MAX_AGE_DAYS) -> dict:
     """
     Delete session folders in SESSION_ROOT whose newest file mtime is older
     than max_age_days days.  Returns a summary dict with keys:

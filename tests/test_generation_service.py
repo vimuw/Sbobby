@@ -1,4 +1,5 @@
 import unittest
+import threading
 from unittest.mock import patch
 
 from el_sbobinator.generation_service import QuotaDailyLimitError, retry_with_quota
@@ -160,6 +161,78 @@ class RetryWithQuotaTests(unittest.TestCase):
 
         self.assertEqual(call_count, 2)
         mock_rotate.assert_not_called()
+
+    def test_cancelled_quota_error_does_not_rotate_or_request_new_key(self):
+        runtime = _FakeRuntime()
+        client = object()
+        cancel_event = __import__("threading").Event()
+        fallback_keys = ["fallback-key-1", "fallback-key-2"]
+        fallback_key_calls = []
+
+        def fn(_client):
+            cancel_event.set()
+            raise RuntimeError("429 quota exceeded daily limit per day")
+
+        with patch(
+            "el_sbobinator.generation_service.try_rotate_key",
+            side_effect=AssertionError("La rotazione non deve partire dopo l'annullamento"),
+        ):
+            returned_client, result = retry_with_quota(
+                fn,
+                client=client,
+                fallback_keys=fallback_keys,
+                model_name="test-model",
+                cancelled=cancel_event.is_set,
+                runtime=runtime,
+                request_fallback_key=lambda: fallback_key_calls.append(1) or None,
+                max_attempts=2,
+                retry_sleep_seconds=0.0,
+                rate_limit_sleep_seconds=0.0,
+            )
+
+        self.assertIs(returned_client, client)
+        self.assertIsNone(result)
+        self.assertEqual(runtime.rotated_keys, [])
+        self.assertEqual(fallback_key_calls, [])
+        self.assertEqual(fallback_keys, ["fallback-key-1", "fallback-key-2"])
+
+    def test_cancel_during_fallback_validation_keeps_key_available(self):
+        runtime = _FakeRuntime()
+        client = object()
+        cancel_event = threading.Event()
+        fallback_keys = ["fallback-key-1"]
+
+        class _ValidModels:
+            def get(self, model=None, **kwargs):
+                cancel_event.set()
+                return {"model": model}
+
+        class _ValidClient:
+            def __init__(self, api_key=None, **kwargs):
+                self.api_key = api_key
+                self.models = _ValidModels()
+
+        def fn(_client):
+            raise RuntimeError("429 quota exceeded daily limit per day")
+
+        with patch("el_sbobinator.generation_service.genai.Client", _ValidClient):
+            returned_client, result = retry_with_quota(
+                fn,
+                client=client,
+                fallback_keys=fallback_keys,
+                model_name="test-model",
+                cancelled=cancel_event.is_set,
+                runtime=runtime,
+                request_fallback_key=lambda: None,
+                max_attempts=2,
+                retry_sleep_seconds=0.0,
+                rate_limit_sleep_seconds=0.0,
+            )
+
+        self.assertIs(returned_client, client)
+        self.assertIsNone(result)
+        self.assertEqual(runtime.rotated_keys, [])
+        self.assertEqual(fallback_keys, ["fallback-key-1"])
 
 
 if __name__ == "__main__":

@@ -196,7 +196,7 @@ export function PreviewModal({
                 {htmlPath && (
                   <button
                     onClick={() => window.pywebview?.api?.open_file?.(htmlPath)}
-                    className="icon-button h-9 w-9 rounded-[12px]"
+                    className="icon-button modal-icon-button"
                     style={{ color: 'var(--text-muted)' }}
                     title="Apri file HTML"
                   >
@@ -206,14 +206,14 @@ export function PreviewModal({
                 <div className="relative">
                   <button
                     onClick={handleCopy}
-                    className="icon-button h-9 w-9 rounded-[12px]"
+                    className="icon-button modal-icon-button"
                     style={isCopied ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : { color: 'var(--text-muted)' }}
                     title={isCopied ? 'Copiato!' : 'Copia per Google Docs'}
                   >
                     {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
-                <button onClick={() => void flushAndClose()} className="icon-button h-11 w-11 rounded-[14px]" style={{ color: 'var(--text-muted)' }}>
+                <button onClick={() => void flushAndClose()} className="icon-button modal-icon-button" style={{ color: 'var(--text-muted)' }}>
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -259,7 +259,7 @@ export function PreviewModal({
                             Il file originale e stato spostato. Selezionalo di nuovo per riattivare il player.
                           </p>
                         </div>
-                        <button onClick={onRelink} className="premium-button-secondary compact-button shrink-0">
+                        <button onClick={onRelink} className="modal-action-button shrink-0">
                           Ricollega audio
                         </button>
                       </div>

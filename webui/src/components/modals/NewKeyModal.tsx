@@ -57,7 +57,7 @@ export function NewKeyModal({ isOpen, onClose }: NewKeyModalProps) {
               </div>
               <button
                 onClick={handleClose}
-                className="icon-button h-10 w-10 rounded-[14px]"
+                className="icon-button modal-icon-button"
                 style={{ color: 'var(--text-muted)' }}
                 aria-label="Chiudi finestra"
               >
@@ -95,12 +95,12 @@ export function NewKeyModal({ isOpen, onClose }: NewKeyModalProps) {
             <div className="px-5 py-4 flex flex-col gap-3 shrink-0" style={{ background: 'var(--bg-elevated)', borderTop: '1px solid var(--border-subtle)' }}>
               <button
                 onClick={handleSubmit}
-                className="premium-button w-full"
+                className="modal-action-button is-primary w-full"
                 disabled={!isReplacementKeyValid}
               >
                 Continua
               </button>
-              <button onClick={handleClose} className="premium-button-secondary w-full">
+              <button onClick={handleClose} className="modal-action-button w-full">
                 Annulla
               </button>
             </div>

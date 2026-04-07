@@ -1,4 +1,5 @@
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -119,6 +120,61 @@ class AppWebviewTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["result"]["summary"], "Ambiente pronto.")
         mock_validate.assert_called_once_with(api_key="fake", validate_api_key=True)
+
+    @patch("el_sbobinator.app_webview.cleanup_orphan_sessions")
+    def test_cleanup_old_sessions_uses_14_day_default(self, mock_cleanup):
+        api = ElSbobinatorApi()
+        mock_cleanup.return_value = {"removed": 2, "freed_bytes": 4096, "errors": 0}
+
+        result = api.cleanup_old_sessions()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["removed"], 2)
+        mock_cleanup.assert_called_once_with(14)
+
+    def test_stop_processing_unblocks_pending_prompts(self):
+        api = ElSbobinatorApi()
+        regenerate_event = threading.Event()
+        new_key_event = threading.Event()
+        received = {}
+
+        def on_regenerate(payload):
+            received["regenerate"] = payload
+            regenerate_event.set()
+
+        def on_new_key(payload):
+            received["new_key"] = payload
+            new_key_event.set()
+
+        api._adapter.ask_regenerate("lesson.mp3", on_regenerate, "resume")
+        api._adapter.ask_new_api_key(on_new_key)
+
+        result = api.stop_processing()
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(api._cancel_event.is_set())
+        self.assertTrue(regenerate_event.wait(timeout=1))
+        self.assertTrue(new_key_event.wait(timeout=1))
+        self.assertEqual(received["regenerate"], {"regenerate": False})
+        self.assertEqual(received["new_key"], {"key": ""})
+
+    def test_answer_regenerate_none_cancels_processing_and_preserves_null(self):
+        api = ElSbobinatorApi()
+        regenerate_event = threading.Event()
+        received = {}
+
+        def on_regenerate(payload):
+            received["regenerate"] = payload
+            regenerate_event.set()
+
+        api._adapter.ask_regenerate("lesson.mp3", on_regenerate, "resume")
+
+        result = api.answer_regenerate(None)
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(api._cancel_event.is_set())
+        self.assertTrue(regenerate_event.wait(timeout=1))
+        self.assertEqual(received["regenerate"], {"regenerate": None})
 
 
 if __name__ == "__main__":
