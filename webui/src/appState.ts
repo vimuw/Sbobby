@@ -12,6 +12,7 @@ export type FileItem = {
   path?: string;
   outputHtml?: string;
   outputDir?: string;
+  completedAt?: number;
 };
 
 export type FileDescriptor = {
@@ -260,6 +261,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
                 outputDir: action.data.output_dir,
                 phaseText: undefined,
                 errorText: undefined,
+                completedAt: Date.now(),
               }
             : file,
         ),

@@ -3,11 +3,13 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { motion, AnimatePresence } from 'motion/react';
 import {
+  CheckCircle,
   FileAudio,
   FileText,
   Github,
   Moon,
   Play,
+  Search,
   Settings,
   Square,
   Sun,
@@ -26,7 +28,7 @@ import { useQueuePersistence } from './hooks/useQueuePersistence';
 import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
 import { useBodyScrollLock } from './hooks/useBodyScrollLock';
-import { QueueFileCard } from './components/QueueFileCard';
+import { CompletedFileCard, QueueFileCard } from './components/QueueFileCard';
 import { RegenerateModal } from './components/modals/RegenerateModal';
 import { NewKeyModal } from './components/modals/NewKeyModal';
 import { SettingsModal } from './components/modals/SettingsModal';
@@ -88,6 +90,7 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
   const [showEmptyState, setShowEmptyState] = useState(() => files.length === 0);
+  const [completedSearch, setCompletedSearch] = useState('');
 
   // --- Refs ---
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -101,8 +104,8 @@ export default function App() {
   }, [files]);
 
   useEffect(() => {
-    if (files.length > 0) setShowEmptyState(false);
-  }, [files.length]);
+    if (files.some(f => f.status !== 'done')) setShowEmptyState(false);
+  }, [files]);
 
   useEffect(() => {
     appStateRef.current = appState;
@@ -219,7 +222,7 @@ export default function App() {
 
   const resolveQueuedFilesForProcessing = useCallback(async () => {
     const api = window.pywebview?.api;
-    const queuedFiles = filesRef.current.filter(file => file.status === 'queued' || file.status === 'done');
+    const queuedFiles = filesRef.current.filter(file => file.status === 'queued');
     if (queuedFiles.length === 0) return [] as FileDescriptor[];
     const resolvedFiles: FileDescriptor[] = [];
     const pathChecks = await Promise.all(
@@ -402,7 +405,19 @@ export default function App() {
   const titleGradient = { background: 'linear-gradient(90deg, var(--gradient-title-from), var(--gradient-title-to))', WebkitBackgroundClip: 'text' as const, WebkitTextFillColor: 'transparent' };
   const sGradient = { background: 'linear-gradient(90deg, var(--gradient-s-from), var(--gradient-s-to))', WebkitBackgroundClip: 'text' as const, WebkitTextFillColor: 'transparent' };
 
-  const sortableIds = useMemo(() => files.map(file => file.id), [files]);
+  const pendingFiles = useMemo(() => files.filter(f => f.status !== 'done'), [files]);
+  const doneFiles = useMemo(
+    () => [...files.filter(f => f.status === 'done')].sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0)),
+    [files],
+  );
+  const filteredDoneFiles = useMemo(
+    () => completedSearch.trim()
+      ? doneFiles.filter(f => f.name.toLowerCase().includes(completedSearch.toLowerCase()))
+      : doneFiles,
+    [doneFiles, completedSearch],
+  );
+
+  const sortableIds = useMemo(() => pendingFiles.map(f => f.id), [pendingFiles]);
 
   return (
     <div className="app-shell min-h-screen font-sans flex flex-col" style={{ background: 'var(--bg-base)', color: 'var(--text-secondary)' }}>
@@ -530,12 +545,9 @@ export default function App() {
                 <FileAudio className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
                 Coda di elaborazione
               </h2>
-              {files.length > 0 && (
+              {pendingFiles.length > 0 && (
                 <span className="status-pill self-start sm:self-auto shrink-0 whitespace-nowrap">
-                  <span className="sm:hidden">{files.length} / {doneCount}</span>
-                  <span className="hidden sm:inline">
-                    {files.length} {files.length === 1 ? 'elemento' : 'elementi'}{doneCount > 0 ? ` / ${doneCount} completat${doneCount !== 1 ? 'i' : 'o'}` : ''}
-                  </span>
+                  {pendingFiles.length} {pendingFiles.length === 1 ? 'elemento' : 'elementi'}
                 </span>
               )}
             </div>
@@ -552,8 +564,8 @@ export default function App() {
             onDragEnd={handleDragEnd}
           >
             <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-              <AnimatePresence mode="popLayout" onExitComplete={() => { if (filesRef.current.length === 0) setShowEmptyState(true); }}>
-                {files.map((file) => {
+              <AnimatePresence mode="popLayout" onExitComplete={() => { if (!filesRef.current.some(f => f.status !== 'done')) setShowEmptyState(true); }}>
+                {pendingFiles.map((file) => {
                   const isActive = file.status === 'processing';
                   return (
                     <QueueFileCard
@@ -592,6 +604,82 @@ export default function App() {
             )}
           </AnimatePresence>
         </div>
+
+        {/* Sbobine completate */}
+        <AnimatePresence>
+          {doneFiles.length > 0 && (
+            <motion.div
+              key="completed-section"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="premium-panel p-5 sm:p-6 space-y-4"
+            >
+              <div className="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: 'var(--border-subtle)' }}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                  <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                    <CheckCircle className="w-5 h-5" style={{ color: 'var(--success-text)' }} />
+                    Sbobine completate
+                  </h2>
+                  <span className="status-pill self-start sm:self-auto shrink-0 whitespace-nowrap" style={{ color: 'var(--success-text)', borderColor: 'var(--success-ring)', background: 'rgba(255,255,255,0.03)' }}>
+                    {doneFiles.length} {doneFiles.length === 1 ? 'sbobina' : 'sbobine'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {doneFiles.length >= 5 && (
+                    <div className="relative flex items-center">
+                      <Search className="absolute left-2.5 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--text-faint)' }} />
+                      <input
+                        type="text"
+                        value={completedSearch}
+                        onChange={e => setCompletedSearch(e.target.value)}
+                        placeholder="Cerca..."
+                        className="premium-button-secondary compact-button text-xs pl-7 pr-3 py-1.5 rounded-[13px] outline-none"
+                        style={{ borderColor: 'var(--border-default)', background: 'rgba(255,255,255,0.03)', color: 'var(--text-primary)', width: '140px' }}
+                      />
+                    </div>
+                  )}
+                  {appState !== 'processing' && (
+                    <button
+                      onClick={() => { dispatch({ type: 'queue/clear_completed' }); setCompletedSearch(''); }}
+                      className="premium-button-secondary compact-button text-xs"
+                      style={{ color: 'var(--text-muted)', borderColor: 'var(--border-default)' }}
+                    >
+                      Pulisci tutto
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <AnimatePresence mode="popLayout">
+                {filteredDoneFiles.map(file => (
+                  <CompletedFileCard
+                    key={file.id}
+                    file={file}
+                    appState={appState}
+                    onRemove={removeFile}
+                    onPreview={openPreview}
+                    onOpenFile={openFile}
+                    onOpenDir={openFile}
+                  />
+                ))}
+                {completedSearch.trim() && filteredDoneFiles.length === 0 && (
+                  <motion.p
+                    key="no-results"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="text-sm text-center py-6"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    Nessun risultato per "{completedSearch}"
+                  </motion.p>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Console */}
         <div className="console-shell console-shell-subtle">

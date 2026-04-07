@@ -71,6 +71,34 @@ describe('processingReducer', () => {
     expect(s1.files).toBe(s0.files); // same array reference
   });
 
+  it('bridge/file_done sets completedAt to a current timestamp', () => {
+    const before = Date.now();
+    const file = makeFile({ id: 'x' });
+    const state = processingReducer(
+      { ...initialProcessingState, files: [file] },
+      { type: 'bridge/file_done', data: { id: 'x', index: 0, output_html: 'out.html', output_dir: 'dir' } },
+    );
+    const after = Date.now();
+    const { completedAt } = state.files[0];
+    expect(typeof completedAt).toBe('number');
+    expect(completedAt!).toBeGreaterThanOrEqual(before);
+    expect(completedAt!).toBeLessThanOrEqual(after);
+  });
+
+  it('queue/clear_completed removes only done files, leaving queued and error intact', () => {
+    const files = [
+      makeFile({ id: 'q1', status: 'queued' }),
+      makeFile({ id: 'd1', status: 'done', progress: 100, phase: 3 }),
+      makeFile({ id: 'e1', status: 'error', progress: 0, phase: 0 }),
+      makeFile({ id: 'd2', status: 'done', progress: 100, phase: 3 }),
+    ];
+    const state = processingReducer(
+      { ...initialProcessingState, files },
+      { type: 'queue/clear_completed' },
+    );
+    expect(state.files.map(f => f.id)).toEqual(['q1', 'e1']);
+  });
+
   it('resets processing files to queued on cancelled batch completion', () => {
     const file = makeFile({ status: 'processing', progress: 50, phase: 1 });
     const state = processingReducer(

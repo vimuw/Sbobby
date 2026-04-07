@@ -3,6 +3,38 @@ import type { FileItem, ProcessingAction } from '../appState';
 
 const QUEUE_STORAGE_KEY = 'el-sbobinator.queue.v1';
 
+export function serializeQueueFile(file: FileItem): Record<string, unknown> {
+  return {
+    id: file.id,
+    name: file.name,
+    size: file.size,
+    duration: file.duration,
+    path: file.path,
+    status: file.status,
+    outputHtml: file.outputHtml,
+    outputDir: file.outputDir,
+    errorText: file.errorText,
+    completedAt: file.completedAt,
+  };
+}
+
+export function deserializeQueueFile(file: Partial<FileItem>, index: number): FileItem {
+  return {
+    id: String(file.id || `restored-${index}`),
+    name: String(file.name || `file-${index}`),
+    size: Number(file.size || 0),
+    duration: Number(file.duration || 0),
+    path: file.path ? String(file.path) : undefined,
+    status: file.status === 'done' ? 'done' : file.status === 'error' ? 'error' : 'queued',
+    progress: file.status === 'done' ? 100 : 0,
+    phase: file.status === 'done' ? 3 : 0,
+    outputHtml: file.outputHtml ? String(file.outputHtml) : undefined,
+    outputDir: file.outputDir ? String(file.outputDir) : undefined,
+    errorText: file.errorText ? String(file.errorText) : undefined,
+    completedAt: file.completedAt ? Number(file.completedAt) : undefined,
+  };
+}
+
 export function useQueuePersistence(
   files: FileItem[],
   structuralVersion: number,
@@ -22,19 +54,7 @@ export function useQueuePersistence(
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed) || parsed.length === 0) return;
 
-      const restoredFiles: FileItem[] = parsed.map((file: Partial<FileItem>, index: number) => ({
-        id: String(file.id || `restored-${index}`),
-        name: String(file.name || `file-${index}`),
-        size: Number(file.size || 0),
-        duration: Number(file.duration || 0),
-        path: file.path ? String(file.path) : undefined,
-        status: file.status === 'done' ? 'done' : file.status === 'error' ? 'error' : 'queued',
-        progress: file.status === 'done' ? 100 : 0,
-        phase: file.status === 'done' ? 3 : 0,
-        outputHtml: file.outputHtml ? String(file.outputHtml) : undefined,
-        outputDir: file.outputDir ? String(file.outputDir) : undefined,
-        errorText: file.errorText ? String(file.errorText) : undefined,
-      }));
+      const restoredFiles: FileItem[] = parsed.map(deserializeQueueFile);
 
       dispatch({ type: 'queue/add', files: restoredFiles });
       appendConsole(`Coda ripristinata: ${restoredFiles.length} file.`);
@@ -51,17 +71,7 @@ export function useQueuePersistence(
         window.localStorage.removeItem(QUEUE_STORAGE_KEY);
         return;
       }
-      const persisted = currentFiles.map(file => ({
-        id: file.id,
-        name: file.name,
-        size: file.size,
-        duration: file.duration,
-        path: file.path,
-        status: file.status,
-        outputHtml: file.outputHtml,
-        outputDir: file.outputDir,
-        errorText: file.errorText,
-      }));
+      const persisted = currentFiles.map(serializeQueueFile);
       window.localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(persisted));
     } catch (error) {
       console.error('Queue persist failed:', error);

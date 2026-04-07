@@ -4,7 +4,7 @@ import { AlertCircle, CheckCircle, Clock, ExternalLink, Eye, FileAudio, FolderOp
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
-import { formatDuration, formatSize } from '../utils';
+import { formatDuration, formatRelativeTime, formatSize } from '../utils';
 
 interface QueueFileCardProps {
   file: FileItem;
@@ -275,3 +275,101 @@ function QueueFileCardInner({
 }
 
 export const QueueFileCard = React.memo(QueueFileCardInner);
+
+interface CompletedFileCardProps {
+  file: FileItem;
+  appState: AppStatus;
+  onRemove: (id: string) => void;
+  onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => void;
+  onOpenFile: (path: string) => void;
+  onOpenDir: (path: string) => void;
+}
+
+function CompletedFileCardInner({ file, appState, onRemove, onPreview, onOpenFile, onOpenDir }: CompletedFileCardProps) {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, transition: { duration: 0.11, ease: 'easeIn' } }}
+      transition={{
+        opacity: { duration: 0.2, ease: 'easeOut' },
+        y: { type: 'spring', stiffness: 380, damping: 30, mass: 0.8 },
+      }}
+      className="queue-card relative p-5 transition-colors"
+      style={{ border: '1px solid var(--success-ring)', background: 'rgba(255,255,255,0.03)' }}
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 overflow-hidden flex-1">
+          <div
+            className="shrink-0 flex items-center justify-center w-10 h-10 rounded-xl"
+            style={{ background: 'rgba(255,255,255,0.03)', color: 'var(--success-text)' }}
+          >
+            <CheckCircle className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h4 className="text-base font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>{file.name}</h4>
+            <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+              <span>{formatSize(file.size)}</span>
+              {file.duration > 0 && (
+                <>
+                  <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+                  <span>{formatDuration(file.duration)}</span>
+                </>
+              )}
+              <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
+              <span style={{ color: 'var(--success-text)' }}>
+                {file.completedAt ? formatRelativeTime(file.completedAt) : 'Completato'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {file.outputHtml && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); onPreview(file.outputHtml!, file.name, file.path, file.id); }}
+                className="icon-button compact-icon-button"
+                style={{ color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.03)', borderColor: 'var(--border-default)' }}
+                title="Anteprima testo"
+              >
+                <Eye className="w-4 h-4" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onOpenFile(file.outputHtml!); }}
+                className="icon-button compact-icon-button"
+                style={{ color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.03)', borderColor: 'var(--border-default)' }}
+                title="Apri nel browser"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </button>
+              {file.outputDir && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onOpenDir(file.outputDir!); }}
+                  className="icon-button compact-icon-button"
+                  style={{ color: 'var(--text-muted)' }}
+                  title="Apri cartella"
+                >
+                  <FolderOpen className="w-4 h-4" />
+                </button>
+              )}
+            </>
+          )}
+          {appState !== 'processing' && (
+            <button
+              onClick={() => onRemove(file.id)}
+              className="icon-button compact-icon-button"
+              style={{ color: 'var(--error-text)', borderColor: 'var(--error-ring)', background: 'var(--error-subtle)' }}
+              title="Rimuovi"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+export const CompletedFileCard = React.memo(CompletedFileCardInner);
