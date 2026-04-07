@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { GITHUB_RELEASES_URL, GITHUB_URL, KOFI_URL } from './branding';
 import { type BridgeCallbacks, type PywebviewApi } from './bridge';
-import { initialProcessingState, processingReducer, type AppStatus, type FileDescriptor, type FileItem } from './appState';
+import { getDoneFiles, getPendingFiles, initialProcessingState, processingReducer, type AppStatus, type FileDescriptor, type FileItem } from './appState';
 import { GEMINI_KEY_PATTERN } from './utils';
 import { useConsole } from './hooks/useConsole';
 import { useTheme } from './hooks/useTheme';
@@ -405,11 +405,8 @@ export default function App() {
   const titleGradient = { background: 'linear-gradient(90deg, var(--gradient-title-from), var(--gradient-title-to))', WebkitBackgroundClip: 'text' as const, WebkitTextFillColor: 'transparent' };
   const sGradient = { background: 'linear-gradient(90deg, var(--gradient-s-from), var(--gradient-s-to))', WebkitBackgroundClip: 'text' as const, WebkitTextFillColor: 'transparent' };
 
-  const pendingFiles = useMemo(() => files.filter(f => f.status !== 'done'), [files]);
-  const doneFiles = useMemo(
-    () => [...files.filter(f => f.status === 'done')].sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0)),
-    [files],
-  );
+  const pendingFiles = useMemo(() => getPendingFiles(files), [files]);
+  const doneFiles = useMemo(() => getDoneFiles(files), [files]);
   const filteredDoneFiles = useMemo(
     () => completedSearch.trim()
       ? doneFiles.filter(f => f.name.toLowerCase().includes(completedSearch.toLowerCase()))

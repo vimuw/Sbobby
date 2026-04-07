@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { initialProcessingState, processingReducer, type FileItem } from './appState';
+import { getDoneFiles, getPendingFiles, initialProcessingState, processingReducer, type FileItem } from './appState';
 
 
 function makeFile(overrides: Partial<FileItem> = {}): FileItem {
@@ -16,6 +16,37 @@ function makeFile(overrides: Partial<FileItem> = {}): FileItem {
   };
 }
 
+
+describe('getPendingFiles / getDoneFiles selectors', () => {
+  const queued = makeFile({ id: 'q', status: 'queued' });
+  const processing = makeFile({ id: 'p', status: 'processing' });
+  const error = makeFile({ id: 'e', status: 'error' });
+  const done1 = makeFile({ id: 'd1', status: 'done', progress: 100, phase: 3, completedAt: 1000 });
+  const done2 = makeFile({ id: 'd2', status: 'done', progress: 100, phase: 3, completedAt: 3000 });
+  const done3 = makeFile({ id: 'd3', status: 'done', progress: 100, phase: 3, completedAt: 2000 });
+  const mixed = [queued, processing, error, done1, done2, done3];
+
+  it('getPendingFiles excludes all done files', () => {
+    const result = getPendingFiles(mixed);
+    expect(result.every(f => f.status !== 'done')).toBe(true);
+    expect(result.map(f => f.id)).toEqual(['q', 'p', 'e']);
+  });
+
+  it('getPendingFiles returns an empty array when all files are done', () => {
+    expect(getPendingFiles([done1, done2])).toEqual([]);
+  });
+
+  it('getDoneFiles includes only done files sorted by completedAt descending', () => {
+    const result = getDoneFiles(mixed);
+    expect(result.map(f => f.id)).toEqual(['d2', 'd3', 'd1']); // 3000, 2000, 1000
+  });
+
+  it('getDoneFiles treats missing completedAt as 0 (sorts last)', () => {
+    const legacy = makeFile({ id: 'leg', status: 'done', progress: 100, phase: 3 }); // no completedAt
+    const result = getDoneFiles([legacy, done1]);
+    expect(result.map(f => f.id)).toEqual(['d1', 'leg']); // 1000 > 0
+  });
+});
 
 describe('processingReducer', () => {
   it('adds and reorders queued files', () => {

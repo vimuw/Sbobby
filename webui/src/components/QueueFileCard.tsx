@@ -76,11 +76,9 @@ function QueueFileCardInner({
           border: `1px solid ${
             file.status === 'processing'
               ? isCanceling ? 'var(--warning-ring)' : 'var(--processing-ring)'
-              : file.status === 'done'
-                ? 'var(--success-ring)'
-                : file.status === 'error'
-                  ? 'var(--error-ring)'
-                  : 'var(--card-queued-border)'
+              : file.status === 'error'
+                ? 'var(--error-ring)'
+                : 'var(--card-queued-border)'
           }`,
           background: file.status === 'processing'
             ? isCanceling
@@ -111,24 +109,20 @@ function QueueFileCardInner({
                   : file.status === 'error'
                     ? 'var(--error-subtle)'
                     : 'rgba(255,255,255,0.03)',
-                color: file.status === 'done'
-                  ? 'var(--success-text)'
-                  : file.status === 'processing'
-                    ? isCanceling ? 'var(--warning-text)' : 'var(--processing-text)'
-                    : file.status === 'error'
-                      ? 'var(--error-text)'
-                      : 'var(--text-muted)',
+                color: file.status === 'processing'
+                  ? isCanceling ? 'var(--warning-text)' : 'var(--processing-text)'
+                  : file.status === 'error'
+                    ? 'var(--error-text)'
+                    : 'var(--text-muted)',
               }}
             >
-              {file.status === 'done'
-                ? <CheckCircle className="w-5 h-5" />
-                : file.status === 'processing'
-                  ? isCanceling
-                    ? <XCircle className="w-5 h-5" />
-                    : <Clock className="w-5 h-5 animate-pulse" />
-                  : file.status === 'error'
-                    ? <AlertCircle className="w-5 h-5" />
-                    : <FileAudio className="w-5 h-5" />}
+              {file.status === 'processing'
+                ? isCanceling
+                  ? <XCircle className="w-5 h-5" />
+                  : <Clock className="w-5 h-5 animate-pulse" />
+                : file.status === 'error'
+                  ? <AlertCircle className="w-5 h-5" />
+                  : <FileAudio className="w-5 h-5" />}
             </div>
             <div className="min-w-0 flex-1">
               <h4 className="text-base font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>{file.name}</h4>
@@ -138,12 +132,6 @@ function QueueFileCardInner({
                   <>
                     <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
                     <span>{formatDuration(file.duration)}</span>
-                  </>
-                )}
-                {file.status === 'done' && (
-                  <>
-                    <span className="w-1 h-1 rounded-full" style={{ background: 'var(--border-default)' }} />
-                    <span style={{ color: 'var(--success-text)' }}>Completato</span>
                   </>
                 )}
                 {file.status === 'error' && (
@@ -197,36 +185,6 @@ function QueueFileCardInner({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {file.status === 'done' && file.outputHtml && (
-              <>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onPreview(file.outputHtml!, file.name, file.path, file.id); }}
-                  className="icon-button compact-icon-button"
-                  style={{ color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.03)', borderColor: 'var(--border-default)' }}
-                  title="Anteprima testo"
-                >
-                  <Eye className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onOpenFile(file.outputHtml!); }}
-                  className="icon-button compact-icon-button"
-                  style={{ color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.03)', borderColor: 'var(--border-default)' }}
-                  title="Apri nel browser"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </button>
-                {file.outputDir && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onOpenDir(file.outputDir!); }}
-                    className="icon-button compact-icon-button"
-                    style={{ color: 'var(--text-muted)' }}
-                    title="Apri cartella"
-                  >
-                    <FolderOpen className="w-4 h-4" />
-                  </button>
-                )}
-              </>
-            )}
             {appState !== 'processing' && (
               <button
                 onClick={() => onRemove(file.id)}

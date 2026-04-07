@@ -15,6 +15,16 @@ export type FileItem = {
   completedAt?: number;
 };
 
+export function getPendingFiles(files: FileItem[]): FileItem[] {
+  return files.filter(f => f.status !== 'done');
+}
+
+/** Always returns a new sorted array. Wrap in useMemo to avoid per-render allocations. */
+export function getDoneFiles(files: FileItem[]): FileItem[] {
+  return [...files.filter(f => f.status === 'done')]
+    .sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0));
+}
+
 export type FileDescriptor = {
   id: string;
   path?: string;
