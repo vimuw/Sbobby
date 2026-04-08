@@ -22,6 +22,7 @@ from el_sbobinator.session_store import (
     resolve_session_paths,
     save_session as save_session_data,
 )
+from el_sbobinator.shared import PRECONVERTED_AUDIO_FINAL, PRECONVERTED_AUDIO_PARTIAL
 
 
 CHUNK_MD_RE = re.compile(r"^chunk_(\d{3})_(\d+)_(\d+)\.md$", re.IGNORECASE)
@@ -248,9 +249,17 @@ def ensure_preconverted_audio(
     phase_callback,
 ) -> tuple[bool, str | None]:
     preconv_enabled = bool(context.settings.preconvert_audio)
-    preconv_path = os.path.join(context.session_dir, "el_sbobinator_preconverted_mono16k.mp3")
+    preconv_path = os.path.join(context.session_dir, PRECONVERTED_AUDIO_FINAL)
+    partial_path = os.path.join(context.session_dir, PRECONVERTED_AUDIO_PARTIAL)
     if not preconv_enabled or stage != "phase1":
         return preconv_enabled, None
+
+    def _cleanup_partial() -> None:
+        try:
+            if os.path.exists(partial_path):
+                os.remove(partial_path)
+        except Exception:
+            pass
 
     try:
         if os.path.exists(preconv_path) and os.path.getsize(preconv_path) > 1024:
@@ -259,16 +268,19 @@ def ensure_preconverted_audio(
     except Exception:
         pass
 
+    _cleanup_partial()
+
     phase_callback("Fase 0/3: pre-conversione audio")
     print("[*] Pre-conversione unica dell'audio (mono, 16kHz) in corso...")
     ok, err = preconvert_media_to_mp3(
         input_path=input_path,
-        output_path=preconv_path,
+        output_path=partial_path,
         bitrate=str(context.settings.audio_bitrate or "48k"),
         ffmpeg_exe=ffmpeg_exe,
         stop_event=cancel_event,
     )
     if not ok:
+        _cleanup_partial()
         if str(err or "").strip().lower() == "cancelled" or cancelled():
             print("   [*] Operazione annullata dall'utente.")
             return preconv_enabled, None
@@ -278,7 +290,8 @@ def ensure_preconverted_audio(
         return False, None
 
     try:
-        if os.path.exists(preconv_path) and os.path.getsize(preconv_path) > 1024:
+        if os.path.exists(partial_path) and os.path.getsize(partial_path) > 1024:
+            os.replace(partial_path, preconv_path)
             print("[*] Pre-conversione completata.")
             context.session.setdefault("phase1", {})
             context.session["phase1"]["preconverted_path"] = preconv_path
@@ -286,7 +299,7 @@ def ensure_preconverted_audio(
             context.save()
             return preconv_enabled, preconv_path
     except Exception:
-        pass
+        _cleanup_partial()
     return False, None
 
 

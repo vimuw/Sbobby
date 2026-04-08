@@ -23,10 +23,14 @@ from datetime import datetime
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 SESSION_CLEANUP_MAX_AGE_DAYS = 14
+PRECONVERTED_AUDIO_FINAL = "el_sbobinator_preconverted_mono16k.mp3"
+PRECONVERTED_AUDIO_PARTIAL = f"{PRECONVERTED_AUDIO_FINAL}.partial"
 
 __all__ = [
     "DEFAULT_MODEL",
     "SESSION_CLEANUP_MAX_AGE_DAYS",
+    "PRECONVERTED_AUDIO_FINAL",
+    "PRECONVERTED_AUDIO_PARTIAL",
     "debug_log",
     "cleanup_orphan_temp_chunks",
     "USER_HOME",
@@ -685,6 +689,8 @@ def _folder_size(path: str) -> int:
     try:
         for dirpath, _, filenames in os.walk(path):
             for fname in filenames:
+                if fname == PRECONVERTED_AUDIO_PARTIAL:
+                    continue
                 try:
                     total += os.path.getsize(os.path.join(dirpath, fname))
                 except Exception:

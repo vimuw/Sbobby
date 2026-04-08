@@ -36,6 +36,30 @@ class SharedCleanupTests(unittest.TestCase):
             self.assertFalse(os.path.exists(expired_dir))
             self.assertTrue(os.path.exists(recent_dir))
 
+    def test_get_session_storage_info_ignores_preconverted_partial_until_promoted(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "active")
+            os.makedirs(session_dir, exist_ok=True)
+
+            partial_path = os.path.join(session_dir, shared.PRECONVERTED_AUDIO_PARTIAL)
+            final_path = os.path.join(session_dir, shared.PRECONVERTED_AUDIO_FINAL)
+
+            with open(partial_path, "wb") as fh:
+                fh.write(b"x" * 4096)
+
+            with patch("el_sbobinator.shared.SESSION_ROOT", tmpdir):
+                shared.invalidate_session_storage_cache()
+                info = shared.get_session_storage_info()
+                self.assertEqual(info["total_sessions"], 1)
+                self.assertEqual(info["total_bytes"], 0)
+
+                os.replace(partial_path, final_path)
+
+                shared.invalidate_session_storage_cache()
+                info = shared.get_session_storage_info()
+                self.assertEqual(info["total_sessions"], 1)
+                self.assertEqual(info["total_bytes"], 4096)
+
 
 if __name__ == "__main__":
     unittest.main()
