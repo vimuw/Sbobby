@@ -75,4 +75,44 @@ describe('createBridge', () => {
     expect(onRegenerate).toHaveBeenCalledWith({ filename: 'lesson.mp3' });
     expect(onAskNewKey).toHaveBeenCalledTimes(1);
   });
+
+  it('resets an in-flight file when processDone reports cancellation', () => {
+    let state = initialProcessingState;
+    const dispatch = (action: ProcessingAction) => {
+      state = processingReducer(state, action);
+    };
+
+    const onBatchDone = vi.fn();
+    const bridge = createBridge({
+      dispatch,
+      appendConsole: vi.fn(),
+      onRegenerate: vi.fn(),
+      onAskNewKey: vi.fn(),
+      onBatchDone,
+      onFileDone: vi.fn(),
+      onFilesDropped: vi.fn(),
+    });
+
+    dispatch({
+      type: 'queue/add',
+      files: [{
+        id: 'abc',
+        name: 'lesson.mp3',
+        size: 1,
+        duration: 1,
+        status: 'queued',
+        progress: 0,
+        phase: 0,
+      }],
+    });
+
+    bridge.setCurrentFile({ id: 'abc', index: 0, total: 1 });
+    bridge.processDone({ cancelled: true, completed: 0, failed: 0, total: 1 });
+
+    expect(state.appState).toBe('idle');
+    expect(state.files[0].status).toBe('queued');
+    expect(state.files[0].progress).toBe(0);
+    expect(state.files[0].phase).toBe(0);
+    expect(onBatchDone).toHaveBeenCalledWith({ cancelled: true, completed: 0, failed: 0, total: 1 });
+  });
 });

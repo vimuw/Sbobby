@@ -615,7 +615,7 @@ class ElSbobinatorApi:
             finally:
                 self._adapter.is_running = False
                 payload: ProcessDonePayload = {
-                    "cancelled": bool(self._cancel_event.is_set()),
+                    "cancelled": bool(self._cancel_event.is_set() or self._adapter.last_run_status == "cancelled"),
                     "completed": completed_count,
                     "failed": failed_count,
                     "total": len(files),

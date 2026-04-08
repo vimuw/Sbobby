@@ -176,6 +176,55 @@ class AppWebviewTests(unittest.TestCase):
         self.assertTrue(regenerate_event.wait(timeout=1))
         self.assertEqual(received["regenerate"], {"regenerate": None})
 
+    @patch("el_sbobinator.pipeline.esegui_sbobinatura")
+    def test_process_done_marks_cancelled_when_run_status_is_cancelled(self, mock_pipeline_run):
+        api = ElSbobinatorApi()
+        emitted = []
+
+        def fake_emit(fn_name, data, batched=None):
+            emitted.append((fn_name, data, batched))
+
+        def fake_pipeline_run(_path, _api_key, adapter, resume_session=True):
+            self.assertTrue(resume_session)
+            adapter.set_run_result("cancelled", "Prompt di ripresa chiuso.")
+
+        mock_pipeline_run.side_effect = fake_pipeline_run
+        api._adapter.emit = fake_emit
+
+        with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
+            tmp.write(b"fake")
+            file_path = tmp.name
+
+        try:
+            result = api.start_processing(
+                [{
+                    "id": "file-1",
+                    "path": file_path,
+                    "name": "lesson.mp3",
+                    "size": 4,
+                    "duration": 1,
+                }],
+                api_key="fake-key",
+                resume_session=True,
+            )
+
+            self.assertTrue(result["ok"])
+            self.assertIsNotNone(api._processing_thread)
+            api._processing_thread.join(timeout=2)
+            self.assertFalse(api._processing_thread.is_alive(), "Il thread di processing non si e' fermato.")
+        finally:
+            try:
+                __import__("os").unlink(file_path)
+            except OSError:
+                pass
+
+        process_done_events = [data for fn_name, data, _batched in emitted if fn_name == "processDone"]
+        self.assertEqual(len(process_done_events), 1)
+        self.assertTrue(process_done_events[0]["cancelled"])
+        self.assertEqual(process_done_events[0]["completed"], 0)
+        self.assertEqual(process_done_events[0]["failed"], 0)
+        self.assertEqual(process_done_events[0]["total"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

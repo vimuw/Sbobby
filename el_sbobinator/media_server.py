@@ -38,7 +38,9 @@ class LocalMediaServer:
 
         with cls._lock:
             if file_path in cls._servers:
-                _, port = cls._servers[file_path]
+                entry = cls._servers.pop(file_path)
+                cls._servers[file_path] = entry
+                _, port = entry
                 return f"http://127.0.0.1:{port}/stream.media?t={time.time()}"
 
             served_path = file_path
@@ -60,11 +62,35 @@ class LocalMediaServer:
                         status_code = 200
                         range_header = self.headers.get("Range")
                         if range_header:
-                            match = re.search(r"bytes=(\d+)-(\d*)", range_header)
-                            if match:
-                                start = int(match.group(1))
-                                if match.group(2):
-                                    end = int(match.group(2))
+                            stripped = range_header.strip()
+                            suffix_match = re.fullmatch(r"bytes=-(\d+)", stripped)
+                            start_match = re.fullmatch(r"bytes=(\d+)-(\d*)", stripped)
+                            if suffix_match:
+                                suffix_len = int(suffix_match.group(1))
+                                if suffix_len == 0 or size == 0:
+                                    self.send_response(416)
+                                    self.send_header("Content-Range", f"bytes */{size}")
+                                    self.end_headers()
+                                    return
+                                start = max(0, size - suffix_len)
+                                end = size - 1
+                                status_code = 206
+                            elif start_match:
+                                start = int(start_match.group(1))
+                                if start >= size:
+                                    self.send_response(416)
+                                    self.send_header("Content-Range", f"bytes */{size}")
+                                    self.end_headers()
+                                    return
+                                if start_match.group(2):
+                                    end = min(int(start_match.group(2)), size - 1)
+                                else:
+                                    end = size - 1
+                                if end < start:
+                                    self.send_response(416)
+                                    self.send_header("Content-Range", f"bytes */{size}")
+                                    self.end_headers()
+                                    return
                                 status_code = 206
 
                         length = end - start + 1
