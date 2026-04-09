@@ -53,7 +53,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
 
     const onBridgeReady = () => {
       if (!initDoneRef.current) {
-        if (retryTimerRef.current !== null) clearTimeout(retryTimerRef.current);
+        if (retryTimerRef.current !== null) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
         retriesRef.current = 0;
       }
       tryBootstrap();
@@ -63,7 +63,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
 
     const delayedWarning = setTimeout(() => {
       if (initDoneRef.current) return;
-      if (retryTimerRef.current !== null) clearTimeout(retryTimerRef.current);
+      if (retryTimerRef.current !== null) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
       retriesRef.current = 3;
       setBridgeDelayed(true);
       if (inFlightRef.current) return;
@@ -73,7 +73,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     return () => {
       window.removeEventListener('pywebviewready', onBridgeReady);
       clearTimeout(delayedWarning);
-      if (retryTimerRef.current !== null) clearTimeout(retryTimerRef.current);
+      if (retryTimerRef.current !== null) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
     };
   }, []);
 

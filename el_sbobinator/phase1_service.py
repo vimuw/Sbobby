@@ -464,7 +464,7 @@ def process_phase1_transcription(  # noqa: C901
                             ):
                                 on_model_switched(old_model, model_state.current)
                         print(
-                            f"   [Recovery automatica] chunk={chunk_idx}: catena modelli esaurita ({de}) - un ulteriore pass dal modello primario ({model_name})..."
+                            f"   [Recovery automatica] chunk={chunk_idx}: catena modelli esaurita ({de}) - un ulteriore pass dal modello primario ({model_state.current if model_state is not None else model_name})..."
                         )
                         continue
                     _excerpt = getattr(de, "rejected_text", "")

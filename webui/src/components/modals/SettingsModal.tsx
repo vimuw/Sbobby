@@ -173,9 +173,10 @@ export function SettingsModal({
   const [saveError, setSaveError] = useState<string | null>(null);
   const isSavingRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
+  const handleClose = () => { if (isSavingRef.current) return; onClose(); };
 
   useEffect(() => {
-    if (!isOpen) { setIsAdvancedOpen(false); return; }
+    if (!isOpen) { setIsAdvancedOpen(false); setIsSaving(false); isSavingRef.current = false; return; }
     setSaveError(null);
     setCleanupResult(null);
     if (!window.pywebview?.api?.get_session_storage_info) return;
@@ -305,7 +306,7 @@ export function SettingsModal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            onClick={handleClose}
             className="absolute inset-0"
             style={{ background: 'var(--bg-overlay)', backdropFilter: 'blur(10px)' }}
           />
@@ -320,7 +321,8 @@ export function SettingsModal({
                 <Settings className="w-5 h-5" style={{ color: 'var(--text-muted)' }} /> Impostazioni
               </h2>
               <button
-                onClick={onClose}
+                onClick={handleClose}
+                disabled={isSaving}
                 className="icon-button modal-icon-button"
                 style={{ color: 'var(--text-muted)' }}
                 aria-label="Chiudi impostazioni"

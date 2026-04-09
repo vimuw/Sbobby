@@ -119,4 +119,42 @@ describe('SettingsModal — save behavior', () => {
     expect(mockSave).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('backdrop click while saving: onClose NOT called', async () => {
+    let resolveFirst!: (val: { ok: boolean }) => void;
+    const firstPromise = new Promise<{ ok: boolean }>(res => { resolveFirst = res; });
+    const mockSave = vi.fn().mockReturnValueOnce(firstPromise);
+    setPywebview({ save_settings: mockSave });
+    const onClose = vi.fn();
+
+    const { container } = render(<SettingsModal {...makeProps()} onClose={onClose} />);
+
+    fireEvent.click(screen.getByText('Salva e Chiudi'));
+
+    const backdrop = container.querySelector('.absolute.inset-0') as HTMLElement;
+    fireEvent.click(backdrop);
+    expect(onClose).not.toHaveBeenCalled();
+
+    await act(async () => { resolveFirst({ ok: true }); });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('X button click while saving: onClose NOT called', async () => {
+    let resolveFirst!: (val: { ok: boolean }) => void;
+    const firstPromise = new Promise<{ ok: boolean }>(res => { resolveFirst = res; });
+    const mockSave = vi.fn().mockReturnValueOnce(firstPromise);
+    setPywebview({ save_settings: mockSave });
+    const onClose = vi.fn();
+
+    render(<SettingsModal {...makeProps()} onClose={onClose} />);
+
+    fireEvent.click(screen.getByText('Salva e Chiudi'));
+
+    const xButton = screen.getByLabelText('Chiudi impostazioni');
+    fireEvent.click(xButton);
+    expect(onClose).not.toHaveBeenCalled();
+
+    await act(async () => { resolveFirst({ ok: true }); });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });
