@@ -198,7 +198,7 @@ class Phase1SessionErrorKeyTests(unittest.TestCase):
             self.assertEqual(os.listdir(chunks_dir), [])
 
 
-class DegenerateRecoveryTests(unittest.TestCase):
+class ChainExhaustionRecoveryTests(unittest.TestCase):
     _COMMON_KWARGS = dict(
         input_path="fake.mp3",
         preconv_used_path=None,
@@ -264,9 +264,10 @@ class DegenerateRecoveryTests(unittest.TestCase):
                 **self._COMMON_KWARGS,
             ), call_count[0]
 
-    def test_recovery_succeeds_on_second_attempt(self):
-        """First attempt: DegenerateOutputError (chain exhausted). Recovery resets to primary.
-        Second attempt: valid output. One chunk saved, last_error absent."""
+    def test_recovery_succeeds_on_extra_pass(self):
+        """retry_with_quota exhausts the full model chain (DegenerateOutputError). Outer
+        recovery resets model_state to primary and retries the chunk one more time.
+        Extra pass returns valid output: one chunk saved, last_error absent."""
         session = {"stage": "phase1", "phase1": {}}
         switched = []
         model_state = build_model_state(
@@ -295,9 +296,9 @@ class DegenerateRecoveryTests(unittest.TestCase):
             self.assertEqual(model_state.current, "gemini-2.5-flash")
             self.assertIn(("gemini-2.5-flash-lite", "gemini-2.5-flash"), switched)
 
-    def test_recovery_second_attempt_also_degenerates_stops_job(self):
-        """Both attempts raise DegenerateOutputError.
-        No chunk saved, last_error='phase1_degenerate_output'."""
+    def test_recovery_extra_pass_also_exhausted_stops_job(self):
+        """retry_with_quota exhausts the chain twice: once in the initial call and once
+        in the outer recovery pass. No chunk saved, last_error='phase1_degenerate_output'."""
         session = {"stage": "phase1", "phase1": {}}
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -319,7 +320,8 @@ class DegenerateRecoveryTests(unittest.TestCase):
             self.assertEqual(calls, 2)
 
     def test_recovery_no_model_switch_callback_when_already_primary(self):
-        """If model_state.current is already the primary, on_model_switched is NOT called."""
+        """If model_state.current is already the primary when the chain is exhausted,
+        the outer recovery resets the model but does NOT fire on_model_switched."""
         session = {"stage": "phase1", "phase1": {}}
         switched = []
         model_state = build_model_state("gemini-2.5-flash", [], "gemini-2.5-flash")
@@ -341,10 +343,10 @@ class DegenerateRecoveryTests(unittest.TestCase):
 
             self.assertEqual(switched, [])
 
-    def test_recovery_primary_503_switches_to_fallback_then_success(self):
-        """Scenario: first attempt → DegenerateOutputError (chain exhausted with fallback active).
-        Recovery resets to primary. Second attempt → primary gets 503, retry_with_quota switches
-        internally to fallback and returns valid output. Chunk saved, job continues."""
+    def test_recovery_extra_pass_503_switches_to_fallback_then_success(self):
+        """Chain exhausted (fallback was active) → outer recovery resets to primary.
+        Extra pass: primary gets 503 and retry_with_quota internally switches to fallback,
+        returning valid output. Chunk saved, last_error absent."""
         session = {"stage": "phase1", "phase1": {}}
         switched = []
         # Start with fallback already active (prior 503 moved the model during this session)
@@ -414,10 +416,10 @@ class DegenerateRecoveryTests(unittest.TestCase):
         self.assertIn(("gemini-2.5-flash-lite", "gemini-2.5-flash"), switched)
         self.assertIn(("gemini-2.5-flash", "gemini-2.5-flash-lite"), switched)
 
-    def test_recovery_rebuilds_chunk_audio_for_each_attempt(self):
+    def test_recovery_rebuilds_chunk_audio_for_each_pass(self):
         """cut_audio_chunk_to_mp3 and make_inline_audio_part must each be called once
-        per attempt — twice total when recovery fires — proving the chunk context is
-        fully reconstructed before each retry."""
+        per outer-loop pass — twice total when the chain-exhaustion recovery fires —
+        proving the chunk audio context is fully reconstructed before the extra pass."""
         from unittest.mock import MagicMock
 
         session = {"stage": "phase1", "phase1": {}}

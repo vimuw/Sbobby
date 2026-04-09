@@ -724,6 +724,53 @@ class RetryWithQuotaTests(unittest.TestCase):
         )
         self.assertEqual(model_state.current, "gemini-2.5-flash")
 
+    def test_503_inner_retry_raises_429_reraises_429_not_503(self):
+        """Regression: when the inner 503-model-unavailable retry loop encounters a
+        minute-scoped 429 and breaks, the terminal `raise exc` must surface the 429,
+        not the original outer 503 that `sys.exc_info()` still holds."""
+        model_state = build_model_state(
+            "gemini-2.5-flash",
+            ["gemini-2.5-flash-lite"],
+            "gemini-2.5-flash",
+        )
+        call_count = [0]
+
+        def fn(_client):
+            call_count[0] += 1
+            if call_count[0] <= 3:
+                err = RuntimeError("429 Too Many Requests per minute")
+                err.code = 429
+                raise err
+            if call_count[0] == 4:
+                err = RuntimeError("503 Service Unavailable")
+                err.code = 503
+                raise err
+            err = RuntimeError("429 Too Many Requests per minute")
+            err.code = 429
+            raise err
+
+        with self.assertRaises(RuntimeError) as ctx:
+            retry_with_quota(
+                fn,
+                client=object(),
+                fallback_keys=[],
+                model_name="gemini-2.5-flash",
+                model_state=model_state,
+                cancelled=lambda: False,
+                runtime=_FakeRuntime(),
+                request_fallback_key=lambda: None,
+                max_attempts=4,
+                retry_sleep_seconds=0.0,
+                model_unavailable_retry_delays=(0.0,),
+                rate_limit_sleep_seconds=0.0,
+            )
+
+        self.assertNotIsInstance(ctx.exception, QuotaDailyLimitError)
+        self.assertIn("429", str(ctx.exception))
+        self.assertEqual(getattr(ctx.exception, "code", None), 429)
+        self.assertNotIn("503", str(ctx.exception))
+        self.assertEqual(model_state.current, "gemini-2.5-flash")
+
 
 if __name__ == "__main__":
     unittest.main()

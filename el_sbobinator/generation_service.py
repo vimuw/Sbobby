@@ -583,7 +583,7 @@ def retry_with_quota(  # noqa: C901
                     attempts += 1
                     continue
                 elif is_minute_rate_limit and not is_exhausted_key:
-                    raise
+                    raise exc
 
                 print("\n[!!] CHIAVE API ESAURITA O QUOTA GIORNALIERA RAGGIUNTA!")
                 if cancelled():

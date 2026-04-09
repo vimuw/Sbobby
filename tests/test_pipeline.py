@@ -133,6 +133,7 @@ class PipelineCancellationTests(unittest.TestCase):
 
             def fake_phase1(**kwargs):
                 seen["current_model"] = kwargs["model_state"].current
+                seen["chain"] = kwargs["model_state"].chain
                 return kwargs["client"], None, ""
 
             def fake_reset(context):
@@ -144,8 +145,8 @@ class PipelineCancellationTests(unittest.TestCase):
                     "outputs": {},
                 }
                 context.settings = SimpleNamespace(
-                    model="gemini-2.5-flash-lite",
-                    fallback_models=[],
+                    model="gemini-2.5-flash",
+                    fallback_models=["gemini-2.5-flash-lite"],
                     effective_model="gemini-2.5-flash-lite",
                     chunk_minutes=10,
                     chunk_seconds=60,
@@ -203,7 +204,8 @@ class PipelineCancellationTests(unittest.TestCase):
                 app._callback({"regenerate": True})
                 thread.join(timeout=2)
 
-        self.assertEqual(seen.get("current_model"), "gemini-2.5-flash-lite")
+        self.assertEqual(seen.get("current_model"), "gemini-2.5-flash")
+        self.assertIn("gemini-2.5-flash-lite", seen.get("chain", ()))
 
     def test_resume_always_starts_from_primary_ignoring_stale_effective_model(self):
         """On resume, model_state.current must be the primary model, even when the session

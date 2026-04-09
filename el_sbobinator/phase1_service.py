@@ -163,7 +163,7 @@ def process_phase1_transcription(  # noqa: C901
             print("   [*] Operazione annullata dall'utente.")
             return client, None, prev_memory
 
-        degenerate_recovery_used = False
+        chain_exhaustion_recovery_used = False
 
         while True:
             chunk_step_t0 = time.monotonic()
@@ -453,8 +453,8 @@ def process_phase1_transcription(  # noqa: C901
                     return client, None, prev_memory
 
                 except DegenerateOutputError as de:
-                    if not degenerate_recovery_used:
-                        degenerate_recovery_used = True
+                    if not chain_exhaustion_recovery_used:
+                        chain_exhaustion_recovery_used = True
                         if model_state is not None:
                             old_model = model_state.current
                             model_state.current = model_name
@@ -464,7 +464,7 @@ def process_phase1_transcription(  # noqa: C901
                             ):
                                 on_model_switched(old_model, model_name)
                         print(
-                            f'   [Recovery automatica] chunk={chunk_idx} attempt=1 reason="{de}" - riprovo con il modello primario ({model_name})...'
+                            f"   [Recovery automatica] chunk={chunk_idx}: catena modelli esaurita ({de}) - un ulteriore pass dal modello primario ({model_name})..."
                         )
                         continue
                     _excerpt = getattr(de, "rejected_text", "")
@@ -472,7 +472,7 @@ def process_phase1_transcription(  # noqa: C901
                         f"\n      excerpt: {_excerpt[:400]}" if _excerpt else ""
                     )
                     print(
-                        f'   [!] Output degenerato nel blocco {chunk_idx} (attempt 2) reason="{de}"{_excerpt_log}'
+                        f'   [!] Output degenerato nel blocco {chunk_idx}: anche il pass di recovery ha fallito reason="{de}"{_excerpt_log}'
                     )
                     session["last_error"] = "phase1_degenerate_output"
                     save_session()
