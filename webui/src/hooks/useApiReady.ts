@@ -6,7 +6,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
   const [bridgeDelayed, setBridgeDelayed] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [fallbackKeys, setFallbackKeys] = useState<string[]>([]);
-  const [preferredModel, setPreferredModel] = useState('gemini-3-flash-preview');
+  const [preferredModel, setPreferredModel] = useState('gemini-2.5-flash');
   const [fallbackModels, setFallbackModels] = useState<string[]>([]);
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
   const initDoneRef = useRef(false);
@@ -20,6 +20,8 @@ export function useApiReady(appendConsole: (msg: string) => void) {
   }, [appendConsole]);
 
   useEffect(() => {
+    let alive = true;
+
     const tryBootstrap = async () => {
       if (initDoneRef.current) return;
       if (inFlightRef.current) return;
@@ -28,6 +30,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
       inFlightRef.current = true;
       try {
         const cfg = await window.pywebview.api.load_settings();
+        if (!alive) return;
         initDoneRef.current = true;
         setBridgeDelayed(false);
         setApiReady(true);
@@ -39,6 +42,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
         if (cfg?.available_models?.length) setAvailableModels(cfg.available_models);
       } catch (e) {
         console.error('Load settings failed:', e);
+        if (!alive) return;
         if (!initDoneRef.current && retriesRef.current < 3) {
           retriesRef.current += 1;
           if (retryTimerRef.current !== null) clearTimeout(retryTimerRef.current);
@@ -71,6 +75,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     }, 5000);
 
     return () => {
+      alive = false;
       window.removeEventListener('pywebviewready', onBridgeReady);
       clearTimeout(delayedWarning);
       if (retryTimerRef.current !== null) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }

@@ -160,6 +160,13 @@
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.08);
 }
 
+:root:not([data-theme="dark"]) .icon-button.modal-icon-button,
+:root:not([data-theme="dark"]) .icon-button.modal-icon-button:hover {
+  background: transparent;
+  box-shadow: none;
+  border-color: transparent;
+}
+
 :root:not([data-theme="dark"]) .queue-card {
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.10), 0 6px 18px rgba(15, 23, 42, 0.07);
 }
@@ -624,6 +631,12 @@ button {
   height: 38px;
   border-radius: 12px;
   box-shadow: none;
+}
+
+.icon-button.modal-icon-button,
+.icon-button.modal-icon-button:hover {
+  background: transparent;
+  border: 1px solid transparent;
 }
 
 .modal-icon-button:hover {
@@ -1487,7 +1500,6 @@ button {
 .editor-toc-sticky {
   position: sticky;
   top: 12px;
-  height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;

@@ -91,7 +91,7 @@ class _PromptBlockingApp:
     def aggiorna_fase(self, text):
         return None
 
-    def imposta_output_html(self, path):
+    def imposta_output_html(self, path, output_dir=None):
         return None
 
     def processo_terminato(self):

@@ -251,6 +251,656 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(process_done_events[0]["failed"], 0)
         self.assertEqual(process_done_events[0]["total"], 1)
 
+    def test_read_html_content_falls_back_to_session_dir(self):
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+        ):
+            session_dir = os.path.join(session_root, "abc123")
+            os.makedirs(session_dir)
+            html_name = "Lesson_Sbobina.html"
+            session_html = os.path.join(session_dir, html_name)
+            with open(session_html, "w", encoding="utf-8") as fh:
+                fh.write(
+                    "<!DOCTYPE html><html><head></head><body><p>ok</p></body></html>"
+                )
+
+            desktop_html = os.path.join(desktop_dir, html_name)
+
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                result = api.read_html_content(desktop_html)
+
+        self.assertTrue(result["ok"], result.get("error"))
+        self.assertIn("<p>ok</p>", result["content"])
+
+    def test_save_html_content_falls_back_to_session_dir(self):
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+        ):
+            session_dir = os.path.join(session_root, "abc123")
+            os.makedirs(session_dir)
+            html_name = "Lesson_Sbobina.html"
+            session_html = os.path.join(session_dir, html_name)
+            with open(session_html, "w", encoding="utf-8") as fh:
+                fh.write(
+                    "<!DOCTYPE html><html><head><style>body{}</style></head>"
+                    "<body><p>Old</p></body></html>"
+                )
+
+            desktop_html = os.path.join(desktop_dir, html_name)
+
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                result = api.save_html_content(desktop_html, "<p>New</p>")
+
+            self.assertTrue(result["ok"], result.get("error"))
+            with open(session_html, "r", encoding="utf-8") as fh:
+                saved = fh.read()
+            self.assertIn("<p>New</p>", saved)
+
+    def test_read_html_content_rebuilds_from_session_when_file_missing_everywhere(self):
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+            tempfile.TemporaryDirectory() as audio_dir,
+        ):
+            session_dir = os.path.join(session_root, "abc123")
+            phase2_revised_dir = os.path.join(session_dir, "phase2_revised")
+            os.makedirs(phase2_revised_dir)
+
+            with open(
+                os.path.join(phase2_revised_dir, "rev_000.md"), "w", encoding="utf-8"
+            ) as fh:
+                fh.write("## Contenuto della sbobina")
+
+            audio_path = os.path.join(audio_dir, "Lesson.mp3")
+            with open(audio_path, "wb") as fh:
+                fh.write(b"fake")
+
+            html_name = "Lesson_Sbobina.html"
+            session_json = {
+                "schema_version": 1,
+                "stage": "done",
+                "input": {"path": audio_path},
+                "outputs": {"html": os.path.join(desktop_dir, html_name)},
+                "settings": {},
+                "phase1": {},
+                "phase2": {},
+                "boundary": {},
+                "last_error": None,
+            }
+            session_path = os.path.join(session_dir, "session.json")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump(session_json, fh)
+
+            desktop_html = os.path.join(desktop_dir, html_name)
+
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                result = api.read_html_content(desktop_html)
+
+            self.assertTrue(result["ok"], result.get("error"))
+            self.assertIn("Contenuto della sbobina", result["content"])
+
+            rebuilt_path = os.path.join(session_dir, html_name)
+            self.assertTrue(
+                os.path.isfile(rebuilt_path),
+                "HTML deve essere scritto nella session dir",
+            )
+
+            with open(session_path, "r", encoding="utf-8") as fh:
+                updated = json.load(fh)
+            self.assertEqual(
+                os.path.basename(updated["outputs"]["html"]),
+                html_name,
+                "session.json deve essere aggiornato con il nuovo path",
+            )
+
+    def test_rebuild_html_uses_html_basename_when_input_path_renamed(self):
+        """If input_path in session.json produces a different basename than the
+        recorded outputs.html, the rebuilt file must still use html_basename."""
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+            tempfile.TemporaryDirectory() as audio_dir,
+        ):
+            session_dir = os.path.join(session_root, "abc123")
+            phase2_revised_dir = os.path.join(session_dir, "phase2_revised")
+            os.makedirs(phase2_revised_dir)
+
+            with open(
+                os.path.join(phase2_revised_dir, "rev_000.md"), "w", encoding="utf-8"
+            ) as fh:
+                fh.write("## Contenuto renamed")
+
+            # input_path now points to a file with a *different* stem than html_basename
+            renamed_audio = os.path.join(audio_dir, "RenamedLesson.mp3")
+            with open(renamed_audio, "wb") as fh:
+                fh.write(b"fake")
+
+            original_html_name = "OriginalLesson_Sbobina.html"
+            session_json = {
+                "schema_version": 1,
+                "stage": "done",
+                "input": {"path": renamed_audio},
+                "outputs": {"html": os.path.join(desktop_dir, original_html_name)},
+                "settings": {},
+                "phase1": {},
+                "phase2": {},
+                "boundary": {},
+                "last_error": None,
+            }
+            session_path = os.path.join(session_dir, "session.json")
+            with open(session_path, "w", encoding="utf-8") as fh:
+                json.dump(session_json, fh)
+
+            desktop_html = os.path.join(desktop_dir, original_html_name)
+
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                result = api.read_html_content(desktop_html)
+
+            self.assertTrue(result["ok"], result.get("error"))
+            self.assertIn("Contenuto renamed", result["content"])
+
+            # The file in session_dir must use the ORIGINAL html basename, not
+            # "RenamedLesson_Sbobina.html" (which export would derive from input_path)
+            rebuilt_path = os.path.join(session_dir, original_html_name)
+            self.assertTrue(
+                os.path.isfile(rebuilt_path),
+                "Rebuilt HTML must use html_basename, not the name derived from input_path",
+            )
+            wrong_path = os.path.join(session_dir, "RenamedLesson_Sbobina.html")
+            self.assertFalse(
+                os.path.isfile(wrong_path),
+                "A file with the input_path-derived basename must not exist",
+            )
+
+            with open(session_path, "r", encoding="utf-8") as fh:
+                updated = json.load(fh)
+            self.assertEqual(
+                os.path.basename(updated["outputs"]["html"]),
+                original_html_name,
+                "session.json must record the canonical html_basename",
+            )
+
+    def test_rebuild_html_from_session_picks_newest_session(self):
+        """Two sessions share the same html basename; the newer one must be rebuilt."""
+        import json
+        import os
+        import time
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+            tempfile.TemporaryDirectory() as audio_dir,
+        ):
+            html_name = "Lecture_Sbobina.html"
+            audio_path = os.path.join(audio_dir, "Lecture.mp3")
+            with open(audio_path, "wb") as fh:
+                fh.write(b"fake")
+
+            def _make_session(name, content, mtime_offset):
+                sdir = os.path.join(session_root, name)
+                p2dir = os.path.join(sdir, "phase2_revised")
+                os.makedirs(p2dir)
+                with open(
+                    os.path.join(p2dir, "rev_000.md"), "w", encoding="utf-8"
+                ) as fh:
+                    fh.write(content)
+                sdata = {
+                    "schema_version": 1,
+                    "stage": "done",
+                    "input": {"path": audio_path},
+                    "outputs": {"html": os.path.join(desktop_dir, html_name)},
+                    "settings": {},
+                    "phase1": {},
+                    "phase2": {},
+                    "boundary": {},
+                    "last_error": None,
+                }
+                spath = os.path.join(sdir, "session.json")
+                with open(spath, "w", encoding="utf-8") as fh:
+                    json.dump(sdata, fh)
+                t = time.time() + mtime_offset
+                os.utime(spath, (t, t))
+                return sdir
+
+            _make_session("old_session", "## Vecchia sbobina", -3600)
+            _make_session("new_session", "## Nuova sbobina", 0)
+
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                result = api.read_html_content(os.path.join(desktop_dir, html_name))
+
+            self.assertTrue(result["ok"], result.get("error"))
+            self.assertIn("Nuova sbobina", result["content"])
+            self.assertNotIn("Vecchia sbobina", result["content"])
+
+    def test_rebuild_html_from_session_skips_incomplete_session(self):
+        """Regression: a session whose stage != 'done' must not be used as a
+        rebuild candidate even if phase2_revised/ and session.json exist."""
+        import json
+        import os
+
+        api = ElSbobinatorApi()
+        with (
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+            tempfile.TemporaryDirectory() as audio_dir,
+        ):
+            html_name = "Lecture_Incomplete.html"
+            audio_path = os.path.join(audio_dir, "Lecture.mp3")
+            with open(audio_path, "wb") as fh:
+                fh.write(b"fake")
+
+            sdir = os.path.join(session_root, "incomplete_session")
+            p2dir = os.path.join(sdir, "phase2_revised")
+            os.makedirs(p2dir)
+            with open(os.path.join(p2dir, "rev_000.md"), "w", encoding="utf-8") as fh:
+                fh.write("## Partial content")
+            sdata = {
+                "schema_version": 1,
+                "stage": "phase2",
+                "input": {"path": audio_path},
+                "outputs": {"html": os.path.join(desktop_dir, html_name)},
+                "settings": {},
+                "phase1": {},
+                "phase2": {},
+                "boundary": {},
+                "last_error": None,
+            }
+            with open(os.path.join(sdir, "session.json"), "w", encoding="utf-8") as fh:
+                json.dump(sdata, fh)
+
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                result = api.read_html_content(os.path.join(desktop_dir, html_name))
+
+            self.assertFalse(result["ok"])
+
+    def test_html_shell_cache_hit_after_desktop_file_deleted(self):
+        """Bug 4 regression: shell cached under Desktop path must be reused when
+        save_html_content falls back to the session-dir copy after the Desktop
+        file is deleted while the preview modal was open."""
+        import os
+        from unittest.mock import patch as _patch
+
+        api = ElSbobinatorApi()
+        html_name = "Lesson_Cache.html"
+        full_html = (
+            "<!DOCTYPE html><html>"
+            "<head><style>body{color:red}</style></head>"
+            "<body><p>Original</p></body>"
+            "</html>"
+        )
+
+        with (
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+        ):
+            session_dir = os.path.join(session_root, "sess1")
+            os.makedirs(session_dir)
+            session_html = os.path.join(session_dir, html_name)
+            desktop_html = os.path.join(desktop_dir, html_name)
+
+            with open(desktop_html, "w", encoding="utf-8") as fh:
+                fh.write(full_html)
+            with open(session_html, "w", encoding="utf-8") as fh:
+                fh.write(full_html)
+
+            with (
+                _patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                _patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                read_result = api.read_html_content(desktop_html)
+                self.assertTrue(read_result["ok"])
+
+                os.remove(desktop_html)
+
+                with _patch(
+                    "el_sbobinator.app_webview.save_html_body_content",
+                    wraps=__import__(
+                        "el_sbobinator.file_ops", fromlist=["save_html_body_content"]
+                    ).save_html_body_content,
+                ) as mock_save:
+                    result = api.save_html_content(desktop_html, "<p>New</p>")
+
+                self.assertTrue(result["ok"], result.get("error"))
+                self.assertIsNotNone(
+                    mock_save.call_args, "save_html_body_content must have been called"
+                )
+                shell_arg = mock_save.call_args.kwargs.get("shell")
+                self.assertIsNotNone(
+                    shell_arg,
+                    "shell must be passed from cache — no extra disk read expected",
+                )
+
+            with open(session_html, "r", encoding="utf-8") as fh:
+                saved = fh.read()
+            self.assertIn("<p>New</p>", saved)
+            self.assertIn("<style>body{color:red}</style>", saved)
+
+    def test_save_uses_same_session_dir_as_read_when_background_write_changes_mtime(
+        self,
+    ):
+        """Bug 2 regression: _resolved_path_cache must pin the session dir chosen by
+        read_html_content so that a background mtime change cannot redirect
+        save_html_content to a different session dir."""
+        import os
+        import time
+        from unittest.mock import patch as _patch
+
+        api = ElSbobinatorApi()
+        html_name = "Lecture_Sbobina.html"
+        full_html = (
+            "<!DOCTYPE html><html>"
+            "<head><style>body{color:green}</style></head>"
+            "<body><p>Original</p></body>"
+            "</html>"
+        )
+
+        with (
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+        ):
+            sess_a = os.path.join(session_root, "sess_a")
+            sess_b = os.path.join(session_root, "sess_b")
+            os.makedirs(sess_a)
+            os.makedirs(sess_b)
+
+            path_a = os.path.join(sess_a, html_name)
+            path_b = os.path.join(sess_b, html_name)
+            desktop_html = os.path.join(desktop_dir, html_name)
+
+            with open(path_a, "w", encoding="utf-8") as fh:
+                fh.write(full_html.replace("Original", "A"))
+            with open(path_b, "w", encoding="utf-8") as fh:
+                fh.write(full_html.replace("Original", "B"))
+
+            now = time.time()
+            os.utime(path_a, (now - 10, now - 10))
+            os.utime(path_b, (now, now))
+
+            with (
+                _patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                _patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                read_result = api.read_html_content(desktop_html)
+                self.assertTrue(read_result["ok"])
+                self.assertIn(
+                    "<p>B</p>",
+                    read_result["content"],
+                    "read must pick sess_b (higher mtime)",
+                )
+
+                os.utime(path_a, (now + 20, now + 20))
+
+                result = api.save_html_content(desktop_html, "<p>Edited</p>")
+
+            self.assertTrue(result["ok"], result.get("error"))
+
+            with open(path_b, "r", encoding="utf-8") as fh:
+                saved_b = fh.read()
+            with open(path_a, "r", encoding="utf-8") as fh:
+                saved_a = fh.read()
+
+            self.assertIn(
+                "<p>Edited</p>", saved_b, "save must write to sess_b (pinned by cache)"
+            )
+            self.assertNotIn(
+                "<p>Edited</p>",
+                saved_a,
+                "sess_a must not be touched despite higher mtime now",
+            )
+
+    def test_read_html_content_pins_cache_when_file_exists(self):
+        """Bug 1 regression: _resolved_path_cache must be populated even when the
+        original file exists at read time, so a transient unavailability at save
+        time does not cause a mtime-based session-dir mismatch."""
+        import os
+        from unittest.mock import patch as _patch
+
+        api = ElSbobinatorApi()
+        html_name = "Lecture_Sbobina.html"
+        full_html = (
+            "<!DOCTYPE html><html>"
+            "<head><style>body{color:red}</style></head>"
+            "<body><p>Original</p></body>"
+            "</html>"
+        )
+
+        with (
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+        ):
+            desktop_html = os.path.join(desktop_dir, html_name)
+            with open(desktop_html, "w", encoding="utf-8") as fh:
+                fh.write(full_html)
+
+            with (
+                _patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                _patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                result = api.read_html_content(desktop_html)
+                self.assertTrue(result["ok"])
+
+            real_path = os.path.realpath(os.path.abspath(desktop_html))
+            self.assertIn(
+                real_path,
+                api._resolved_path_cache,
+                "_resolved_path_cache must be populated even when file exists at read time",
+            )
+            self.assertEqual(api._resolved_path_cache[real_path], real_path)
+
+    def test_html_shell_cache_no_poisoning_on_same_basename(self):
+        """Bug 2 regression: two files with the same basename in different session
+        dirs must not overwrite each other's cache entry.  File A's save must
+        receive shell_A even after file B (same basename, different path) was
+        read afterwards."""
+        import os
+        from unittest.mock import patch as _patch
+
+        api = ElSbobinatorApi()
+        html_name = "lecture.html"
+        shell_a = "<head><style>body{color:red}</style></head>"
+        shell_b = "<head><style>body{color:blue}</style></head>"
+        html_a = f"<!DOCTYPE html><html>{shell_a}<body><p>A</p></body></html>"
+        html_b = f"<!DOCTYPE html><html>{shell_b}<body><p>B</p></body></html>"
+
+        with (
+            tempfile.TemporaryDirectory() as desktop_dir,
+            tempfile.TemporaryDirectory() as session_root,
+        ):
+            sess_a = os.path.join(session_root, "sessA")
+            sess_b = os.path.join(session_root, "sessB")
+            os.makedirs(sess_a)
+            os.makedirs(sess_b)
+            path_a = os.path.join(sess_a, html_name)
+            path_b = os.path.join(sess_b, html_name)
+
+            with open(path_a, "w", encoding="utf-8") as fh:
+                fh.write(html_a)
+            with open(path_b, "w", encoding="utf-8") as fh:
+                fh.write(html_b)
+
+            with (
+                _patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                _patch.object(api, "_get_session_root", return_value=session_root),
+            ):
+                self.assertTrue(api.read_html_content(path_a)["ok"])
+                self.assertTrue(api.read_html_content(path_b)["ok"])
+
+                with _patch(
+                    "el_sbobinator.app_webview.save_html_body_content",
+                    wraps=__import__(
+                        "el_sbobinator.file_ops", fromlist=["save_html_body_content"]
+                    ).save_html_body_content,
+                ) as mock_save:
+                    result = api.save_html_content(path_a, "<p>New A</p>")
+
+            self.assertTrue(result["ok"], result.get("error"))
+            shell_arg = mock_save.call_args.kwargs.get("shell")
+            self.assertIsNotNone(shell_arg, "shell must be passed from cache")
+            self.assertIn(
+                "color:red", "".join(shell_arg), "must use shell_A, not shell_B"
+            )
+            self.assertNotIn("color:blue", "".join(shell_arg))
+
+
+class TestFallbackAllowedRootsRecheck(unittest.TestCase):
+    """Regression tests: fallback path returned by _find_html_in_session_dirs must be
+    re-checked against allowed_roots before use (symlink-escape security gap)."""
+
+    def _make_api_with_roots(self, tmp, desktop_dir, session_root):
+        from el_sbobinator.app_webview import ElSbobinatorApi
+
+        api = ElSbobinatorApi()
+        return api, desktop_dir, session_root
+
+    def test_read_html_content_rejects_fallback_outside_allowed_roots(self):
+        import os
+        import tempfile
+
+        from unittest.mock import patch
+        from el_sbobinator.app_webview import ElSbobinatorApi
+
+        with tempfile.TemporaryDirectory() as tmp:
+            desktop_dir = os.path.join(tmp, "desktop")
+            session_root = os.path.join(tmp, "sessions")
+            outside_dir = os.path.join(tmp, "outside")
+            os.makedirs(desktop_dir)
+            os.makedirs(session_root)
+            os.makedirs(outside_dir)
+
+            outside_html = os.path.join(outside_dir, "note.html")
+            with open(outside_html, "w", encoding="utf-8") as fh:
+                fh.write("<html><body><p>secret</p></body></html>")
+
+            desktop_html = os.path.join(desktop_dir, "note.html")
+            api = ElSbobinatorApi()
+
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch.object(api, "_get_session_root", return_value=session_root),
+                patch.object(
+                    api,
+                    "_find_html_in_session_dirs",
+                    return_value=os.path.realpath(outside_html),
+                ),
+                patch.object(api, "_rebuild_html_from_session", return_value=None),
+            ):
+                result = api.read_html_content(desktop_html)
+
+        self.assertFalse(result["ok"])
+        self.assertIn("Accesso negato", result["error"])
+
+    def test_save_html_content_rejects_fallback_outside_allowed_roots(self):
+        import os
+        import tempfile
+
+        from unittest.mock import patch
+        from el_sbobinator.app_webview import ElSbobinatorApi
+
+        with tempfile.TemporaryDirectory() as tmp:
+            desktop_dir = os.path.join(tmp, "desktop")
+            session_root = os.path.join(tmp, "sessions")
+            outside_dir = os.path.join(tmp, "outside")
+            os.makedirs(desktop_dir)
+            os.makedirs(session_root)
+            os.makedirs(outside_dir)
+
+            outside_html = os.path.join(outside_dir, "note.html")
+            with open(outside_html, "w", encoding="utf-8") as fh:
+                fh.write("<html><body><p>original</p></body></html>")
+
+            desktop_html = os.path.join(desktop_dir, "note.html")
+            api = ElSbobinatorApi()
+
+            with (
+                patch(
+                    "el_sbobinator.app_webview.get_desktop_dir",
+                    return_value=desktop_dir,
+                ),
+                patch.object(api, "_get_session_root", return_value=session_root),
+                patch.object(
+                    api,
+                    "_find_html_in_session_dirs",
+                    return_value=os.path.realpath(outside_html),
+                ),
+                patch.object(api, "_rebuild_html_from_session", return_value=None),
+            ):
+                result = api.save_html_content(desktop_html, "<p>pwned</p>")
+
+            self.assertFalse(result["ok"])
+            self.assertIn("Accesso negato", result["error"])
+            with open(outside_html, "r", encoding="utf-8") as fh:
+                self.assertNotIn(
+                    "pwned", fh.read(), "file outside allowed roots must not be written"
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

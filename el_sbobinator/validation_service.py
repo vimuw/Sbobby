@@ -29,10 +29,13 @@ def _check_writable_dir(path: str) -> tuple[bool, str]:
         os.makedirs(path, exist_ok=True)
         with open(probe_name, "w", encoding="utf-8") as handle:
             handle.write("ok")
-        os.remove(probe_name)
-        return True, "Scrittura consentita."
     except Exception as exc:
         return False, str(exc)
+    try:
+        os.remove(probe_name)
+    except Exception:
+        pass
+    return True, "Scrittura consentita."
 
 
 def _get_model_capabilities(model_info) -> list[str] | None:
@@ -126,51 +129,59 @@ def validate_environment(
                 }
             )
         else:
-            failing_idx = 0
-            failing_model = primary_model
             try:
                 client = genai.Client(api_key=cleaned)
-                model_chain = [primary_model, *sanitized_fallbacks]
-                for idx, model_name in enumerate(model_chain):
-                    failing_idx = idx
-                    failing_model = model_name
-                    model_info = client.models.get(model=model_name)
-                    capabilities = _get_model_capabilities(model_info)
-                    if capabilities is not None and "generatecontent" not in {
-                        str(item or "").strip().lower() for item in capabilities
-                    }:
-                        raise RuntimeError(f"{model_name} non supporta generateContent")
-                    checks.append(
-                        {
-                            "id": "api_key" if idx == 0 else f"api_model_{idx}",
-                            "label": "API Key Gemini"
-                            if idx == 0
-                            else f"Fallback modello {idx}",
-                            "status": "ok",
-                            "message": f"Accesso disponibile per {model_name}.",
-                            "details": model_name,
-                        }
-                    )
             except Exception as exc:
                 checks.append(
                     {
-                        "id": "api_key"
-                        if failing_idx == 0
-                        else f"api_model_{failing_idx}",
-                        "label": "API Key Gemini"
-                        if failing_idx == 0
-                        else f"Fallback modello {failing_idx}",
+                        "id": "api_key",
+                        "label": "API Key Gemini",
                         "status": "error",
-                        "message": (
-                            "API key non valida o modello primario non accessibile."
-                            if failing_idx == 0
-                            else f"Modello fallback {failing_idx} non accessibile con questa chiave."
-                        ),
-                        "details": str(exc)
-                        if failing_idx == 0
-                        else f"{failing_model}: {exc}",
+                        "message": "API key non valida o modello primario non accessibile.",
+                        "details": str(exc),
                     }
                 )
+            else:
+                model_chain = [primary_model, *sanitized_fallbacks]
+                for idx, model_name in enumerate(model_chain):
+                    check_id = "api_key" if idx == 0 else f"api_model_{idx}"
+                    check_label = (
+                        "API Key Gemini" if idx == 0 else f"Fallback modello {idx}"
+                    )
+                    try:
+                        model_info = client.models.get(model=model_name)
+                        capabilities = _get_model_capabilities(model_info)
+                        if capabilities is not None and "generatecontent" not in {
+                            str(item or "").strip().lower() for item in capabilities
+                        }:
+                            raise RuntimeError(
+                                f"{model_name} non supporta generateContent"
+                            )
+                        checks.append(
+                            {
+                                "id": check_id,
+                                "label": check_label,
+                                "status": "ok",
+                                "message": f"Accesso disponibile per {model_name}.",
+                                "details": model_name,
+                            }
+                        )
+                    except Exception as exc:
+                        checks.append(
+                            {
+                                "id": check_id,
+                                "label": check_label,
+                                "status": "error",
+                                "message": (
+                                    "API key non valida o modello primario non accessibile."
+                                    if idx == 0
+                                    else f"Modello fallback {idx} non accessibile con questa chiave."
+                                ),
+                                "details": str(exc)
+                                if idx == 0
+                                else f"{model_name}: {exc}",
+                            }
+                        )
 
     if platform.system() != "Windows":
         keyring_ok = False

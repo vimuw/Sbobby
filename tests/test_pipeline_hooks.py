@@ -24,8 +24,8 @@ class _DummyTarget:
     def aggiorna_fase(self, text):
         self.events.append(("phase", text))
 
-    def imposta_output_html(self, path):
-        self.events.append(("output", path))
+    def imposta_output_html(self, path, output_dir=None):
+        self.events.append(("output", path, output_dir))
 
     def processo_terminato(self):
         self.events.append(("done", None))
@@ -48,6 +48,7 @@ class PipelineRuntimeTests(unittest.TestCase):
         runtime.progress(0.4)
         runtime.phase("fase test")
         runtime.output_html("out.html")
+        runtime.output_html("out2.html", output_dir="/some/dir")
         runtime.set_work_totals(chunks_total=3)
         runtime.update_work_done("chunks", 1, total=3)
         runtime.register_step_time("chunks", 2.5, done=1, total=3)
@@ -57,7 +58,8 @@ class PipelineRuntimeTests(unittest.TestCase):
 
         self.assertIn(("progress", 0.4), target.events)
         self.assertIn(("phase", "fase test"), target.events)
-        self.assertIn(("output", "out.html"), target.events)
+        self.assertIn(("output", "out.html", None), target.events)
+        self.assertIn(("output", "out2.html", "/some/dir"), target.events)
         self.assertEqual(target.last_run_status, "completed")
         self.assertEqual(target.effective_api_key, "key-123")
 

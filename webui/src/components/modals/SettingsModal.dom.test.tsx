@@ -158,3 +158,37 @@ describe('SettingsModal — save behavior', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('SettingsModal — session info race condition', () => {
+  it('stale fetch discarded on open→close→reopen: loading not cleared prematurely', async () => {
+    let resolveFirst!: (val: unknown) => void;
+    let resolveSecond!: (val: unknown) => void;
+    const firstPromise = new Promise(res => { resolveFirst = res; });
+    const secondPromise = new Promise(res => { resolveSecond = res; });
+    const mockGetInfo = vi.fn()
+      .mockReturnValueOnce(firstPromise)
+      .mockReturnValueOnce(secondPromise);
+    setPywebview({ get_session_storage_info: mockGetInfo });
+
+    const { rerender } = render(<SettingsModal {...makeProps()} isOpen={true} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+
+    rerender(<SettingsModal {...makeProps()} isOpen={false} />);
+    rerender(<SettingsModal {...makeProps()} isOpen={true} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+
+    await act(async () => { resolveFirst({ ok: true, total_bytes: 999999, total_sessions: 7777 }); });
+
+    expect(screen.queryByText('Calcolo…')).not.toBeNull();   // loading NOT prematurely cleared
+    expect(screen.queryByText(/7777/)).toBeNull();            // stale data NOT applied
+
+    await act(async () => { resolveSecond({ ok: true, total_bytes: 1024, total_sessions: 3 }); });
+
+    expect(screen.queryByText('Calcolo…')).toBeNull();
+    expect(screen.queryByText(/3 sessioni/)).not.toBeNull();
+  });
+});

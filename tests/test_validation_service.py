@@ -1,7 +1,9 @@
+import os
+import tempfile
 import unittest
 from unittest.mock import patch
 
-from el_sbobinator.validation_service import validate_environment
+from el_sbobinator.validation_service import _check_writable_dir, validate_environment
 
 
 class _AlwaysOkModels:
@@ -42,6 +44,19 @@ class _PrimaryFailClient:
 class _ClientCtorFail:
     def __init__(self, api_key=None, **kwargs):
         raise RuntimeError("invalid API key")
+
+
+class _MiddleFailModels:
+    def get(self, model=None, **kwargs):
+        if model == "gemini-2.5-flash-lite":
+            raise RuntimeError("middle model disabled")
+        return {"model": model}
+
+
+class _MiddleFailClient:
+    def __init__(self, api_key=None, **kwargs):
+        self.api_key = api_key
+        self.models = _MiddleFailModels()
 
 
 class _NoGenerateContentModel:
@@ -174,6 +189,60 @@ class ValidationServiceTests(unittest.TestCase):
         )
         self.assertEqual(api_check["status"], "error")
         self.assertIn("generateContent", api_check["details"])
+
+    @patch("el_sbobinator.validation_service.get_desktop_dir", return_value=".")
+    @patch("el_sbobinator.validation_service.resolve_ffmpeg", return_value="ffmpeg.exe")
+    @patch("google.genai.Client", _MiddleFailClient)
+    def test_validate_environment_continues_after_middle_fallback_failure(
+        self, *_mocks
+    ):
+        result = validate_environment(
+            api_key="fake",
+            validate_api_key=True,
+            preferred_model="gemini-2.5-flash",
+            fallback_models=["gemini-2.5-flash-lite", "gemini-3-flash-preview"],
+        )
+
+        self.assertFalse(result["ok"])
+        check_ids = [check["id"] for check in result["checks"]]
+        self.assertIn("api_key", check_ids)
+        self.assertIn("api_model_1", check_ids)
+        self.assertIn("api_model_2", check_ids)
+
+        api_check = next(c for c in result["checks"] if c["id"] == "api_key")
+        middle_check = next(c for c in result["checks"] if c["id"] == "api_model_1")
+        last_check = next(c for c in result["checks"] if c["id"] == "api_model_2")
+
+        self.assertEqual(api_check["status"], "ok")
+        self.assertEqual(middle_check["status"], "error")
+        self.assertIn("gemini-2.5-flash-lite", middle_check["details"])
+        self.assertEqual(last_check["status"], "ok")
+        self.assertEqual(last_check["details"], "gemini-3-flash-preview")
+
+
+class CheckWritableDirTests(unittest.TestCase):
+    def test_returns_true_when_directory_is_writable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ok, msg = _check_writable_dir(tmp)
+        self.assertTrue(ok)
+        self.assertIn("consentita", msg)
+
+    def test_returns_true_even_when_remove_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("os.remove", side_effect=OSError("locked")):
+                ok, msg = _check_writable_dir(tmp)
+            probe = os.path.join(tmp, ".el_sbobinator_write_test")
+            if os.path.exists(probe):
+                os.remove(probe)
+        self.assertTrue(ok)
+        self.assertIn("consentita", msg)
+
+    def test_returns_false_when_write_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("builtins.open", side_effect=PermissionError("no write")):
+                ok, msg = _check_writable_dir(tmp)
+        self.assertFalse(ok)
+        self.assertIn("no write", msg)
 
 
 if __name__ == "__main__":

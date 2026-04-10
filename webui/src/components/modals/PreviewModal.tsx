@@ -36,11 +36,13 @@ export function PreviewModal({
   const lastPersistedRef = useRef(previewContent ?? '');
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveGenRef = useRef(0);
+  const saveErrorOnCloseRef = useRef(false);
   const htmlPathRef = useRef(htmlPath);
   useEffect(() => { htmlPathRef.current = htmlPath; }, [htmlPath]);
   useEffect(() => {
     lastPersistedRef.current = previewContent ?? '';
     isDirtyRef.current = false;
+    saveErrorOnCloseRef.current = false;
     setIsCopied(false);
     setAutosaveStatus('idle');
     setIsTocOpen(false);
@@ -49,7 +51,7 @@ export function PreviewModal({
   useEffect(() => {
     const autosaveGenRefAtCleanup = autosaveGenRef;
     return () => {
-      if (!isDirtyRef.current) return;
+      if (!isDirtyRef.current || saveErrorOnCloseRef.current) return;
       if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
       const path = htmlPathRef.current;
       const snap = getHtmlRef.current?.() ?? '';
@@ -74,7 +76,7 @@ export function PreviewModal({
   }, []); // empty deps: register once on mount, remove on unmount
 
   const flushAndClose = useCallback(async () => {
-    if (isDirtyRef.current) {
+    if (isDirtyRef.current && !saveErrorOnCloseRef.current) {
       if (autosaveTimerRef.current) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
       const path = htmlPathRef.current;
       const snap = getHtmlRef.current?.() ?? '';
@@ -83,8 +85,8 @@ export function PreviewModal({
         try {
           const res = await window.pywebview.api.save_html_content(path, snap, ++autosaveGenRef.current);
           if (res.ok) { lastPersistedRef.current = snap; isDirtyRef.current = false; }
-          else { setAutosaveStatus('error'); return; }
-        } catch { setAutosaveStatus('error'); return; }
+          else { saveErrorOnCloseRef.current = true; setAutosaveStatus('error'); return; }
+        } catch { saveErrorOnCloseRef.current = true; setAutosaveStatus('error'); return; }
       }
     }
     onClose();
@@ -100,6 +102,7 @@ export function PreviewModal({
   const scheduleAutosave = useCallback(() => {
     if (!htmlPath || previewContent === null) return;
     isDirtyRef.current = true;
+    saveErrorOnCloseRef.current = false;
     if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
     const savedForPath = htmlPath;
     const gen = ++autosaveGenRef.current;
@@ -108,11 +111,13 @@ export function PreviewModal({
       const snap = getHtmlRef.current?.() ?? '';
       if (snap === lastPersistedRef.current) { isDirtyRef.current = false; return; }
       setAutosaveStatus('saving');
-      const res = await window.pywebview.api.save_html_content(savedForPath, snap, gen);
-      if (htmlPathRef.current !== savedForPath) return;
-      if (gen !== autosaveGenRef.current) return;
-      if (res.ok) { lastPersistedRef.current = snap; isDirtyRef.current = false; setAutosaveStatus('saved'); }
-      else setAutosaveStatus('error');
+      try {
+        const res = await window.pywebview.api.save_html_content(savedForPath, snap, gen);
+        if (htmlPathRef.current !== savedForPath) return;
+        if (gen !== autosaveGenRef.current) return;
+        if (res.ok) { lastPersistedRef.current = snap; isDirtyRef.current = false; setAutosaveStatus('saved'); }
+        else setAutosaveStatus('error');
+      } catch { setAutosaveStatus('error'); }
     }, 300);
   }, [htmlPath, previewContent]);
 
@@ -175,7 +180,7 @@ export function PreviewModal({
               </h3>
               <div className="flex gap-2 shrink-0 flex-wrap justify-end">
                 <span
-                  className="inline-flex h-11 items-center rounded-[14px] px-3 text-sm font-medium"
+                  className="inline-flex h-[38px] items-center rounded-[14px] px-3 text-sm font-medium"
                   style={{
                     color: autosaveStatus === 'error' ? 'var(--error-text)' : autosaveStatus === 'saved' ? 'var(--success-text)' : 'var(--text-muted)',
                     background: 'rgba(255,255,255,0.02)',
@@ -204,7 +209,7 @@ export function PreviewModal({
                     {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
-                <button onClick={() => void flushAndClose()} className="icon-button modal-icon-button" style={{ color: 'var(--text-muted)' }}>
+                <button onClick={() => void flushAndClose()} className="icon-button modal-icon-button" style={{ color: 'var(--text-muted)' }} title={autosaveStatus === 'error' ? 'Chiudi senza salvare' : undefined}>
                   <X className="w-5 h-5" />
                 </button>
               </div>

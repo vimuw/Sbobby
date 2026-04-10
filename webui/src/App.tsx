@@ -3,6 +3,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { motion, AnimatePresence } from 'motion/react';
 import {
+  AlertTriangle,
   Check,
   CheckCircle,
   ChevronDown,
@@ -128,6 +129,8 @@ export default function App() {
   const [isCopied, setIsCopied] = useState(false);
   const [showEmptyState, setShowEmptyState] = useState(() => files.length === 0);
   const [completedSearch, setCompletedSearch] = useState('');
+  const [isPeakHour, setIsPeakHour] = useState(() => { const h = new Date().getHours(); return h >= 15 && h < 20; });
+  const [isPeakDismissed, setIsPeakDismissed] = useState(false);
 
   // --- Refs ---
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -480,6 +483,19 @@ export default function App() {
     }
   }, [appState, etaLabel]);
 
+  useEffect(() => {
+    const check = () => {
+      const h = new Date().getHours();
+      setIsPeakHour(h >= 15 && h < 20);
+    };
+    const id = setInterval(check, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (isPeakHour) setIsPeakDismissed(false);
+  }, [isPeakHour]);
+
   const titleGradient = { background: 'linear-gradient(90deg, var(--gradient-title-from), var(--gradient-title-to))', WebkitBackgroundClip: 'text' as const, WebkitTextFillColor: 'transparent' };
   const sGradient = { background: 'linear-gradient(90deg, var(--gradient-s-from), var(--gradient-s-to))', WebkitBackgroundClip: 'text' as const, WebkitTextFillColor: 'transparent' };
 
@@ -557,12 +573,12 @@ export default function App() {
               </span>
             )}
             <span className="premium-badge" style={{
-              color: !apiReady ? (bridgeDelayed ? 'var(--error-text)' : 'var(--warning-text)') : hasApiKey ? 'var(--success-text)' : 'var(--text-secondary)',
-              borderColor: !apiReady ? (bridgeDelayed ? 'var(--error-ring)' : 'var(--warning-ring)') : hasApiKey ? 'var(--success-ring)' : 'var(--border-default)',
-              background: !apiReady ? (bridgeDelayed ? 'var(--error-subtle)' : 'var(--warning-subtle)') : hasApiKey ? 'var(--success-subtle)' : 'rgba(255,255,255,0.02)',
+              color: !apiReady ? (bridgeDelayed ? 'var(--error-text)' : 'var(--warning-text)') : !hasApiKey ? 'var(--text-secondary)' : !isApiKeyValid ? 'var(--warning-text)' : 'var(--success-text)',
+              borderColor: !apiReady ? (bridgeDelayed ? 'var(--error-ring)' : 'var(--warning-ring)') : !hasApiKey ? 'var(--border-default)' : !isApiKeyValid ? 'var(--warning-ring)' : 'var(--success-ring)',
+              background: !apiReady ? (bridgeDelayed ? 'var(--error-subtle)' : 'var(--warning-subtle)') : !hasApiKey ? 'rgba(255,255,255,0.02)' : !isApiKeyValid ? 'var(--warning-subtle)' : 'var(--success-subtle)',
             }}>
-              <span className={`inline-flex h-2.5 w-2.5 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`} style={{ background: !apiReady ? (bridgeDelayed ? 'var(--error-bg)' : 'var(--warning-bg)') : hasApiKey ? 'var(--success-bg)' : 'var(--text-faint)' }} />
-              {!apiReady ? (bridgeDelayed ? 'Bridge in ritardo' : 'Bridge in avvio') : hasApiKey ? 'API pronta' : 'Configura API'}
+              <span className={`inline-flex h-2.5 w-2.5 rounded-full ${appState === 'processing' ? 'animate-pulse' : ''}`} style={{ background: !apiReady ? (bridgeDelayed ? 'var(--error-bg)' : 'var(--warning-bg)') : !hasApiKey ? 'var(--text-faint)' : !isApiKeyValid ? 'var(--warning-bg)' : 'var(--success-bg)' }} />
+              {!apiReady ? (bridgeDelayed ? 'Bridge in ritardo' : 'Bridge in avvio') : !hasApiKey ? 'Configura API' : !isApiKeyValid ? 'Chiave non valida' : 'API pronta'}
             </span>
             <button
               onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
@@ -577,8 +593,35 @@ export default function App() {
             </button>
           </div>
         </div>
+        <AnimatePresence>
+          {isPeakHour && !isPeakDismissed && (
+            <motion.div
+              key="peak-hour-banner"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.22, ease: 'easeInOut' }}
+              className="w-full overflow-hidden"
+              style={{ borderTop: '1px solid var(--warning-ring, var(--border-default))', background: 'var(--warning-subtle)' }}
+            >
+              <div className="max-w-6xl mx-auto px-5 sm:px-6 py-2.5 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2.5 text-sm font-medium" style={{ color: 'var(--warning-text)' }}>
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>Fascia oraria di punta (15:00–20:00): tutti i modelli Gemini Flash possono subire <strong>rallentamenti o errori 503</strong> per traffico elevato sui server Google. Gemini 3 Flash è il più colpito; Gemini 2.5 Flash è generalmente più stabile, ma non immune da problemi.</span>
+                </div>
+                <button
+                  onClick={() => setIsPeakDismissed(true)}
+                  className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--warning-text)', padding: '2px', lineHeight: 1 }}
+                  aria-label="Chiudi avviso fascia oraria"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
-
       <AnimatePresence>
         {updateAvailable && (
           <motion.div

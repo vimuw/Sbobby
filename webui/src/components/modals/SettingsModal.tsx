@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Activity, AlertCircle, ArrowDown, ArrowUp, ChevronDown, Cpu, Eye, EyeOff, HardDrive, Settings, SlidersHorizontal, X } from 'lucide-react';
+import { Activity, AlertCircle, AlertTriangle, ArrowDown, ArrowUp, ChevronDown, Cpu, Eye, EyeOff, HardDrive, Settings, SlidersHorizontal, X } from 'lucide-react';
 import type { ModelOption, ValidationResult } from '../../bridge';
 import { formatSize, GEMINI_KEY_PATTERN } from '../../utils';
 
@@ -180,12 +180,14 @@ export function SettingsModal({
     setSaveError(null);
     setCleanupResult(null);
     if (!window.pywebview?.api?.get_session_storage_info) return;
+    let aborted = false;
     setIsLoadingSessionInfo(true);
     setSessionInfo(null);
     window.pywebview.api.get_session_storage_info()
-      .then(res => { if (res?.ok) setSessionInfo({ total_bytes: res.total_bytes ?? 0, total_sessions: res.total_sessions ?? 0 }); })
+      .then(res => { if (!aborted && res?.ok) setSessionInfo({ total_bytes: res.total_bytes ?? 0, total_sessions: res.total_sessions ?? 0 }); })
       .catch(() => {})
-      .finally(() => setIsLoadingSessionInfo(false));
+      .finally(() => { if (!aborted) setIsLoadingSessionInfo(false); });
+    return () => { aborted = true; };
   }, [isOpen]);
 
   const handleCleanupSessions = async () => {
@@ -197,8 +199,10 @@ export function SettingsModal({
       if (res?.ok) {
         setCleanupResult({ removed: res.removed ?? 0, freed_bytes: res.freed_bytes ?? 0 });
         if (window.pywebview?.api?.get_session_storage_info) {
-          const info = await window.pywebview.api.get_session_storage_info();
-          if (info?.ok) setSessionInfo({ total_bytes: info.total_bytes ?? 0, total_sessions: info.total_sessions ?? 0 });
+          try {
+            const info = await window.pywebview.api.get_session_storage_info();
+            if (info?.ok) setSessionInfo({ total_bytes: info.total_bytes ?? 0, total_sessions: info.total_sessions ?? 0 });
+          } catch { /* non-critical refresh — cleanup already succeeded */ }
         }
       } else {
         appendConsole(`❌ Pulizia sessioni fallita: ${res?.error || 'errore sconosciuto'}`);
@@ -323,11 +327,11 @@ export function SettingsModal({
               <button
                 onClick={handleClose}
                 disabled={isSaving}
-                className="icon-button modal-icon-button"
+                className="icon-button modal-icon-button disabled:opacity-40"
                 style={{ color: 'var(--text-muted)' }}
                 aria-label="Chiudi impostazioni"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
             <div className="app-scroll flex-1 overflow-y-auto overflow-x-hidden px-5 py-5 space-y-6">
@@ -501,6 +505,12 @@ export function SettingsModal({
                                   Nessun fallback aggiuntivo configurato oltre al primario.
                                 </p>
                               )}
+                            </div>
+                            <div className="rounded-lg px-3 py-2.5 flex items-start gap-2" style={{ background: 'var(--warning-subtle)', border: '1px solid var(--warning-ring, var(--border-default))' }}>
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: 'var(--warning-text)' }} />
+                              <p className="text-xs" style={{ color: 'var(--warning-text)' }}>
+                                Tutti i modelli Gemini Flash possono subire rallentamenti o errori 503 nella fascia <strong>15:00–20:00</strong> per traffico elevato sui server Google, con Gemini 3 Flash generalmente più colpito. <strong>Gemini 2.5 Flash</strong> è il più stabile, ma non è immune da problemi.
+                              </p>
                             </div>
                             <p className="text-xs" style={{ color: 'var(--text-faint, var(--text-muted))' }}>
                               L'app cambia modello solo se il modello corrente risponde 503/UNAVAILABLE. Se passa a un fallback, resta su quello fino alla fine del job.

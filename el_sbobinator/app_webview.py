@@ -283,9 +283,12 @@ class PipelineAdapter:
     def aggiorna_fase(self, text: str):
         self._emit_js("updatePhase", text, batched=True)
 
-    def imposta_output_html(self, path: str):
+    def imposta_output_html(self, path: str, output_dir: str | None = None):
         self.last_output_html = path
-        self.last_output_dir = os.path.dirname(path) if path else None
+        if output_dir is not None:
+            self.last_output_dir = output_dir
+        else:
+            self.last_output_dir = os.path.dirname(path) if path else None
 
     def processo_terminato(self):
         # Hook per fine file: il lifecycle del batch e' gestito da ElSbobinatorApi.start_processing.
@@ -393,6 +396,7 @@ class ElSbobinatorApi:
         self._adapter = PipelineAdapter(None, self._cancel_event)
         self._processing_thread: threading.Thread | None = None
         self._html_shell_cache: dict[str, tuple[str, str]] = {}
+        self._resolved_path_cache: dict[str, str] = {}
         configure_logging()
         self._logger = get_logger("el_sbobinator.webview")
 
@@ -821,8 +825,26 @@ class ElSbobinatorApi:
                 "ok": False,
                 "error": "Accesso negato: path fuori dai percorsi consentiti.",
             }
+        requested_real_path = real_path
+        self._resolved_path_cache[requested_real_path] = real_path
         if not os.path.isfile(real_path):
-            return {"ok": False, "error": "File non trovato."}
+            _basename = os.path.basename(real_path)
+            fallback = self._find_html_in_session_dirs(_basename)
+            if not fallback:
+                fallback = self._rebuild_html_from_session(_basename)
+            if fallback and os.path.isfile(fallback):
+                real_path = fallback
+                if not any(
+                    real_path.startswith(root + os.sep) or real_path == root
+                    for root in allowed_roots
+                ):
+                    return {
+                        "ok": False,
+                        "error": "Accesso negato: path fuori dai percorsi consentiti.",
+                    }
+                self._resolved_path_cache[requested_real_path] = real_path
+            else:
+                return {"ok": False, "error": "File non trovato."}
         try:
             content = read_html_file_content(real_path)
             shell = extract_html_shell(content)
@@ -838,6 +860,113 @@ class ElSbobinatorApi:
 
         return SESSION_ROOT
 
+    def _find_html_in_session_dirs(self, basename: str) -> str | None:
+        """Cerca un file HTML con lo stesso nome nelle cartelle di sessione.
+
+        Usato come fallback quando il path originale (es. Desktop) non esiste piu'.
+        Restituisce il path piu' recente per modifiche tra piu' sessioni candidate.
+        """
+        session_root = self._get_session_root()
+        if not os.path.isdir(session_root):
+            return None
+        candidates: list[tuple[float, str]] = []
+        try:
+            for entry in os.scandir(session_root):
+                if not entry.is_dir():
+                    continue
+                candidate = os.path.join(entry.path, basename)
+                try:
+                    st = os.stat(candidate)
+                    candidates.append((st.st_mtime, os.path.realpath(candidate)))
+                except (FileNotFoundError, OSError):
+                    continue
+        except Exception:
+            return None
+        if not candidates:
+            return None
+        candidates.sort(reverse=True)
+        return candidates[0][1]
+
+    def _rebuild_html_from_session(self, html_basename: str) -> str | None:
+        """Ricostruisce l'HTML dai blocchi .md della sessione come ultimo fallback.
+
+        Usato quando l'HTML manca sia al path originale sia nelle session dirs
+        (es. sessioni create prima che l'HTML venisse salvato nella session dir).
+        """
+        from el_sbobinator.export_service import export_final_html_document
+        from el_sbobinator.pipeline_session import read_text_file
+        from el_sbobinator.shared import _atomic_write_json, safe_output_basename
+
+        session_root = self._get_session_root()
+        if not os.path.isdir(session_root):
+            return None
+        try:
+            candidates: list[tuple[float, str, dict]] = []
+            for entry in os.scandir(session_root):
+                if not entry.is_dir():
+                    continue
+                session_path = os.path.join(entry.path, "session.json")
+                if not os.path.isfile(session_path):
+                    continue
+                try:
+                    with open(session_path, "r", encoding="utf-8") as fh:
+                        session_data = json.load(fh)
+                    existing_html = session_data.get("outputs", {}).get("html", "")
+                    if not existing_html:
+                        continue
+                    if os.path.basename(str(existing_html)) != html_basename:
+                        continue
+                    phase2_revised_dir = os.path.join(entry.path, "phase2_revised")
+                    if not os.path.isdir(phase2_revised_dir):
+                        continue
+                    if not session_data.get("input", {}).get("path", ""):
+                        continue
+                    if session_data.get("stage") != "done":
+                        continue
+                    mtime = os.path.getmtime(session_path)
+                    candidates.append((mtime, entry.path, session_data))
+                except Exception:
+                    continue
+            candidates.sort(key=lambda c: c[0], reverse=True)
+            for _mtime, entry_path, session_data in candidates:
+                session_path = os.path.join(entry_path, "session.json")
+                phase2_revised_dir = os.path.join(entry_path, "phase2_revised")
+                input_path = session_data["input"]["path"]
+                try:
+                    _, html_path = export_final_html_document(
+                        input_path=input_path,
+                        phase2_revised_dir=phase2_revised_dir,
+                        fallback_body="",
+                        read_text=read_text_file,
+                        output_dir=entry_path,
+                        fallback_output_dir=entry_path,
+                        safe_output_basename=safe_output_basename,
+                    )
+                    if not os.path.isfile(html_path):
+                        break
+                    # export derives its filename from input_path; if input_path
+                    # was renamed after session creation the basename will differ
+                    # from html_basename. Rename to the canonical basename so
+                    # _find_html_in_session_dirs and save_html_content always
+                    # resolve the same name.
+                    if os.path.basename(html_path) != html_basename:
+                        canonical_path = os.path.join(
+                            os.path.dirname(html_path), html_basename
+                        )
+                        os.replace(html_path, canonical_path)
+                        html_path = canonical_path
+                    try:
+                        session_data["outputs"]["html"] = html_path
+                        _atomic_write_json(session_path, session_data)
+                    except Exception:
+                        pass
+                    return os.path.realpath(html_path)
+                except Exception:
+                    continue
+        except Exception:
+            return None
+        return None
+
     def save_html_content(
         self, path: str, content: str, generation: int | None = None
     ) -> dict:
@@ -846,6 +975,7 @@ class ElSbobinatorApi:
             return {"ok": False, "error": "Path non valido: deve essere un file .html."}
         # Path traversal protection: resolve and check against allowed roots
         real_path = os.path.realpath(os.path.abspath(path))
+        original_real_path = real_path
         allowed_roots = [
             os.path.realpath(get_desktop_dir()),  # Desktop / OneDrive Desktop
             os.path.realpath(self._get_session_root()),  # Session storage
@@ -859,9 +989,31 @@ class ElSbobinatorApi:
                 "error": "Accesso negato: path fuori dai percorsi consentiti.",
             }
         if not os.path.isfile(real_path):
-            return {"ok": False, "error": "File non trovato."}
+            _basename = os.path.basename(real_path)
+            cached_resolution = self._resolved_path_cache.get(original_real_path)
+            if cached_resolution and os.path.isfile(cached_resolution):
+                fallback = cached_resolution
+            else:
+                fallback = self._find_html_in_session_dirs(_basename)
+                if not fallback:
+                    fallback = self._rebuild_html_from_session(_basename)
+            if fallback and os.path.isfile(fallback):
+                real_path = fallback
+                if not any(
+                    real_path.startswith(root + os.sep) or real_path == root
+                    for root in allowed_roots
+                ):
+                    return {
+                        "ok": False,
+                        "error": "Accesso negato: path fuori dai percorsi consentiti.",
+                    }
+                self._resolved_path_cache[original_real_path] = real_path
+            else:
+                return {"ok": False, "error": "File non trovato."}
         try:
-            shell = self._html_shell_cache.get(real_path)
+            shell = self._html_shell_cache.get(real_path) or self._html_shell_cache.get(
+                original_real_path
+            )
             gen = int(generation) if generation is not None else None
             save_html_body_content(real_path, content, shell=shell, generation=gen)
             return {"ok": True}

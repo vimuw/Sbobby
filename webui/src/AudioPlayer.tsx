@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2 } from 'lucide-react';
+import { Keyboard, Pause, Play, RotateCcw, SkipBack, SkipForward, Volume2 } from 'lucide-react';
 
 interface AudioPlayerProps {
   src: string;
@@ -11,6 +11,21 @@ interface AudioPlayerProps {
 
 const PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 
+const INTERACTIVE_ARIA_ROLES = new Set([
+  'button', 'link', 'menuitem', 'menuitemcheckbox', 'menuitemradio',
+  'option', 'tab', 'treeitem', 'slider', 'spinbutton', 'combobox',
+  'radio', 'checkbox', 'switch',
+]);
+
+const isEditableTarget = (target: EventTarget | null): boolean => {
+  if (!target) return false;
+  const el = target as HTMLElement;
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable) return true;
+  if (el.tagName === 'BUTTON' || el.tagName === 'A') return true;
+  const role = el.getAttribute('role');
+  return role !== null && INTERACTIVE_ARIA_ROLES.has(role);
+};
+
 export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolume, onStateChange }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -18,11 +33,15 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(initialPlaybackRate ?? 1);
   const [volume, setVolume] = useState(initialVolume ?? 1);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const shortcutsRef = useRef<HTMLDivElement>(null);
   const pendingInitialTimeRef = useRef<number | null>(initialTime ?? null);
   const playbackRateRef = useRef(initialPlaybackRate ?? 1);
   const volumeRef = useRef(initialVolume ?? 1);
+  const durationRef = useRef(0);
   const onStateChangeRef = useRef(onStateChange);
   useEffect(() => { onStateChangeRef.current = onStateChange; }, [onStateChange]);
+  useEffect(() => { durationRef.current = duration; }, [duration]);
 
   useEffect(() => {
     if (!audioRef.current) return;
@@ -65,29 +84,77 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
   }, []);
 
   const togglePlayRef = useRef(togglePlay);
-  useEffect(() => {
-    togglePlayRef.current = togglePlay;
-  }, [togglePlay]);
+  useEffect(() => { togglePlayRef.current = togglePlay; }, [togglePlay]);
+
+  const skip = useCallback((amount: number) => {
+    if (!audioRef.current) return;
+    let next = audioRef.current.currentTime + amount;
+    if (next < 0) next = 0;
+    const dur = durationRef.current;
+    if (dur > 0 && next > dur) next = dur;
+    audioRef.current.currentTime = next;
+    setCurrentTime(next);
+  }, []);
+
+  const skipRef = useRef(skip);
+  useEffect(() => { skipRef.current = skip; }, [skip]);
+
+  const adjustVolume = useCallback((delta: number) => {
+    const newVol = Math.max(0, Math.min(1, volumeRef.current + delta));
+    volumeRef.current = newVol;
+    setVolume(newVol);
+    if (audioRef.current) audioRef.current.volume = newVol;
+    onStateChangeRef.current?.({ currentTime: audioRef.current?.currentTime ?? 0, playbackRate: playbackRateRef.current, volume: newVol });
+  }, []);
+
+  const adjustVolumeRef = useRef(adjustVolume);
+  useEffect(() => { adjustVolumeRef.current = adjustVolume; }, [adjustVolume]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
+      if (e.code === 'F4' && !e.altKey && !e.ctrlKey && !e.shiftKey) {
+        const el = e.target as HTMLElement;
+        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') return;
         e.preventDefault();
         togglePlayRef.current();
+        return;
+      }
+      if (isEditableTarget(e.target)) return;
+      switch (e.code) {
+        case 'Space':
+          if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+            e.preventDefault();
+            togglePlayRef.current();
+          }
+          break;
+        case 'ArrowLeft':
+          if (!e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); skipRef.current(-10); }
+          break;
+        case 'ArrowRight':
+          if (!e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); skipRef.current(10); }
+          break;
+        case 'ArrowUp':
+          if (!e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); adjustVolumeRef.current(0.05); }
+          break;
+        case 'ArrowDown':
+          if (!e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); adjustVolumeRef.current(-0.05); }
+          break;
       }
     };
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, []);
 
-  const skip = (amount: number) => {
-    if (!audioRef.current) return;
-    let next = audioRef.current.currentTime + amount;
-    if (next < 0) next = 0;
-    if (duration > 0 && next > duration) next = duration;
-    audioRef.current.currentTime = next;
-    setCurrentTime(next);
-  };
+  useEffect(() => {
+    if (!showShortcuts) return;
+    const handler = (e: PointerEvent) => {
+      if (shortcutsRef.current && !shortcutsRef.current.contains(e.target as Node)) {
+        setShowShortcuts(false);
+      }
+    };
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
+  }, [showShortcuts]);
 
   const handleTimeUpdate = () => {
     if (!audioRef.current) return;
@@ -215,6 +282,41 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
         <button type="button" onClick={() => skip(-duration)} className="player-control" aria-label="Torna all'inizio">
           <RotateCcw className="h-4 w-4" />
         </button>
+        <div className="relative" ref={shortcutsRef}>
+          <button
+            type="button"
+            className={`player-control ${showShortcuts ? 'is-active' : ''}`}
+            aria-label="Scorciatoie da tastiera"
+            onClick={() => setShowShortcuts(v => !v)}
+          >
+            <Keyboard className="h-3.5 w-3.5" />
+          </button>
+          {showShortcuts && (
+            <div
+              className="absolute bottom-full right-0 mb-2 z-50 rounded-lg border p-3 text-xs shadow-lg"
+              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)', color: 'var(--text-muted)', minWidth: '230px' }}
+            >
+              <div className="mb-2 font-semibold text-[11px]" style={{ color: 'var(--text-primary)' }}>Scorciatoie da tastiera</div>
+              {([
+                ['Spazio', 'Pausa / Riprendi'],
+                ['F4', 'Pausa / Riprendi (in editor)'],
+                ['\u2190 \u2192', 'Salta \u00b110 secondi'],
+                ['\u2191 \u2193', 'Volume \u00b15%'],
+              ] as [string, string][]).map(([key, desc]) => (
+                <div key={key} className="flex items-center justify-between gap-4 py-0.5">
+                  <kbd
+                    className="rounded px-1.5 py-0.5 text-[10px] font-mono font-medium shrink-0"
+                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}
+                  >{key}</kbd>
+                  <span className="text-right">{desc}</span>
+                </div>
+              ))}
+              <div className="mt-2 pt-2 text-[10px] leading-snug" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                Le scorciatoie freccia e Spazio sono attive solo quando il focus non è su un elemento interattivo (editor, pulsanti, ecc.)
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

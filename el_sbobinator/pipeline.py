@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import platform
+import shutil
 import threading
 import time
 from google import genai
@@ -508,11 +509,15 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         # 3. SALVATAGGIO FINALE (MARKDOWN + HTML)
         # ==========================================
         runtime.phase("Fase: esportazione HTML")
-        output_folder = get_desktop_dir()
+        desktop_folder = get_desktop_dir()
         try:
-            os.makedirs(output_folder, exist_ok=True)
+            os.makedirs(desktop_folder, exist_ok=True)
         except Exception:
-            output_folder = USER_HOME
+            desktop_folder = USER_HOME
+
+        # HTML scritto nella cartella di sessione (persistente, non viene
+        # eliminata accidentalmente come un file sul Desktop).
+        session_html_dir = session_ctx.session_dir
 
         try:
             title, html_path = export_final_html_document(
@@ -520,8 +525,8 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                 phase2_revised_dir=phase2_revised_dir,
                 fallback_body=revised_text,
                 read_text=read_text_file,
-                output_dir=output_folder,
-                fallback_output_dir=output_folder,
+                output_dir=session_html_dir,
+                fallback_output_dir=session_html_dir,
                 safe_output_basename=safe_output_basename,
             )
         except Exception as e:
@@ -529,12 +534,6 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             session["last_error"] = "html_export_failed"
             save_session()
             return
-
-        try:
-            if os.path.exists(html_path):
-                runtime.output_html(html_path)
-        except Exception:
-            pass
 
         if not os.path.exists(html_path):
             print(
@@ -555,13 +554,27 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         except Exception:
             pass
 
+        # Copia best-effort sul Desktop per comodita' dell'utente.
+        try:
+            desktop_copy = os.path.join(desktop_folder, os.path.basename(html_path))
+            if os.path.abspath(html_path) != os.path.abspath(desktop_copy):
+                shutil.copy2(html_path, desktop_copy)
+                print(f"[*] Copia Desktop: {desktop_copy}")
+        except Exception as e:
+            print(f"[*] Copia Desktop non riuscita (non fatale): {e}")
+
+        try:
+            runtime.output_html(html_path, output_dir=desktop_folder)
+        except Exception:
+            pass
+
         elapsed = time.monotonic() - start_time
         minutes = int(elapsed // 60)
         seconds = int(elapsed % 60)
         print(f"\n======================================")
         print("SBOBINATURA COMPLETATA CON SUCCESSO!")
         print(f"Tempo totale: {minutes}m {seconds}s")
-        print(f"File salvato in: {output_folder}")
+        print(f"File salvato in: {session_html_dir}")
         runtime.phase("Fase: completato")
         runtime.set_run_result("completed")
         logger.info("Pipeline completata con successo.", extra={"stage": "done"})

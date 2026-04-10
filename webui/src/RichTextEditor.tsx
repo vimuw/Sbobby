@@ -1013,9 +1013,21 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
   const tocHeadingsRef = useRef(tocHeadings);
   useEffect(() => { tocHeadingsRef.current = tocHeadings; }, [tocHeadings]);
   const tocNavRef = useRef<HTMLElement>(null);
+  const tocStickyRef = useRef<HTMLDivElement>(null);
   const headingElsCacheRef = useRef<HTMLElement[] | null>(null);
   useEffect(() => { headingElsCacheRef.current = null; }, [tocHeadings]);
   const tocScrollRafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    const sticky = tocStickyRef.current;
+    if (!container || !sticky) return;
+    const update = () => { sticky.style.height = `${Math.max(100, container.clientHeight - 60)}px`; };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!activeHeadingId || !tocNavRef.current) return;
@@ -1024,11 +1036,11 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
     if (!activeBtn) return;
     const navRect = nav.getBoundingClientRect();
     const btnRect = activeBtn.getBoundingClientRect();
-    const btnAbsoluteTop = btnRect.top - navRect.top + nav.scrollTop;
-    nav.scrollTo({
-      top: btnAbsoluteTop - nav.clientHeight / 2 + activeBtn.clientHeight / 2,
-      behavior: 'smooth',
-    });
+    if (btnRect.top < navRect.top) {
+      nav.scrollTop += btnRect.top - navRect.top;
+    } else if (btnRect.bottom > navRect.bottom) {
+      nav.scrollTop += btnRect.bottom - navRect.bottom;
+    }
   }, [activeHeadingId]);
 
   useEffect(() => {
@@ -1218,7 +1230,7 @@ export function RichTextEditor({ initialContent, onChange, onEditorReady, initia
         <div className="editor-page-outer">
           {/* Left TOC column — lives inside the gray area */}
           <div className="editor-toc-col" style={{ width: isTocOpen ? 260 : 44 }}>
-            <div className="editor-toc-sticky">
+            <div className="editor-toc-sticky" ref={tocStickyRef}>
               {!isTocOpen ? (
                 <button className="editor-toc-btn" onClick={onTocToggle} title="Apri indice">
                   <Menu className="w-4 h-4" />

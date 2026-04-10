@@ -48,8 +48,6 @@ function QueueFileCardInner({
   const processingDetails = file.status === 'processing' ? getProcessingDetails(currentPhase) : null;
   const isCanceling = appState === 'canceling' && file.status === 'processing';
   const isDraggable = file.status === 'queued' && appState === 'idle';
-  const processingTitle = isCanceling ? 'Revisione in arresto' : processingDetails?.title;
-
   const { attributes, listeners, setNodeRef, transform, transition: dndTransition, isDragging } = useSortable({
     id: file.id,
     disabled: !isDraggable,
@@ -152,19 +150,6 @@ function QueueFileCardInner({
                     <span className="inline-flex h-2 w-2 rounded-full animate-pulse" style={{ background: isCanceling ? 'var(--error-text)' : 'var(--processing-dot)' }} />
                     {isCanceling ? 'Annullamento in corso' : 'In elaborazione'}
                   </span>
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.span
-                      key={`processing-title-${processingTitle}`}
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      transition={{ duration: 0.16, ease: 'easeOut' }}
-                      className="text-[0.96rem] font-semibold tracking-tight"
-                      style={{ color: 'var(--text-primary)' }}
-                    >
-                      {processingTitle}
-                    </motion.span>
-                  </AnimatePresence>
                   <AnimatePresence mode="wait" initial={false}>
                     {processingDetails.chunk && (
                       <motion.span
