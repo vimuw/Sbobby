@@ -51,3 +51,7 @@ env/
 webui/node_modules/
 webui/dist/
 webui/.env.local
+
+# IDE-specific config
+.windsurf/
+.vscode/
