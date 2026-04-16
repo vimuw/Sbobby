@@ -168,7 +168,12 @@ def main() -> int:
                 ok = False
                 print("MISSING:", p)
 
-        htmls = [f for f in os.listdir(root) if f.lower().endswith(".html")]
+        htmls = [
+            fname
+            for dirpath, _dirs, files in os.walk(root)
+            for fname in files
+            if fname.lower().endswith(".html")
+        ]
         if not htmls:
             ok = False
             print("MISSING: html output")
