@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { motion, AnimatePresence } from 'motion/react';
@@ -722,7 +722,7 @@ export default function App() {
     } finally {
       setSetupKeySaving(false);
     }
-  }, [setupKeyInput, fallbackKeys, preferredModel, fallbackModels, appendConsole]);
+  }, [setupKeyInput, fallbackKeys, preferredModel, fallbackModels, appendConsole, setApiKey]);
 
   useEffect(() => {
     document.title = appState === 'processing' ? '⏳ El Sbobinator' : 'El Sbobinator';

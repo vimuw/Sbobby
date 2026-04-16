@@ -1,5 +1,5 @@
 import React from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { motion } from 'motion/react';
 import { AlertCircle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, RotateCcw, Trash2, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -14,6 +14,7 @@ interface QueueFileCardProps {
   onRetry: (id: string) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string) => void;
   onOpenFile: (path: string) => void;
+  /** @deprecated kept for interface compatibility */
 }
 
 function abbreviatePath(path: string): string {
@@ -23,11 +24,11 @@ function abbreviatePath(path: string): string {
 }
 
 function QueueFileCardInner({
-  file, appState, currentPhase,
+  file, appState, currentPhase: _currentPhase,
   onRemove,
   onRetry,
-  onPreview,
-  onOpenFile,
+  onPreview: _onPreview,
+  onOpenFile: _onOpenFile,
 }: QueueFileCardProps) {
   const isCanceling = appState === 'canceling' && file.status === 'processing';
   const isDraggable = file.status === 'queued' && appState === 'idle';
