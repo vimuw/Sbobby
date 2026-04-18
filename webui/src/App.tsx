@@ -966,7 +966,7 @@ export default function App() {
                   <Zap className="w-4 h-4 shrink-0" />
                   <span>Nuova versione disponibile: <strong>{updateAvailable}</strong></span>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-3 shrink-0">
                   <button
                     disabled={isUpdating}
                     onClick={async () => {
@@ -988,8 +988,8 @@ export default function App() {
                         window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
                       }
                     }}
-                    className="premium-button-secondary compact-button text-xs px-3 py-1.5 flex items-center gap-1.5"
-                    style={{ color: 'var(--accent-text, var(--text-primary))', borderColor: 'var(--accent-ring, var(--border-default))' }}
+                    className="flex items-center gap-1.5 text-xs"
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: isUpdating ? 'default' : 'pointer', textDecoration: 'underline', color: 'var(--accent-text, var(--text-primary))', opacity: isUpdating ? 0.5 : 1 }}
                   >
                     {isUpdating
                       ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Download in corso…</>
@@ -997,11 +997,11 @@ export default function App() {
                   </button>
                   <button
                     onClick={() => dismissUpdate(updateAvailable)}
-                    className="icon-button h-7 w-7 rounded-[10px]"
-                    style={{ color: 'var(--text-muted)' }}
                     aria-label="Chiudi avviso aggiornamento"
+                    className="text-xs"
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', color: 'var(--text-muted)' }}
                   >
-                    <X className="w-3.5 h-3.5" />
+                    Ignora
                   </button>
                 </div>
               </div>

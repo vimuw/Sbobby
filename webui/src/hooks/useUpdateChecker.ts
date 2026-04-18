@@ -3,7 +3,7 @@ import { APP_VERSION, GITHUB_API_RELEASES_URL } from '../branding';
 
 const UPDATE_DISMISSED_KEY = 'el-sbobinator.dismissed-update.v1';
 const UPDATE_LAST_CHECK_KEY = 'el-sbobinator.last-update-check.v1';
-const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const UPDATE_CHECK_INTERVAL_MS = 1 * 60 * 60 * 1000;
 
 export function useUpdateChecker() {
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
