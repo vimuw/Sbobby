@@ -263,6 +263,17 @@ def process_macro_revision_phase(  # noqa: C901
                 except Exception:
                     pass
                 revised_done += 1
+                _update_session(
+                    session,
+                    {
+                        "stage": "phase2",
+                        "phase2": {
+                            **session.get("phase2", {}),
+                            "revised_done": int(revised_done),
+                        },
+                    },
+                )
+                save_session()
                 failed_blocks.append(index)
                 continue
 
@@ -467,6 +478,16 @@ def process_boundary_revision_phase(  # noqa: C901
             except Exception:
                 pass
 
+    try:
+        for _tmp_name in os.listdir(boundary_dir):
+            if _tmp_name.lower().endswith(".tmp"):
+                try:
+                    os.remove(os.path.join(boundary_dir, _tmp_name))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     next_pair = int(session.get("boundary", {}).get("next_pair", 1) or 1)
     if done_indexes:
         next_pair = max(next_pair, max(done_indexes) + 1)
@@ -539,7 +560,15 @@ def process_boundary_revision_phase(  # noqa: C901
         step_t0 = time.monotonic()
         done_path = os.path.join(boundary_dir, f"boundary_{pair_idx:03}.done")
         if os.path.exists(done_path):
-            session["boundary"]["next_pair"] = int(pair_idx + 1)
+            _update_session(
+                session,
+                {
+                    "boundary": {
+                        **session.get("boundary", {}),
+                        "next_pair": int(pair_idx + 1),
+                    }
+                },
+            )
             save_session()
             runtime.register_step_time(
                 "boundary", 0.0, done=pair_idx, total=pairs_total
@@ -570,7 +599,15 @@ def process_boundary_revision_phase(  # noqa: C901
         right_parts = split_paragraphs(right_text)
         if not left_parts or not right_parts:
             _atomic_write_text(done_path, "")
-            session["boundary"]["next_pair"] = int(pair_idx + 1)
+            _update_session(
+                session,
+                {
+                    "boundary": {
+                        **session.get("boundary", {}),
+                        "next_pair": int(pair_idx + 1),
+                    }
+                },
+            )
             save_session()
             _bsecs = max(0.0, time.monotonic() - float(step_t0))
             runtime.register_step_time(
@@ -701,13 +738,19 @@ def process_boundary_revision_phase(  # noqa: C901
                 else new_right_head
             )
 
-            _atomic_write_text(
+            left_tmp = os.path.join(boundary_dir, f"rev_{pair_idx:03}.tmp")
+            right_tmp = os.path.join(boundary_dir, f"rev_{pair_idx + 1:03}.tmp")
+            with open(left_tmp, "w", encoding="utf-8") as _fh:
+                _fh.write(new_left + "\n")
+            with open(right_tmp, "w", encoding="utf-8") as _fh:
+                _fh.write(new_right + "\n")
+            os.replace(
+                left_tmp,
                 os.path.join(phase2_revised_dir, f"rev_{pair_idx:03}.md"),
-                new_left + "\n",
             )
-            _atomic_write_text(
+            os.replace(
+                right_tmp,
                 os.path.join(phase2_revised_dir, f"rev_{pair_idx + 1:03}.md"),
-                new_right + "\n",
             )
             _atomic_write_text(done_path, "")
             _update_session(

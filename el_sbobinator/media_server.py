@@ -51,6 +51,9 @@ class LocalMediaServer:
                     super().end_headers()
 
                 def do_GET(self):
+                    if self.path.split("?", 1)[0] != "/stream.media":
+                        self.send_error(404)
+                        return
                     try:
                         path = served_path
                         if not os.path.exists(path):

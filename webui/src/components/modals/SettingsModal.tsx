@@ -134,6 +134,7 @@ interface SettingsModalProps {
   onClose: () => void;
   apiKey: string;
   setApiKey: (key: string) => void;
+  hasProtectedKey: boolean;
   fallbackKeys: string[];
   setFallbackKeys: (keys: string[]) => void;
   preferredModel: string;
@@ -153,6 +154,7 @@ export function SettingsModal({
   onClose,
   apiKey,
   setApiKey,
+  hasProtectedKey,
   fallbackKeys,
   setFallbackKeys,
   preferredModel,
@@ -259,7 +261,8 @@ export function SettingsModal({
       const keys = fallbackKeys.map(k => k.trim()).filter(Boolean);
       let result;
       try {
-        result = await window.pywebview.api.save_settings(apiKey.trim(), keys, preferredModel, fallbackModels);
+        const apiKeyPayload = hasProtectedKey && !apiKey.trim() ? null : apiKey.trim();
+        result = await window.pywebview.api.save_settings(apiKeyPayload, keys, preferredModel, fallbackModels);
       } catch (e: unknown) {
         const err = `Errore salvataggio impostazioni: ${getErrorMessage(e)}`;
         setSaveError(err);

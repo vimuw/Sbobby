@@ -444,7 +444,7 @@ class ElSbobinatorApi:
 
     def save_settings(
         self,
-        api_key: str,
+        api_key: str | None,
         fallback_keys: list[str],
         preferred_model: str,
         fallback_models: list[str],
@@ -557,6 +557,14 @@ class ElSbobinatorApi:
             if not os.path.isdir(abs_dir):
                 return {"ok": False, "error": "Cartella non trovata"}
             shutil.rmtree(abs_dir)
+            _prefix = abs_dir + os.sep
+            _evict = [
+                k
+                for k, v in self._resolved_path_cache.items()
+                if v == abs_dir or v.startswith(_prefix)
+            ]
+            for k in _evict:
+                del self._resolved_path_cache[k]
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -1281,19 +1289,41 @@ class ElSbobinatorApi:
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                 tmp_path = tmp.name
-            urllib.request.urlretrieve(url, tmp_path)
+            with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310
+                with open(tmp_path, "wb") as fh:
+                    while True:
+                        chunk = resp.read(65536)
+                        if not chunk:
+                            break
+                        fh.write(chunk)
         except Exception as e:
             return {"ok": False, "error": f"Download fallito: {e}"}
 
         try:
             if sys.platform == "win32":
                 os.startfile(tmp_path)  # type: ignore[attr-defined]
+
+                def _cleanup_installer(path: str) -> None:
+                    for _ in range(3):
+                        time.sleep(5)
+                        try:
+                            os.unlink(path)
+                            return
+                        except PermissionError:
+                            pass
+                        except OSError:
+                            return
+
+                threading.Thread(
+                    target=_cleanup_installer, args=(tmp_path,), daemon=True
+                ).start()
             else:
                 try:
                     result = subprocess.run(
                         ["hdiutil", "attach", "-nobrowse", "-plist", tmp_path],
                         capture_output=True,
                         check=True,
+                        timeout=30,
                     )
                     plist = plistlib.loads(result.stdout)
                     mount_point = None
@@ -1307,13 +1337,18 @@ class ElSbobinatorApi:
                     try:
                         app_src = os.path.join(mount_point, "El Sbobinator.app")
                         app_dst = "/Applications/El Sbobinator.app"
-                        subprocess.run(["cp", "-R", app_src, app_dst], check=True)
+                        subprocess.run(
+                            ["cp", "-R", app_src, app_dst], check=True, timeout=30
+                        )
                         subprocess.run(
                             ["xattr", "-dr", "com.apple.quarantine", app_dst],
                             check=False,
+                            timeout=30,
                         )
                     finally:
-                        subprocess.run(["hdiutil", "detach", mount_point], check=False)
+                        subprocess.run(
+                            ["hdiutil", "detach", mount_point], check=False, timeout=30
+                        )
                     subprocess.Popen(["open", "/Applications/El Sbobinator.app"])
                 finally:
                     try:

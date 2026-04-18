@@ -90,15 +90,10 @@ def save_session(session_path: str, session: dict) -> None:
 
 
 def _update_session(session: dict, updates: dict) -> dict:
-    """Apply updates atomically to a session copy; restore old state on failure."""
+    """Return a deep copy of the session before applying updates."""
     snapshot = copy.deepcopy(session)
-    try:
-        session.update(updates)
-        return snapshot
-    except Exception:
-        session.clear()
-        session.update(snapshot)
-        raise
+    session.update(updates)
+    return snapshot
 
 
 def new_session(input_path: str, settings: dict | None = None) -> dict:

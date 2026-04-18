@@ -10,7 +10,7 @@ export function useUpdateChecker() {
 
   useEffect(() => {
     const compareVersions = (a: string, b: string): number => {
-      const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number);
+      const parse = (v: string) => v.replace(/^v/, '').split('.').map(p => parseInt(p, 10) || 0);
       const [aMaj, aMin, aPatch] = parse(a);
       const [bMaj, bMin, bPatch] = parse(b);
       return aMaj !== bMaj ? aMaj - bMaj : aMin !== bMin ? aMin - bMin : aPatch - bPatch;
@@ -19,12 +19,12 @@ export function useUpdateChecker() {
     try {
       const lastCheck = Number(window.localStorage.getItem(UPDATE_LAST_CHECK_KEY) || 0);
       if (Date.now() - lastCheck < UPDATE_CHECK_INTERVAL_MS) return;
-      window.localStorage.setItem(UPDATE_LAST_CHECK_KEY, String(Date.now()));
     } catch (_) {}
 
     fetch(GITHUB_API_RELEASES_URL)
       .then(r => r.json())
       .then(data => {
+        try { window.localStorage.setItem(UPDATE_LAST_CHECK_KEY, String(Date.now())); } catch (_) {}
         const latest: string = data?.tag_name;
         if (!latest) return;
         try {

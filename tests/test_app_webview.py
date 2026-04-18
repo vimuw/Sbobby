@@ -1013,6 +1013,126 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
             self.assertIn("Percorso non valido", result["error"])
             self.assertTrue(os.path.exists(victim))
 
+    def test_delete_session_evicts_resolved_path_cache(self):
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as session_root:
+            session_dir = os.path.join(session_root, "ses1")
+            os.makedirs(session_dir)
+            html_path = os.path.join(session_dir, "note.html")
+            with open(html_path, "w") as fh:
+                fh.write("<html><body></body></html>")
+
+            api._resolved_path_cache["key1"] = html_path
+            api._resolved_path_cache["key2"] = session_dir
+            api._resolved_path_cache["key3"] = "/unrelated/path"
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                result = api.delete_session(session_dir)
+
+        self.assertTrue(result["ok"], result.get("error"))
+        self.assertNotIn("key1", api._resolved_path_cache)
+        self.assertNotIn("key2", api._resolved_path_cache)
+        self.assertIn("key3", api._resolved_path_cache)
+
+    def test_download_and_install_update_uses_streaming_urlopen(self):
+        import io
+        import os
+        import sys
+
+        api = ElSbobinatorApi()
+        fake_data = b"fake exe payload"
+
+        class _FakeResp:
+            def __init__(self):
+                self._buf = io.BytesIO(fake_data)
+
+            def read(self, n):
+                return self._buf.read(n)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = os.path.join(tmpdir, "setup.exe")
+
+            class _FakeTmpFile:
+                name = tmp_path
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *_):
+                    pass
+
+            with (
+                patch(
+                    "urllib.request.urlopen", return_value=_FakeResp()
+                ) as mock_urlopen,
+                patch("tempfile.NamedTemporaryFile", return_value=_FakeTmpFile()),
+                patch.object(sys, "platform", "win32"),
+                patch("os.startfile"),
+                patch("os.unlink"),
+                patch("time.sleep"),
+            ):
+                api.download_and_install_update("v1.2.3")
+
+            mock_urlopen.assert_called_once()
+            _call_args = mock_urlopen.call_args
+            self.assertEqual(_call_args.kwargs.get("timeout") or _call_args.args[1], 30)
+            with open(tmp_path, "rb") as fh:
+                self.assertEqual(fh.read(), fake_data)
+
+    def test_cleanup_installer_daemon_retries_on_permission_error(self):
+        import os
+        import sys
+
+        api = ElSbobinatorApi()
+        call_counts = [0]
+        done_event = threading.Event()
+
+        def flaky_unlink(path):
+            call_counts[0] += 1
+            if call_counts[0] < 2:
+                raise PermissionError("locked")
+            done_event.set()
+
+        class _FakeResp:
+            def read(self, n):
+                return b""
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+        class _FakeTmpFile:
+            name = "/tmp/fake_setup.exe"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                pass
+
+        with (
+            patch("urllib.request.urlopen", return_value=_FakeResp()),
+            patch("tempfile.NamedTemporaryFile", return_value=_FakeTmpFile()),
+            patch.object(sys, "platform", "win32"),
+            patch("os.startfile"),
+            patch("os.unlink", side_effect=flaky_unlink),
+            patch("time.sleep"),
+        ):
+            api.download_and_install_update("v1.0.0")
+            done_event.wait(timeout=2.0)
+
+        self.assertGreaterEqual(call_counts[0], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

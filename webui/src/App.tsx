@@ -176,7 +176,6 @@ export default function App() {
   const [completionFlash, setCompletionFlash] = useState(false);
 
   // --- Refs ---
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const filesRef = useRef<FileItem[]>([]);
   const appStateRef = useRef<AppStatus>('idle');
   const currentEditorSessionRef = useRef<EditorSession>({});
@@ -418,17 +417,6 @@ export default function App() {
         enqueueUniqueFiles(filesToAdd);
       }
     } catch (e) { appendConsole(`❌ Errore selezione file: ${e}`); }
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.length) {
-      const filesToAdd: FileItem[] = Array.from(e.target.files).map((file: File) => ({
-        id: crypto.randomUUID(), name: file.name, size: file.size, duration: 0,
-        status: 'queued' as const, progress: 0, phase: 0,
-      }));
-      enqueueUniqueFiles(filesToAdd);
-      e.target.value = '';
-    }
   };
 
   const requestRemoveFile = useCallback((id: string) => {
@@ -1144,7 +1132,6 @@ export default function App() {
               background: isDragging ? 'var(--accent-subtle)' : 'rgba(255,255,255,0.01)',
             }}
           >
-            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".mp3,.m4a,.wav,.mp4,.mkv,.webm,.ogg,.flac,.aac" multiple />
             <div className="w-14 h-14 mb-4 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}>
               <UploadCloud className="w-7 h-7" style={{ color: isDragging ? 'var(--accent-text)' : 'var(--text-muted)' }} />
             </div>
@@ -1640,6 +1627,7 @@ export default function App() {
         onClose={() => setIsSettingsOpen(false)}
         apiKey={apiKey}
         setApiKey={setApiKey}
+        hasProtectedKey={hasProtectedKey}
         fallbackKeys={fallbackKeys}
         setFallbackKeys={setFallbackKeys}
         preferredModel={preferredModel}

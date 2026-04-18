@@ -86,7 +86,9 @@ def _error_code(exc: Exception) -> int | None:
     return None
 
 
-def _is_minute_scoped_rate_limit(error_text: str) -> bool:
+def _is_minute_scoped_rate_limit(
+    error_text: str, error_code: int | None = None
+) -> bool:
     markers = (
         "per minute",
         "per-minute",
@@ -99,7 +101,7 @@ def _is_minute_scoped_rate_limit(error_text: str) -> bool:
         "retry after",
         "rpm",
     )
-    return any(marker in error_text for marker in markers)
+    return error_code == 429 or any(marker in error_text for marker in markers)
 
 
 def _is_daily_or_key_exhausted(error_text: str, error_code: int | None) -> bool:
@@ -122,6 +124,9 @@ def _is_daily_or_key_exhausted(error_text: str, error_code: int | None) -> bool:
     )
     if any(marker in error_text for marker in hard_limit_markers):
         return True
+
+    if _is_minute_scoped_rate_limit(error_text, error_code):
+        return False
 
     token_markers = ("token", "tokens")
     token_exhaustion_markers = (
@@ -580,7 +585,7 @@ def retry_with_quota(  # noqa: C901
                     continue
 
             if is_quota_related:
-                is_minute_rate_limit = _is_minute_scoped_rate_limit(error)
+                is_minute_rate_limit = _is_minute_scoped_rate_limit(error, error_code)
                 is_exhausted_key = _is_daily_or_key_exhausted(error, error_code)
                 if (
                     is_minute_rate_limit
@@ -662,6 +667,7 @@ def retry_with_quota(  # noqa: C901
             if not sleep_with_cancel(cancelled, retry_sleep_seconds):
                 print("   [*] Operazione annullata dall'utente.")
                 return client, None
+    return client, None
 
 
 def extract_response_text(response) -> str:

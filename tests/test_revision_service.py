@@ -226,6 +226,39 @@ class TestBoundaryRevisionPhase(unittest.TestCase):
                 ".done must NOT be written on failure — writing it would silently mask the unresolved boundary",
             )
 
+    def test_orphan_tmp_files_cleaned_on_startup(self):
+        """Orphan *.tmp files left in boundary_dir by a previous crash between the two
+        os.replace() calls must be removed at the start of the next run."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bdir = os.path.join(tmpdir, "boundary")
+            rdir = os.path.join(tmpdir, "revised")
+            os.makedirs(bdir)
+            os.makedirs(rdir)
+
+            orphan_left = os.path.join(bdir, "rev_001.tmp")
+            orphan_right = os.path.join(bdir, "rev_002.tmp")
+            with open(orphan_left, "w", encoding="utf-8") as fh:
+                fh.write("stale left content\n")
+            with open(orphan_right, "w", encoding="utf-8") as fh:
+                fh.write("stale right content\n")
+
+            with open(os.path.join(rdir, "rev_001.md"), "w", encoding="utf-8") as fh:
+                fh.write("blocco uno.\n")
+            with open(os.path.join(rdir, "rev_002.md"), "w", encoding="utf-8") as fh:
+                fh.write("blocco due.\n")
+
+            session = _session()
+            _run_boundary(bdir, rdir, session)
+
+            self.assertFalse(
+                os.path.exists(orphan_left),
+                "rev_001.tmp orphan must be removed by the startup cleanup pass",
+            )
+            self.assertFalse(
+                os.path.exists(orphan_right),
+                "rev_002.tmp orphan must be removed by the startup cleanup pass",
+            )
+
     def test_max_similarity_aligned_no_false_positive_from_cross_pairs(self):
         """The new boundary-aligned max_similarity must NOT trigger AI when the only
         high-similarity pair is at a non-aligned position (old Cartesian-product code

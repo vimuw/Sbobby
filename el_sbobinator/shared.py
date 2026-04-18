@@ -530,7 +530,7 @@ def load_config() -> dict:  # noqa: C901
 
 
 def save_config(  # noqa: C901
-    api_key: str,
+    api_key: str | None,
     fallback_keys: list | None = None,
     preferred_model: str | None = None,
     fallback_models: list | None = None,
@@ -583,9 +583,9 @@ def save_config(  # noqa: C901
                             try:
                                 with open(_p, "r", encoding="utf-8") as _f:
                                     _raw = json.load(_f)
+                                break
                             except Exception:
                                 pass
-                            break
                     if isinstance(_raw, dict):
                         if _raw.get("fallback_keys_protected"):
                             data["fallback_keys_protected"] = _raw[
@@ -624,11 +624,23 @@ def save_config(  # noqa: C901
             debug_log(
                 f"dpapi: exception during protect — API key stored as plaintext in config: {_dpapi_exc}"
             )
+        if (
+            platform.system() == "Windows"
+            and api_key is None
+            and "api_key_protected" not in data
+        ):
+            _existing_protected = current_cfg.get("api_key_protected")
+            if _existing_protected:
+                data["api_key_protected"] = _existing_protected
 
         # Store secret in OS keyring on macOS/Linux if available.
         try:
             if platform.system() != "Windows":
-                if api_key_norm:
+                if api_key is None:
+                    # No-change: preserve existing keyring flags verbatim.
+                    if "use_keyring" in current_cfg:
+                        data["use_keyring"] = current_cfg["use_keyring"]
+                elif api_key_norm:
                     ok = _keyring_set_api_key(api_key_norm)
                     if ok:
                         data["api_key"] = ""

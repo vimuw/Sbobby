@@ -71,7 +71,7 @@ export interface PywebviewApi {
     has_protected_key?: boolean;
   }>;
   save_settings?: (
-    apiKey: string,
+    apiKey: string | null,
     fallbackKeys: string[],
     preferredModel: string,
     fallbackModels: string[],

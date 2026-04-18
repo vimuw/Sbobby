@@ -208,7 +208,10 @@ def _esegui_sbobinatura_impl(  # noqa: C901
                     outcome = {"rigenera": False}
 
                     def on_answer(payload):
-                        outcome["rigenera"] = payload.get("regenerate", False)
+                        val = payload.get("regenerate", False)
+                        if val is None:
+                            cancel_event.set()
+                        outcome["rigenera"] = False if val is None else val
                         event.set()
 
                     regenerate_mode = "completed" if stage == "done" else "resume"
@@ -239,9 +242,6 @@ def _esegui_sbobinatura_impl(  # noqa: C901
 
             _is_regen = ask_should_regenerate()
             print(f"[*] Risposta Rigenerare dal JS: {_is_regen}")
-            if _is_regen is None:
-                runtime.set_run_result("cancelled", "Prompt di ripresa chiuso.")
-                return
             if _is_regen:
                 print(
                     f"[*] L'utente ha scelto di rigenerare il file {os.path.basename(input_path)}. Pulizia sessione precedente..."
@@ -279,6 +279,8 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         # ------------------------------------------
         # PRE-CONVERSIONE UNICA (piu' veloce)
         # ------------------------------------------
+        if runtime.cancelled():
+            return
         _, preconv_used_path = ensure_preconverted_audio(
             session_ctx,
             input_path=input_path,

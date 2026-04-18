@@ -15,6 +15,7 @@ const makeProps = () => ({
   onClose: vi.fn(),
   apiKey: 'AIzaSyTest123456',
   setApiKey: vi.fn(),
+  hasProtectedKey: false,
   fallbackKeys: [],
   setFallbackKeys: vi.fn(),
   preferredModel: 'gemini-3-flash-preview',
