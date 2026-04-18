@@ -9,6 +9,7 @@ Centralizza:
 
 from __future__ import annotations
 
+import functools
 import os
 import re
 import subprocess
@@ -18,6 +19,7 @@ from typing import Optional, Tuple
 import imageio_ffmpeg
 
 
+@functools.lru_cache(maxsize=1)
 def get_ffmpeg_exe() -> str:
     return imageio_ffmpeg.get_ffmpeg_exe()
 

@@ -1090,6 +1090,71 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
             with open(tmp_path, "rb") as fh:
                 self.assertEqual(fh.read(), fake_data)
 
+    def test_stale_prewarm_blocked_by_gen_counter(self):
+        """Regression: gen counter prevents a late get_completed_sessions write from
+        overwriting an invalidation (delete_session / pipeline-done) that fired
+        while I/O was in progress outside the lock."""
+        import threading
+        from unittest.mock import patch as _patch
+
+        api = ElSbobinatorApi()
+
+        scan_started = threading.Event()
+        scan_proceed = threading.Event()
+
+        def fake_scandir(_path):
+            scan_started.set()
+            scan_proceed.wait(timeout=5)
+            return iter([])
+
+        with tempfile.TemporaryDirectory() as td:
+            with (
+                _patch.object(api, "_get_session_root", return_value=td),
+                _patch(
+                    "el_sbobinator.app_webview.os.scandir", side_effect=fake_scandir
+                ),
+            ):
+                bg = threading.Thread(target=api.get_completed_sessions)
+                bg.start()
+
+                self.assertTrue(scan_started.wait(timeout=2), "scandir did not start")
+
+                # Simulate an invalidation while I/O is in progress
+                with api._sessions_cache_lock:
+                    api._sessions_cache = None
+                    api._sessions_cache_gen += 1
+
+                scan_proceed.set()
+                bg.join(timeout=2)
+
+        with api._sessions_cache_lock:
+            self.assertIsNone(
+                api._sessions_cache,
+                "Stale prewarm must not overwrite a concurrent invalidation",
+            )
+
+    def test_delete_session_increments_cache_gen(self):
+        """delete_session must increment _sessions_cache_gen so concurrent prewarms
+        can detect the invalidation via the gen-counter guard."""
+        import os
+
+        api = ElSbobinatorApi()
+        with tempfile.TemporaryDirectory() as session_root:
+            session_dir = os.path.join(session_root, "sess_gen")
+            os.makedirs(session_dir)
+            with open(os.path.join(session_dir, "session.json"), "w") as fh:
+                fh.write("{}")
+
+            with api._sessions_cache_lock:
+                initial_gen = api._sessions_cache_gen
+
+            with patch.object(api, "_get_session_root", return_value=session_root):
+                api.delete_session(session_dir)
+
+        with api._sessions_cache_lock:
+            self.assertEqual(api._sessions_cache_gen, initial_gen + 1)
+            self.assertIsNone(api._sessions_cache)
+
     def test_cleanup_installer_daemon_retries_on_permission_error(self):
         import os
         import sys

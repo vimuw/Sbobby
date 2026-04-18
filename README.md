@@ -200,4 +200,13 @@ python scripts/build_release.py build --target windows --ui webui --install-deps
 python scripts/build_release.py build --target macos --ui webui --install-deps --dev-deps
 ```
 
+### Documentazione per sviluppatori
+
+Per i dettagli di architettura, pipeline, formato sessione e contratto del bridge vedi:
+
+- [`docs/architecture.md`](docs/architecture.md) — mappa dei moduli Python/React e flusso a runtime.
+- [`docs/pipeline.md`](docs/pipeline.md) — fasi della pipeline, catena di fallback e valori di `last_error`.
+- [`docs/session_model.md`](docs/session_model.md) — layout su disco delle sessioni e schema `session.json`.
+- [`docs/bridge_protocol.md`](docs/bridge_protocol.md) — eventi Python→JS e API JS→Python.
+
 </details>

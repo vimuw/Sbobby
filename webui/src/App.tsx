@@ -401,9 +401,9 @@ export default function App() {
   useBodyScrollLock(isModalOpen);
 
   // --- Handlers ---
-  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); if (appState === 'idle') setIsDragging(true); };
-  const handleDragLeave = () => setIsDragging(false);
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); if (appState === 'idle') setIsDragging(true); }, [appState]);
+  const handleDragLeave = useCallback(() => setIsDragging(false), []);
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     if (appStateRef.current !== 'idle' || !e.dataTransfer.files.length) return;
@@ -413,7 +413,7 @@ export default function App() {
       w.chrome.webview.postMessageWithAdditionalObjects('FilesDropped', e.dataTransfer.files);
       window.pywebview?.api?.collect_dropped_files?.(names);
     }
-  };
+  }, [appStateRef]);
 
   const handleBrowseClick = async () => {
     if (appState !== 'idle') return;
@@ -799,7 +799,10 @@ export default function App() {
   const pendingFiles = useMemo(() => getPendingFiles(files), [files]);
   const doneFiles = useMemo(() => getDoneFiles(files), [files]);
   const showProcessingBanner = appState === 'processing' || appState === 'canceling' || completionFlash;
-  const bannerFile = files.find(f => f.status === 'processing') ?? (completionFlash ? doneFiles[0] : undefined);
+  const bannerFile = useMemo(
+    () => files.find(f => f.status === 'processing') ?? (completionFlash ? doneFiles[0] : undefined),
+    [files, completionFlash, doneFiles],
+  );
   const filteredDoneFiles = useMemo(
     () => completedSearch.trim()
       ? doneFiles.filter(f => f.name.toLowerCase().includes(completedSearch.toLowerCase()))

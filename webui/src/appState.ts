@@ -217,11 +217,16 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
       return { ...state, structuralVersion: state.structuralVersion + 1, files: [] };
     case 'app/set_status':
       return { ...state, appState: action.status };
-    case 'bridge/update_progress':
-      return { ...state, activeProgress: Math.round(action.value * 100) };
+    case 'bridge/update_progress': {
+      const next = Math.round(action.value * 100);
+      if (state.activeProgress === next) return state;
+      return { ...state, activeProgress: next };
+    }
     case 'bridge/update_phase':
+      if (state.currentPhase === action.text) return state;
       return { ...state, currentPhase: action.text };
     case 'bridge/update_model':
+      if (state.currentModel === action.model) return state;
       return { ...state, currentModel: action.model };
     case 'bridge/process_done':
       return {
@@ -253,14 +258,18 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
           boundary: Number(action.data.boundary ?? state.workTotals.boundary ?? 0),
         },
       };
-    case 'bridge/update_work_done':
+    case 'bridge/update_work_done': {
+      const prev = state.workDone[action.data.kind];
+      const next = Number(action.data.done ?? 0);
+      if (prev === next) return state;
       return {
         ...state,
         workDone: {
           ...state.workDone,
-          [action.data.kind]: Number(action.data.done ?? 0),
+          [action.data.kind]: next,
         },
       };
+    }
     case 'bridge/register_step_time': {
       const { kind, seconds, done, total } = action.data;
       const prev = state.stepMetrics[kind];

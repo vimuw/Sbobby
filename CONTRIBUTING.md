@@ -51,6 +51,10 @@ python scripts/build_release.py build --target macos --ui webui --install-deps -
 | `webui/` | React + TypeScript frontend |
 | `scripts/build_release.py` | Authoritative automation entrypoint (lint, test, build, packaging) |
 | `tests/` | unittest test suite |
+| `docs/architecture.md` | Module map (Python + frontend) and runtime flow |
+| `docs/pipeline.md` | Pipeline phases, model fallback chain and `last_error` values |
+| `docs/session_model.md` | On-disk session layout and `session.json` schema |
+| `docs/bridge_protocol.md` | Python ↔ React event/API contract |
 
 ## PR expectations
 

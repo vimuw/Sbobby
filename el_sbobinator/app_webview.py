@@ -248,7 +248,7 @@ class PipelineAdapter:
         self._regenerate_callback = None
         self._new_key_callback = None
 
-        self._dispatcher = _BridgeDispatcher(lambda: self.window)
+        self._dispatcher = _BridgeDispatcher(lambda: self.window, flush_interval=0.08)
 
     @property
     def is_running(self) -> bool:
@@ -412,8 +412,17 @@ class ElSbobinatorApi:
         self._processing_thread: threading.Thread | None = None
         self._html_shell_cache: dict[str, tuple[str, str]] = {}
         self._resolved_path_cache: dict[str, str] = {}
+        self._sessions_cache: dict | None = None
+        self._sessions_cache_ts: float = 0.0
+        self._sessions_cache_gen: int = 0
+        self._sessions_cache_lock = threading.Lock()
         configure_logging()
         self._logger = get_logger("el_sbobinator.webview")
+        threading.Thread(
+            target=self.get_completed_sessions,
+            daemon=True,
+            name="sessions-prewarm",
+        ).start()
 
     def set_window(self, window: webview.Window):
         self._window = window
@@ -478,6 +487,15 @@ class ElSbobinatorApi:
         """Return the most recent completed sessions for the archive UI."""
         import json as _json
 
+        with self._sessions_cache_lock:
+            if (
+                self._sessions_cache is not None
+                and time.time() - self._sessions_cache_ts < 5.0
+            ):
+                cached = self._sessions_cache
+                return {**cached, "sessions": list(cached["sessions"])}
+            gen_at_start = self._sessions_cache_gen
+
         session_root = self._get_session_root()
         if not os.path.isdir(session_root):
             return {"ok": True, "sessions": []}
@@ -541,7 +559,12 @@ class ElSbobinatorApi:
                         "session_dir": str(session_dir),
                     }
                 )
-            return {"ok": True, "sessions": sessions}
+            result = {"ok": True, "sessions": sessions}
+            with self._sessions_cache_lock:
+                if self._sessions_cache_gen == gen_at_start:
+                    self._sessions_cache = result
+                    self._sessions_cache_ts = time.time()
+            return {**result, "sessions": list(sessions)}
         except Exception as e:
             return {"ok": False, "error": str(e), "sessions": []}
 
@@ -558,6 +581,9 @@ class ElSbobinatorApi:
             if not os.path.isdir(abs_dir):
                 return {"ok": False, "error": "Cartella non trovata"}
             shutil.rmtree(abs_dir)
+            with self._sessions_cache_lock:
+                self._sessions_cache = None
+                self._sessions_cache_gen += 1
             _prefix = abs_dir + os.sep
             _evict = [
                 k
@@ -599,6 +625,9 @@ class ElSbobinatorApi:
             except Exception:
                 pass
             _atomic_write_json(session_path, data)
+            with self._sessions_cache_lock:
+                self._sessions_cache = None
+                self._sessions_cache_gen += 1
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -609,6 +638,10 @@ class ElSbobinatorApi:
         """Delete session folders older than max_age_days days."""
         try:
             result = cleanup_orphan_sessions(max(1, int(max_age_days)))
+            if result["removed"] > 0:
+                with self._sessions_cache_lock:
+                    self._sessions_cache = None
+                    self._sessions_cache_gen += 1
             return {
                 "ok": True,
                 "removed": result["removed"],
@@ -902,6 +935,9 @@ class ElSbobinatorApi:
                 self._push_console(f"[!] Errore fatale: {e}")
             finally:
                 self._adapter.is_running = False
+                with self._sessions_cache_lock:
+                    self._sessions_cache = None
+                    self._sessions_cache_gen += 1
                 payload: ProcessDonePayload = {
                     "cancelled": bool(
                         self._cancel_event.is_set()

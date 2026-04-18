@@ -29,6 +29,11 @@ from el_sbobinator.model_registry import (
 _KEYRING_SERVICE = "El Sbobinator"
 _KEYRING_USER_API = "gemini_api_key"
 _config_lock = threading.Lock()
+_write_lock = threading.Lock()
+_config_cache: dict | None = None
+_config_cache_ts: float = 0.0
+_config_cache_gen: int = 0
+_CONFIG_CACHE_TTL = 30.0
 
 
 def debug_log(msg: str) -> None:
@@ -354,6 +359,17 @@ def safe_output_basename(name: str) -> str:
 
 
 def load_config() -> dict:  # noqa: C901
+    global _config_cache, _config_cache_ts
+    with _config_lock:
+        if (
+            _config_cache is not None
+            and time.monotonic() - _config_cache_ts < _CONFIG_CACHE_TTL
+        ):
+            _hit = dict(_config_cache)
+            _hit["fallback_models"] = list(_config_cache.get("fallback_models") or [])
+            _hit["fallback_keys"] = list(_config_cache.get("fallback_keys") or [])
+            return _hit
+        gen_at_start = _config_cache_gen
     # Prefer new location, but migrate from legacy (<= 2026-03) file if present.
     for path in (CONFIG_FILE, LEGACY_CONFIG_FILE):
         if not os.path.exists(path):
@@ -438,14 +454,39 @@ def load_config() -> dict:  # noqa: C901
                 )
                 data["preferred_model"] = preferred_model
                 data["fallback_models"] = fallback_models
-                return data
+                with _config_lock:
+                    if _config_cache_gen == gen_at_start:
+                        _cache_entry = dict(data)
+                        _cache_entry["fallback_models"] = list(
+                            data.get("fallback_models") or []
+                        )
+                        _cache_entry["fallback_keys"] = list(
+                            data.get("fallback_keys") or []
+                        )
+                        _config_cache = _cache_entry
+                        _config_cache_ts = time.monotonic()
+                result = dict(data)
+                result["fallback_models"] = list(data.get("fallback_models") or [])
+                result["fallback_keys"] = list(data.get("fallback_keys") or [])
+                return result
         except Exception:
             pass
-    return {
+    _default = {
         "api_key": "",
         "preferred_model": DEFAULT_MODEL,
         "fallback_models": list(DEFAULT_FALLBACK_MODELS),
     }
+    with _config_lock:
+        if _config_cache_gen == gen_at_start:
+            _cache_entry = dict(_default)
+            _cache_entry["fallback_models"] = list(
+                _default.get("fallback_models") or []
+            )
+            _config_cache = _cache_entry
+            _config_cache_ts = time.monotonic()
+    result = dict(_default)
+    result["fallback_models"] = list(_default.get("fallback_models") or [])
+    return result
 
 
 def save_config(  # noqa: C901
@@ -454,7 +495,11 @@ def save_config(  # noqa: C901
     preferred_model: str | None = None,
     fallback_models: list | None = None,
 ) -> None:
-    with _config_lock:
+    global _config_cache, _config_cache_gen
+    with _write_lock:
+        with _config_lock:
+            _config_cache = None
+            _config_cache_gen += 1
         api_key_norm = str(api_key or "").strip()
         data: dict = {"api_key": api_key_norm}
         current_cfg: dict = {}
