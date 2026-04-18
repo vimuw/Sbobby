@@ -1078,12 +1078,15 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
                 patch("os.startfile", create=True),
                 patch("os.unlink"),
                 patch("time.sleep"),
+                patch("sys.exit"),
             ):
                 api.download_and_install_update("v1.2.3")
 
             mock_urlopen.assert_called_once()
             _call_args = mock_urlopen.call_args
-            self.assertEqual(_call_args.kwargs.get("timeout") or _call_args.args[1], 30)
+            self.assertEqual(
+                _call_args.kwargs.get("timeout") or _call_args.args[1], 120
+            )
             with open(tmp_path, "rb") as fh:
                 self.assertEqual(fh.read(), fake_data)
 

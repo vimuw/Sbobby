@@ -1289,7 +1289,7 @@ class ElSbobinatorApi:
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                 tmp_path = tmp.name
-            with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310
+            with urllib.request.urlopen(url, timeout=120) as resp:  # noqa: S310
                 with open(tmp_path, "wb") as fh:
                     while True:
                         chunk = resp.read(65536)
@@ -1364,7 +1364,8 @@ class ElSbobinatorApi:
                 if webview.windows:
                     webview.windows[0].destroy()
             except Exception:
-                sys.exit(0)
+                pass
+            sys.exit(0)
 
         threading.Thread(target=_delayed_destroy, daemon=True).start()
         return {"ok": True}
