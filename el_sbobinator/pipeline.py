@@ -118,6 +118,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             return session_ctx.save()
 
         def on_model_switched(previous_model: str, new_model: str):
+            assert session is not None
             session.setdefault("settings", {})
             session["settings"]["effective_model"] = new_model
             save_session()
@@ -208,7 +209,7 @@ def _esegui_sbobinatura_impl(  # noqa: C901
 
                     def on_answer(payload):
                         val = payload.get("regenerate", False)
-                        if val is None:
+                        if val is None and cancel_event is not None:
                             cancel_event.set()
                         outcome["rigenera"] = False if val is None else val
                         event.set()

@@ -8,7 +8,16 @@ place so config/session/UI logic stay aligned.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypedDict
+
+
+class ModelOption(TypedDict):
+    id: str
+    label: str
+    summary: str
+    default_chunk_minutes: int
+    default_macro_char_limit: int
+    phase1_temperature: float
 
 
 SUPPORTED_MODELS: tuple[str, ...] = (
@@ -24,7 +33,7 @@ DEFAULT_FALLBACK_MODELS: tuple[str, ...] = (
     "gemini-3.1-flash-lite-preview",
 )
 
-MODEL_OPTIONS: tuple[dict[str, str | int], ...] = (
+MODEL_OPTIONS: tuple[ModelOption, ...] = (
     {
         "id": "gemini-3-flash-preview",
         "label": "Gemini 3 Flash (Preview)",

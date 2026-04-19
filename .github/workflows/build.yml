@@ -47,8 +47,16 @@ jobs:
 
       - name: Run Checks
         run: |
-          python scripts/build_release.py check --skip-npm-install
+          python scripts/build_release.py check --with-coverage --skip-npm-install
           python scripts/build_release.py validate
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage-python.xml,webui/coverage/lcov.info
+          flags: python,frontend
+          fail_ci_if_error: true
 
   build:
     needs: checks

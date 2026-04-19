@@ -81,9 +81,9 @@ def sanitize_html_basic(html: str) -> str:
         )
     return _nh3.clean(
         html or "",
-        tags=_ALLOWED_TAGS,
+        tags=set(_ALLOWED_TAGS),
         attributes=_ALLOWED_ATTRS,
-        url_schemes=_ALLOWED_URL_SCHEMES,
+        url_schemes=set(_ALLOWED_URL_SCHEMES),
         strip_comments=True,
     )
 
@@ -209,7 +209,7 @@ def normalize_heading_levels(md: str) -> str:
 def build_html_document(title: str, markdown_text: str) -> str:
     normalized_markdown = normalize_heading_levels(markdown_text or "")
     html_body = markdown.markdown(
-        normalized_markdown, extensions=["extra", "sane_lists"], output_format="html5"
+        normalized_markdown, extensions=["extra", "sane_lists"], output_format="html"
     )
     html_body = sanitize_html_basic(html_body)
     safe_title = (title or "Sbobina").strip()

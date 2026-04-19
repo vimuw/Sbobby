@@ -10,7 +10,7 @@ from el_sbobinator.app_webview import ElSbobinatorApi
 
 class _FakeWindow:
     def __init__(self):
-        self.calls = []
+        self.calls: list[str] = []
 
     def evaluate_js(self, script):
         self.calls.append(script)
@@ -31,7 +31,7 @@ class WorkflowEndToEndTests(unittest.TestCase):
     def test_start_processing_emits_file_done_and_process_done(self):
         api = ElSbobinatorApi()
         window = _FakeWindow()
-        api.set_window(window)
+        api.set_window(window)  # type: ignore[arg-type]
 
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = os.path.join(tmpdir, "input.mp3")
@@ -61,9 +61,10 @@ class WorkflowEndToEndTests(unittest.TestCase):
                     side_effect=fake_pipeline,
                 ),
             ):
-                result = api.start_processing(files, "fake-key", resume_session=True)
+                result = api.start_processing(files, "fake-key", resume_session=True)  # type: ignore[arg-type]
                 self.assertTrue(result["ok"])
                 self.assertIsNotNone(api._processing_thread)
+                assert api._processing_thread is not None
                 api._processing_thread.join(timeout=5)
                 api._adapter._dispatcher.flush()
 
@@ -74,7 +75,7 @@ class WorkflowEndToEndTests(unittest.TestCase):
     def test_start_processing_marks_current_file_failed_on_fatal_exception(self):
         api = ElSbobinatorApi()
         window = _FakeWindow()
-        api.set_window(window)
+        api.set_window(window)  # type: ignore[arg-type]
 
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = os.path.join(tmpdir, "input.mp3")
@@ -97,9 +98,10 @@ class WorkflowEndToEndTests(unittest.TestCase):
                     side_effect=RuntimeError("boom"),
                 ),
             ):
-                result = api.start_processing(files, "fake-key", resume_session=True)
+                result = api.start_processing(files, "fake-key", resume_session=True)  # type: ignore[arg-type]
                 self.assertTrue(result["ok"])
                 self.assertIsNotNone(api._processing_thread)
+                assert api._processing_thread is not None
                 api._processing_thread.join(timeout=5)
                 api._adapter._dispatcher.flush()
 

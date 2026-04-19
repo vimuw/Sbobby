@@ -111,7 +111,7 @@ def main() -> int:
 
         # Monkeypatch: avoid network + write outputs inside the temp dir
         pipe.genai.Client = FakeClient
-        pipe.get_desktop_dir = lambda: root
+        pipe.get_desktop_dir = lambda: root  # type: ignore[attr-defined]
 
         # Precreate a session with small chunks to exercise multiple iterations (and FFmpeg prefetch).
         session_dir = os.path.join(root, "session")

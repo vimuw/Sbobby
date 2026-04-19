@@ -48,7 +48,7 @@ def _png_bytes(img: Image.Image, size: int) -> bytes:
     import io
 
     frame = img.copy()
-    frame.thumbnail((size, size), Image.LANCZOS)
+    frame.thumbnail((size, size), Image.LANCZOS)  # type: ignore[attr-defined]
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     offset = ((size - frame.width) // 2, (size - frame.height) // 2)
     canvas.paste(frame, offset, frame if frame.mode == "RGBA" else None)

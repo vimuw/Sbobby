@@ -10,13 +10,13 @@ from __future__ import annotations
 from typing import Literal, NotRequired, TypedDict
 
 
-class BridgeFileItem(TypedDict, total=False):
+class BridgeFileItem(TypedDict):
     id: str
     path: str
     name: str
-    size: int
-    duration: float
-    resume_session: bool
+    size: NotRequired[int]
+    duration: NotRequired[float]
+    resume_session: NotRequired[bool]
 
 
 class ProcessDonePayload(TypedDict, total=False):
@@ -66,12 +66,12 @@ class StepTimePayload(TypedDict, total=False):
     total: int | None
 
 
-class ValidationCheck(TypedDict, total=False):
+class ValidationCheck(TypedDict):
     id: str
     label: str
     status: Literal["ok", "warning", "error"]
     message: str
-    details: str
+    details: NotRequired[str]
 
 
 class ValidationResult(TypedDict):

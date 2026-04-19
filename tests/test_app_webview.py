@@ -8,8 +8,8 @@ from el_sbobinator.app_webview import ElSbobinatorApi, PipelineAdapter
 
 class _FakeWindow:
     def __init__(self):
-        self.calls = []
-        self.dialog_result = None
+        self.calls: list[str] = []
+        self.dialog_result: str | None = None
 
     def evaluate_js(self, script):
         self.calls.append(script)
@@ -21,7 +21,7 @@ class _FakeWindow:
 class AppWebviewTests(unittest.TestCase):
     def test_dispatcher_batches_js_calls(self):
         window = _FakeWindow()
-        adapter = PipelineAdapter(window, cancel_event=__import__("threading").Event())
+        adapter = PipelineAdapter(window, cancel_event=__import__("threading").Event())  # type: ignore[arg-type]
 
         adapter.aggiorna_progresso(0.5)
         adapter.aggiorna_fase("fase 1")
@@ -121,11 +121,12 @@ class AppWebviewTests(unittest.TestCase):
         window = _FakeWindow()
         with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
             window.dialog_result = tmp.name
-        api.set_window(window)
+        api.set_window(window)  # type: ignore[arg-type]
 
         result = api.ask_media_file()
 
         self.assertIsNotNone(result)
+        assert result is not None
         self.assertEqual(result["path"], window.dialog_result)
         self.assertEqual(
             result["name"], __import__("os").path.basename(window.dialog_result)
@@ -136,7 +137,7 @@ class AppWebviewTests(unittest.TestCase):
         window = _FakeWindow()
         with tempfile.NamedTemporaryFile("wb", suffix=".mp3", delete=False) as tmp:
             window.dialog_result = tmp.name
-        api.set_window(window)
+        api.set_window(window)  # type: ignore[arg-type]
 
         result = api.ask_files()
 
@@ -261,6 +262,7 @@ class AppWebviewTests(unittest.TestCase):
 
             self.assertTrue(result["ok"])
             self.assertIsNotNone(api._processing_thread)
+            assert api._processing_thread is not None
             api._processing_thread.join(timeout=2)
             self.assertFalse(
                 api._processing_thread.is_alive(),
@@ -318,6 +320,7 @@ class AppWebviewTests(unittest.TestCase):
 
             self.assertTrue(result["ok"])
             self.assertIsNotNone(api._processing_thread)
+            assert api._processing_thread is not None
             api._processing_thread.join(timeout=2)
             self.assertFalse(api._processing_thread.is_alive())
         finally:

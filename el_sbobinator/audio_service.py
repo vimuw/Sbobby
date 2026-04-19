@@ -47,7 +47,7 @@ def cut_audio_chunk_to_mp3(
     input_path: str,
     output_path: str,
     start_sec: int,
-    duration_sec: int,
+    duration_sec: int | float,
     bitrate: str = "48k",
     ffmpeg_exe: str | None = None,
     stream_copy: bool = False,

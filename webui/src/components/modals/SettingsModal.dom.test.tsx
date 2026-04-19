@@ -193,3 +193,177 @@ describe('SettingsModal — session info race condition', () => {
     expect(screen.queryByText(/3 sessioni/)).not.toBeNull();
   });
 });
+
+describe('SettingsModal — main-section interactions', () => {
+  it('toggles showApiKeys on show/hide button click', async () => {
+    render(<SettingsModal {...makeProps()} />);
+    fireEvent.click(screen.getByTitle('Mostra chiave'));
+    expect(screen.getByTitle('Nascondi chiave')).toBeTruthy();
+  });
+
+  it('calls setApiKey when API key input changes', async () => {
+    const setApiKey = vi.fn();
+    render(<SettingsModal {...makeProps()} setApiKey={setApiKey} />);
+    const input = screen.getByPlaceholderText(/AIzaSy/);
+    fireEvent.change(input, { target: { value: 'AIzaSy123' } });
+    expect(setApiKey).toHaveBeenCalledWith('AIzaSy123');
+  });
+
+  it('calls setFallbackKeys when fallback textarea changes', async () => {
+    const setFallbackKeys = vi.fn();
+    render(<SettingsModal {...makeProps()} setFallbackKeys={setFallbackKeys} />);
+    const textarea = screen.getByPlaceholderText(/Inserisci una API Key per riga/);
+    fireEvent.change(textarea, { target: { value: 'key1\nkey2' } });
+    expect(setFallbackKeys).toHaveBeenCalledWith(['key1', 'key2']);
+  });
+
+  it('toggles notifications when switch is clicked', async () => {
+    render(<SettingsModal {...makeProps()} />);
+    const toggle = screen.getByRole('switch');
+    fireEvent.click(toggle);
+    expect(localStorage.getItem('notifications_enabled')).toBeTruthy();
+  });
+
+  it('toggles fallback keys show/hide on Mostra chiavi click', async () => {
+    render(<SettingsModal {...makeProps()} />);
+    fireEvent.click(screen.getByTitle('Mostra chiavi'));
+    expect(screen.getByTitle('Nascondi chiavi')).toBeTruthy();
+  });
+
+  it('calls open_url when aistudio link is clicked', async () => {
+    const openUrl = vi.fn();
+    setPywebview({ open_url: openUrl });
+    render(<SettingsModal {...makeProps()} />);
+    fireEvent.click(screen.getByText(/Ottieni gratis su aistudio/));
+    expect(openUrl).toHaveBeenCalledWith('https://aistudio.google.com/apikey');
+  });
+});
+
+describe('SettingsModal — session folder and cleanup', () => {
+  it('calls open_session_folder when folder button is clicked', async () => {
+    const openFolder = vi.fn();
+    setPywebview({ open_session_folder: openFolder });
+    render(<SettingsModal {...makeProps()} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+    fireEvent.click(screen.getByTitle('Apri cartella sessioni'));
+    expect(openFolder).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls cleanup_old_sessions when Pulisci button clicked and shows result', async () => {
+    const cleanupFn = vi.fn().mockResolvedValue({ ok: true, removed: 3, freed_bytes: 1024 });
+    setPywebview({ cleanup_old_sessions: cleanupFn });
+    render(<SettingsModal {...makeProps()} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText(/Pulisci/));
+    });
+    await vi.waitFor(() =>
+      expect(screen.getByText(/Rimoss/)).toBeTruthy(),
+    );
+  });
+});
+
+describe('SettingsModal — fallback models list', () => {
+  it('renders fallback model card when fallbackModels is populated', async () => {
+    const models = [
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast and capable', default_chunk_minutes: 12 },
+      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', summary: 'Lightweight', default_chunk_minutes: 10 },
+    ];
+    render(
+      <SettingsModal
+        {...makeProps()}
+        availableModels={models}
+        preferredModel="gemini-2.5-flash"
+        fallbackModels={['gemini-2.5-flash-lite']}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+    expect(screen.getAllByText('Gemini 2.5 Flash-Lite').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Lightweight').length).toBeGreaterThan(0);
+  });
+
+  it('calls setFallbackModels when remove fallback button is clicked', async () => {
+    const models = [
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
+      { id: 'gemini-2.5-flash-lite', label: 'Lite', summary: 'Light', default_chunk_minutes: 10 },
+    ];
+    const setFallbackModels = vi.fn();
+    render(
+      <SettingsModal
+        {...makeProps()}
+        availableModels={models}
+        preferredModel="gemini-2.5-flash"
+        fallbackModels={['gemini-2.5-flash-lite']}
+        setFallbackModels={setFallbackModels}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+    fireEvent.click(screen.getByTitle('Rimuovi fallback'));
+    expect(setFallbackModels).toHaveBeenCalled();
+  });
+
+  it('calls setFallbackModels when move-down button clicked (with 2 fallbacks)', async () => {
+    const models = [
+      { id: 'gemini-2.5-flash', label: 'Flash', summary: 'F', default_chunk_minutes: 12 },
+      { id: 'gemini-2.5-flash-lite', label: 'Lite', summary: 'L', default_chunk_minutes: 10 },
+      { id: 'gemini-2.5-pro', label: 'Pro', summary: 'P', default_chunk_minutes: 20 },
+    ];
+    const setFallbackModels = vi.fn();
+    render(
+      <SettingsModal
+        {...makeProps()}
+        availableModels={models}
+        preferredModel="gemini-2.5-flash"
+        fallbackModels={['gemini-2.5-flash-lite', 'gemini-2.5-pro']}
+        setFallbackModels={setFallbackModels}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+    fireEvent.click(screen.getAllByTitle('Sposta giu')[0]);
+    expect(setFallbackModels).toHaveBeenCalled();
+  });
+});
+
+describe('SettingsModal — validate environment', () => {
+  it('shows validation summary after clicking Verifica ambiente', async () => {
+    const models = [
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
+    ];
+    const validateFn = vi.fn().mockResolvedValue({
+      ok: true,
+      result: {
+        ok: true,
+        summary: 'Ambiente OK',
+        checks: [
+          { id: 'ffmpeg', label: 'ffmpeg', status: 'ok', message: 'ffmpeg trovato' },
+        ],
+      },
+    });
+    setPywebview({ validate_environment: validateFn });
+    render(
+      <SettingsModal
+        {...makeProps()}
+        availableModels={models}
+        preferredModel="gemini-2.5-flash"
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByText('Avanzati').closest('button')!);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Verifica ambiente'));
+    });
+    await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
+    expect(screen.getByText('ffmpeg')).toBeTruthy();
+  });
+});

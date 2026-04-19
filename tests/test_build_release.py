@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 _MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "build_release.py"
 _SPEC = importlib.util.spec_from_file_location("build_release_module", _MODULE_PATH)
+assert _SPEC is not None
 build_release = importlib.util.module_from_spec(_SPEC)
 assert _SPEC.loader is not None
 _SPEC.loader.exec_module(build_release)

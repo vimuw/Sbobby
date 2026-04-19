@@ -109,7 +109,7 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                     return_value=fresh_settings,
                 ),
             ):
-                reset_for_regeneration(context)
+                reset_for_regeneration(context)  # type: ignore[arg-type]
 
             self.assertEqual(
                 context.session["settings"]["model"], "gemini-2.5-flash-lite"
@@ -142,7 +142,7 @@ class PipelineSessionHelpersTests(unittest.TestCase):
 
             session = {"phase1": {"next_start_sec": 0, "memoria_precedente": ""}}
             context = _DummyContext(session, tmpdir)
-            restored = restore_phase1_progress(context, stage="phase1", step_seconds=30)
+            restored = restore_phase1_progress(context, stage="phase1", step_seconds=30)  # type: ignore[arg-type]
 
             self.assertEqual(len(restored.existing_chunks), 1)
             self.assertEqual(restored.start_sec, 30)
@@ -181,8 +181,8 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                 with patch(
                     "el_sbobinator.pipeline_session.invalidate_session_storage_cache"
                 ) as mock_invalidate:
-                    enabled, result_path = ensure_preconverted_audio(
-                        context,
+                    enabled, result_path = ensure_preconverted_audio(  # type: ignore[arg-type]
+                        context,  # type: ignore[arg-type]
                         input_path="lesson.mp3",
                         stage="phase1",
                         ffmpeg_exe="ffmpeg",
@@ -233,8 +233,8 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                     "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
                     side_effect=fake_preconvert,
                 ):
-                    enabled, result_path = ensure_preconverted_audio(
-                        context,
+                    enabled, result_path = ensure_preconverted_audio(  # type: ignore[arg-type]
+                        context,  # type: ignore[arg-type]
                         input_path="lesson.mp3",
                         stage="phase1",
                         ffmpeg_exe="ffmpeg",
@@ -279,8 +279,8 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                     with patch(
                         "el_sbobinator.pipeline_session.invalidate_session_storage_cache"
                     ) as mock_invalidate:
-                        ensure_preconverted_audio(
-                            context,
+                        ensure_preconverted_audio(  # type: ignore[arg-type]
+                            context,  # type: ignore[arg-type]
                             input_path="lesson.mp3",
                             stage="phase1",
                             ffmpeg_exe="ffmpeg",
@@ -311,8 +311,8 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                     with patch(
                         "el_sbobinator.pipeline_session.invalidate_session_storage_cache"
                     ) as mock_invalidate:
-                        ensure_preconverted_audio(
-                            context,
+                        ensure_preconverted_audio(  # type: ignore[arg-type]
+                            context,  # type: ignore[arg-type]
                             input_path="lesson.mp3",
                             stage="phase1",
                             ffmpeg_exe="ffmpeg",
@@ -341,8 +341,8 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                 "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
                 side_effect=fake_preconvert,
             ):
-                enabled, result_path = ensure_preconverted_audio(
-                    context,
+                enabled, result_path = ensure_preconverted_audio(  # type: ignore[arg-type]
+                    context,  # type: ignore[arg-type]
                     input_path="lesson.mp3",
                     stage="phase1",
                     ffmpeg_exe="ffmpeg",
@@ -371,8 +371,8 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                 "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
                 side_effect=fake_preconvert,
             ):
-                enabled, result_path = ensure_preconverted_audio(
-                    context,
+                enabled, result_path = ensure_preconverted_audio(  # type: ignore[arg-type]
+                    context,  # type: ignore[arg-type]
                     input_path="lesson.mp3",
                     stage="phase1",
                     ffmpeg_exe="ffmpeg",
@@ -405,8 +405,8 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                     "el_sbobinator.pipeline_session.os.replace",
                     side_effect=PermissionError("locked"),
                 ):
-                    enabled, result_path = ensure_preconverted_audio(
-                        context,
+                    enabled, result_path = ensure_preconverted_audio(  # type: ignore[arg-type]
+                        context,  # type: ignore[arg-type]
                         input_path="lesson.mp3",
                         stage="phase1",
                         ffmpeg_exe="ffmpeg",

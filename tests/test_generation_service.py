@@ -71,7 +71,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             ):
                 return "ok"
             err = RuntimeError("503 Service Unavailable")
-            err.code = 503
+            err.code = 503  # type: ignore[attr-defined]
             raise err
 
         client, result = retry_with_quota(
@@ -109,7 +109,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             if model_state.current == "gemini-2.5-flash-lite":
                 return "ok"
             err = RuntimeError("404 NOT_FOUND model unsupported for generateContent")
-            err.code = 404
+            err.code = 404  # type: ignore[attr-defined]
             raise err
 
         with patch(
@@ -208,7 +208,7 @@ class RetryWithQuotaTests(unittest.TestCase):
 
         def fn(_client):
             err = RuntimeError("503 Service Unavailable")
-            err.code = 503
+            err.code = 503  # type: ignore[attr-defined]
             raise err
 
         with self.assertRaises(RuntimeError) as ctx:
@@ -241,7 +241,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             call_count += 1
             if call_count == 1:
                 err = RuntimeError("503 Service Unavailable")
-                err.code = 503
+                err.code = 503  # type: ignore[attr-defined]
                 raise err
             raise RuntimeError("429 resource_exhausted per minute")
 
@@ -377,7 +377,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             nonlocal call_count
             call_count += 1
             err = RuntimeError("503 Service Unavailable")
-            err.code = 503
+            err.code = 503  # type: ignore[attr-defined]
             raise err
 
         with patch("el_sbobinator.generation_service.try_rotate_key") as mock_rotate:
@@ -480,7 +480,7 @@ class RetryWithQuotaTests(unittest.TestCase):
 
         def fn(current_client):
             err = RuntimeError("503 Service Unavailable")
-            err.code = 503
+            err.code = 503  # type: ignore[attr-defined]
             raise err
 
         with self.assertRaises(RuntimeError):
@@ -530,7 +530,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             call_count[0] += 1
             if call_count[0] == 1:
                 err = RuntimeError("429 Too Many Requests per minute")
-                err.code = 429
+                err.code = 429  # type: ignore[attr-defined]
                 raise err
             return "ok"
 
@@ -567,7 +567,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             call_count[0] += 1
             if call_count[0] <= 2:
                 err = RuntimeError("503 Service Unavailable")
-                err.code = 503
+                err.code = 503  # type: ignore
                 raise err
             return "ok"
 
@@ -608,7 +608,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             call_count[0] += 1
             if model_state.current == "gemini-2.5-flash":
                 err = RuntimeError("503 Service Unavailable")
-                err.code = 503
+                err.code = 503  # type: ignore[attr-defined]
                 raise err
             return "ok"
 
@@ -646,7 +646,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             call_count[0] += 1
             if call_count[0] <= 2:
                 err = RuntimeError("503 Service Unavailable")
-                err.code = 503
+                err.code = 503  # type: ignore[attr-defined]
                 raise err
             return "ok"
 
@@ -691,7 +691,7 @@ class RetryWithQuotaTests(unittest.TestCase):
 
         def fn(_client):
             err = RuntimeError("503 Service Unavailable")
-            err.code = 503
+            err.code = 503  # type: ignore[attr-defined]
             raise err
 
         def mock_sleep(cancelled_fn, seconds):
@@ -741,14 +741,14 @@ class RetryWithQuotaTests(unittest.TestCase):
             call_count[0] += 1
             if call_count[0] <= 3:
                 err = RuntimeError("429 Too Many Requests per minute")
-                err.code = 429
+                err.code = 429  # type: ignore[attr-defined]
                 raise err
             if call_count[0] == 4:
                 err = RuntimeError("503 Service Unavailable")
-                err.code = 503
+                err.code = 503  # type: ignore[attr-defined]
                 raise err
             err = RuntimeError("429 Too Many Requests per minute")
-            err.code = 429
+            err.code = 429  # type: ignore[attr-defined]
             raise err
 
         with self.assertRaises(RuntimeError) as ctx:
@@ -839,7 +839,7 @@ class RetryWithQuotaTests(unittest.TestCase):
                 err = RuntimeError(
                     "404 NOT_FOUND model unsupported for generateContent"
                 )
-                err.code = 404
+                err.code = 404  # type: ignore[attr-defined]
                 raise err
             fallback_calls[0] += 1
             if fallback_calls[0] == 1:
@@ -884,7 +884,7 @@ class RetryWithQuotaTests(unittest.TestCase):
                 if primary_calls[0] == 1:
                     raise RuntimeError("generic transient error")
                 err = RuntimeError("503 Service Unavailable")
-                err.code = 503
+                err.code = 503  # type: ignore[attr-defined]
                 raise err
             fallback_calls[0] += 1
             if fallback_calls[0] == 1:
@@ -976,7 +976,7 @@ class AllModelsUnavailableErrorTests(unittest.TestCase):
 
     def _make_503(self):
         err = RuntimeError("503 Service Unavailable")
-        err.code = 503
+        err.code = 503  # type: ignore[attr-defined]
         return err
 
     def test_all_models_503_raises_all_models_unavailable_error(self):

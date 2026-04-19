@@ -118,7 +118,7 @@ class ValidationServiceTests(unittest.TestCase):
         )
         self.assertEqual(api_check["status"], "ok")
         self.assertEqual(fallback_check["status"], "error")
-        self.assertIn("gemini-2.5-flash-lite", fallback_check["details"])
+        self.assertIn("gemini-2.5-flash-lite", fallback_check["details"])  # type: ignore[typeddict-item]
         self.assertEqual(
             fallback_check["message"],
             "Modello fallback 1 non accessibile con questa chiave.",
@@ -148,7 +148,7 @@ class ValidationServiceTests(unittest.TestCase):
             "Modello primario non accessibile.",
         )
         self.assertNotIn("fallback", api_check["message"].lower())
-        self.assertIn("gemini-2.5-flash", api_check["details"])
+        self.assertIn("gemini-2.5-flash", api_check["details"])  # type: ignore[typeddict-item]
 
     @patch("el_sbobinator.validation_service.get_desktop_dir", return_value=".")
     @patch("el_sbobinator.validation_service.resolve_ffmpeg", return_value="ffmpeg.exe")
@@ -169,7 +169,7 @@ class ValidationServiceTests(unittest.TestCase):
         )
         self.assertEqual(api_check["status"], "error")
         self.assertEqual(api_check["label"], "API Key Gemini")
-        self.assertIn("invalid API key", api_check["details"])
+        self.assertIn("invalid API key", api_check["details"])  # type: ignore[typeddict-item]
 
     @patch("el_sbobinator.validation_service.get_desktop_dir", return_value=".")
     @patch("el_sbobinator.validation_service.resolve_ffmpeg", return_value="ffmpeg.exe")
@@ -189,7 +189,7 @@ class ValidationServiceTests(unittest.TestCase):
             check for check in result["checks"] if check["id"] == "api_key"
         )
         self.assertEqual(api_check["status"], "error")
-        self.assertIn("generateContent", api_check["details"])
+        self.assertIn("generateContent", api_check["details"])  # type: ignore[typeddict-item]
 
     @patch("el_sbobinator.validation_service.get_desktop_dir", return_value=".")
     @patch("el_sbobinator.validation_service.resolve_ffmpeg", return_value="ffmpeg.exe")
@@ -216,9 +216,9 @@ class ValidationServiceTests(unittest.TestCase):
 
         self.assertEqual(api_check["status"], "ok")
         self.assertEqual(middle_check["status"], "error")
-        self.assertIn("gemini-2.5-flash-lite", middle_check["details"])
+        self.assertIn("gemini-2.5-flash-lite", middle_check["details"])  # type: ignore[typeddict-item]
         self.assertEqual(last_check["status"], "ok")
-        self.assertEqual(last_check["details"], "gemini-3-flash-preview")
+        self.assertEqual(last_check["details"], "gemini-3-flash-preview")  # type: ignore[typeddict-item]
 
 
 class CheckWritableDirTests(unittest.TestCase):

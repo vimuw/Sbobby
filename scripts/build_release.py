@@ -156,7 +156,11 @@ def install_node_dependencies(skip_npm_install: bool) -> None:
     run(["npm", "install", "--no-audit", "--no-fund"], cwd=WEBUI_DIR)
 
 
-def run_python_checks() -> None:
+def run_pyright() -> None:
+    run([sys.executable, "-m", "pyright"])
+
+
+def run_python_checks(with_coverage: bool = False) -> None:
     existing_targets = [
         str(ROOT / target)
         for target in PYTHON_CHECK_TARGETS
@@ -164,14 +168,33 @@ def run_python_checks() -> None:
     ]
     run([sys.executable, "-m", "ruff", "check", *existing_targets])
     run([sys.executable, "-m", "ruff", "format", "--check", *existing_targets])
-    run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-q"])
+    if with_coverage:
+        run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "tests/",
+                "-q",
+                "--cov=el_sbobinator",
+                "--cov-report=xml:coverage-python.xml",
+                "--cov-report=term-missing",
+                "--cov-fail-under=70",
+            ]
+        )
+    else:
+        run([sys.executable, "-m", "pytest", "tests/", "-q"])
+    run_pyright()
 
 
-def run_webui_checks(skip_npm_install: bool) -> None:
+def run_webui_checks(skip_npm_install: bool, with_coverage: bool = False) -> None:
     install_node_dependencies(skip_npm_install=skip_npm_install)
     run(["npm", "run", "lint"], cwd=WEBUI_DIR)
     run(["npm", "run", "typecheck"], cwd=WEBUI_DIR)
-    run(["npm", "test"], cwd=WEBUI_DIR)
+    if with_coverage:
+        run(["npm", "run", "test:coverage"], cwd=WEBUI_DIR)
+    else:
+        run(["npm", "test"], cwd=WEBUI_DIR)
 
 
 def build_webui(skip_npm_install: bool) -> None:
@@ -287,10 +310,13 @@ def command_deps(args: argparse.Namespace) -> None:
 
 
 def command_check(args: argparse.Namespace) -> None:
+    with_coverage = bool(args.with_coverage)
     if not args.skip_python:
-        run_python_checks()
+        run_python_checks(with_coverage=with_coverage)
     if not args.skip_webui:
-        run_webui_checks(skip_npm_install=bool(args.skip_npm_install))
+        run_webui_checks(
+            skip_npm_install=bool(args.skip_npm_install), with_coverage=with_coverage
+        )
 
 
 def command_build(args: argparse.Namespace) -> None:
@@ -358,6 +384,7 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser.add_argument("--skip-python", action="store_true")
     check_parser.add_argument("--skip-webui", action="store_true")
     check_parser.add_argument("--skip-npm-install", action="store_true")
+    check_parser.add_argument("--with-coverage", action="store_true")
     check_parser.set_defaults(func=command_check)
 
     build_parser = subparsers.add_parser("build", help="Build the distributable app")

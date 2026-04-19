@@ -138,6 +138,232 @@ describe('processingReducer', () => {
     expect(state.files.map(f => f.id)).toEqual(['q1', 'e1']);
   });
 
+  it('queue/reorder returns same state when fromIndex equals toIndex', () => {
+    const files = [makeFile({ id: 'a' }), makeFile({ id: 'b' })];
+    const state = { ...initialProcessingState, files };
+    const next = processingReducer(state, { type: 'queue/reorder', fromIndex: 0, toIndex: 0 });
+    expect(next).toBe(state);
+  });
+
+  it('queue/reorder returns same state when fromIndex is out of bounds', () => {
+    const files = [makeFile({ id: 'a' })];
+    const state = { ...initialProcessingState, files };
+    const next = processingReducer(state, { type: 'queue/reorder', fromIndex: 5, toIndex: 0 });
+    expect(next).toBe(state);
+  });
+
+  it('queue/update_source does not alter non-matching files', () => {
+    const files = [makeFile({ id: 'x' }), makeFile({ id: 'y' })];
+    const state = processingReducer(
+      { ...initialProcessingState, files },
+      { type: 'queue/update_source', id: 'x', path: '/new.mp3', name: 'new.mp3' },
+    );
+    expect(state.files[1].id).toBe('y');
+  });
+
+  it('queue/remove removes the targeted file', () => {
+    const files = [makeFile({ id: 'del' }), makeFile({ id: 'keep' })];
+    const state = processingReducer(
+      { ...initialProcessingState, files },
+      { type: 'queue/remove', id: 'del' },
+    );
+    expect(state.files.map(f => f.id)).toEqual(['keep']);
+  });
+
+  it('queue/update_source updates path/name/size/duration for matching file', () => {
+    const file = makeFile({ id: 'src1', path: '/old.mp3', name: 'old.mp3', size: 100, duration: 10 });
+    const state = processingReducer(
+      { ...initialProcessingState, files: [file] },
+      { type: 'queue/update_source', id: 'src1', path: '/new.mp3', name: 'new.mp3', size: 200, duration: 20 },
+    );
+    expect(state.files[0].path).toBe('/new.mp3');
+    expect(state.files[0].name).toBe('new.mp3');
+    expect(state.files[0].size).toBe(200);
+  });
+
+  it('queue/retry_one resets only the targeted error file', () => {
+    const files = [
+      makeFile({ id: 'a', status: 'error', errorText: 'fail', progress: 0, phase: 0 }),
+      makeFile({ id: 'b', status: 'error', errorText: 'fail2', progress: 0, phase: 0 }),
+    ];
+    const state = processingReducer(
+      { ...initialProcessingState, files },
+      { type: 'queue/retry_one', id: 'a' },
+    );
+    expect(state.files[0].status).toBe('queued');
+    expect(state.files[0].errorText).toBeUndefined();
+    expect(state.files[1].status).toBe('error');
+  });
+
+  it('queue/clear_all empties file list', () => {
+    const state = processingReducer(
+      { ...initialProcessingState, files: [makeFile()] },
+      { type: 'queue/clear_all' },
+    );
+    expect(state.files).toEqual([]);
+  });
+
+  it('app/set_status changes appState', () => {
+    const state = processingReducer(initialProcessingState, { type: 'app/set_status', status: 'canceling' });
+    expect(state.appState).toBe('canceling');
+  });
+
+  it('default case returns same state for unknown action', () => {
+    // @ts-expect-error testing unknown action type
+    const state = processingReducer(initialProcessingState, { type: 'unknown/action' });
+    expect(state).toBe(initialProcessingState);
+  });
+
+  it('queue/update_source falls back to existing duration when not provided', () => {
+    const file = makeFile({ id: 'u', duration: 60 });
+    const state = processingReducer(
+      { ...initialProcessingState, files: [file] },
+      { type: 'queue/update_source', id: 'u', path: '/new.mp3', name: 'new.mp3' },
+    );
+    expect(state.files[0].duration).toBe(60);
+  });
+
+  it('bridge/update_progress returns same state when progress value is unchanged', () => {
+    const base = { ...initialProcessingState, activeProgress: 55 };
+    const next = processingReducer(base, { type: 'bridge/update_progress', value: 0.55 });
+    expect(next).toBe(base);
+  });
+
+  it('bridge/set_work_totals falls back to existing values when data fields are null', () => {
+    const base = { ...initialProcessingState, workTotals: { chunks: 5, macro: 4, boundary: 3 } };
+    const state = processingReducer(
+      base,
+      { type: 'bridge/set_work_totals', data: { chunks: null, macro: null, boundary: null } },
+    );
+    expect(state.workTotals).toEqual({ chunks: 5, macro: 4, boundary: 3 });
+  });
+
+  it('bridge/set_work_totals updates workTotals', () => {
+    const state = processingReducer(
+      initialProcessingState,
+      { type: 'bridge/set_work_totals', data: { chunks: 10, macro: 8, boundary: 7 } },
+    );
+    expect(state.workTotals).toEqual({ chunks: 10, macro: 8, boundary: 7 });
+  });
+
+  it('bridge/update_work_done updates workDone for a kind', () => {
+    const state = processingReducer(
+      initialProcessingState,
+      { type: 'bridge/update_work_done', data: { kind: 'chunks', done: 5 } },
+    );
+    expect(state.workDone.chunks).toBe(5);
+  });
+
+  it('bridge/update_work_done returns same state when value is unchanged', () => {
+    const base = { ...initialProcessingState, workDone: { chunks: 5, macro: 0, boundary: 0 } };
+    const next = processingReducer(base, { type: 'bridge/update_work_done', data: { kind: 'chunks', done: 5 } });
+    expect(next).toBe(base);
+  });
+
+  it('bridge/process_done with cancelled=true does not touch queued files', () => {
+    const files = [
+      makeFile({ id: 'p1', status: 'processing' }),
+      makeFile({ id: 'q1', status: 'queued' }),
+    ];
+    const state = processingReducer(
+      { ...initialProcessingState, files },
+      { type: 'bridge/process_done', data: { cancelled: true, total: 1 } },
+    );
+    expect(state.files[1].status).toBe('queued');
+  });
+
+  it('bridge/set_current_file does not alter non-matching files', () => {
+    const files = [makeFile({ id: 'active' }), makeFile({ id: 'other' })];
+    const state = processingReducer(
+      { ...initialProcessingState, files },
+      { type: 'bridge/set_current_file', data: { id: 'active', index: 0, total: 2 } },
+    );
+    expect(state.files[1].status).toBe('queued');
+  });
+
+  it('bridge/file_failed uses fallback message when error is undefined', () => {
+    const file = makeFile({ id: 'f', status: 'processing' });
+    const state = processingReducer(
+      { ...initialProcessingState, files: [file] },
+      { type: 'bridge/file_failed', data: { id: 'f', index: 0, error: undefined } },
+    );
+    expect(state.files[0].errorText).toBe('Elaborazione non completata.');
+  });
+
+  it('bridge/register_step_time initialises stepMetrics for first call', () => {
+    const state = processingReducer(
+      initialProcessingState,
+      { type: 'bridge/register_step_time', data: { kind: 'chunks', seconds: 5 } },
+    );
+    expect(state.stepMetrics.chunks?.avgSeconds).toBe(5);
+    expect(state.stepMetrics.chunks?.done).toBe(1);
+  });
+
+  it('bridge/register_step_time uses EMA on subsequent calls', () => {
+    const withPrev = {
+      ...initialProcessingState,
+      stepMetrics: { chunks: { avgSeconds: 10, done: 1, total: 5 }, macro: null, boundary: null },
+    };
+    const state = processingReducer(
+      withPrev,
+      { type: 'bridge/register_step_time', data: { kind: 'chunks', seconds: 4 } },
+    );
+    expect(state.stepMetrics.chunks?.avgSeconds).toBeCloseTo(0.4 * 4 + 0.6 * 10);
+  });
+
+  it('bridge/file_done does not alter non-matching files', () => {
+    const files = [makeFile({ id: 'target' }), makeFile({ id: 'other' })];
+    const state = processingReducer(
+      { ...initialProcessingState, files },
+      { type: 'bridge/file_done', data: { id: 'target', index: 0, output_html: 'out.html', output_dir: 'dir' } },
+    );
+    expect(state.files[1].status).toBe('queued');
+  });
+
+  it('bridge/file_failed does not alter non-matching files', () => {
+    const files = [makeFile({ id: 'fail1', status: 'processing' }), makeFile({ id: 'ok', status: 'queued' })];
+    const state = processingReducer(
+      { ...initialProcessingState, files },
+      { type: 'bridge/file_failed', data: { id: 'fail1', index: 0, error: 'timeout' } },
+    );
+    expect(state.files[1].status).toBe('queued');
+  });
+
+  it('bridge/update_phase returns same state when phase unchanged (early return)', () => {
+    const state = { ...initialProcessingState, currentPhase: 'Fase 1/3' };
+    const next = processingReducer(state, { type: 'bridge/update_phase', text: 'Fase 1/3' });
+    expect(next).toBe(state);
+  });
+
+  it('bridge/update_phase updates currentPhase when changed', () => {
+    const state = { ...initialProcessingState, currentPhase: 'Fase 1/3' };
+    const next = processingReducer(state, { type: 'bridge/update_phase', text: 'Fase 2/3' });
+    expect(next.currentPhase).toBe('Fase 2/3');
+  });
+
+  it('bridge/update_model returns same state when model unchanged', () => {
+    const state = { ...initialProcessingState, currentModel: 'gemini-2.5-flash' };
+    const next = processingReducer(state, { type: 'bridge/update_model', model: 'gemini-2.5-flash' });
+    expect(next).toBe(state);
+  });
+
+  it('bridge/update_model updates currentModel when changed', () => {
+    const state = { ...initialProcessingState, currentModel: 'gemini-2.5-flash' };
+    const next = processingReducer(state, { type: 'bridge/update_model', model: 'gemini-2.5-pro' });
+    expect(next.currentModel).toBe('gemini-2.5-pro');
+  });
+
+  it('bridge/file_failed marks file as error with errorText', () => {
+    const file = makeFile({ id: 'err1', status: 'processing' });
+    const state = processingReducer(
+      { ...initialProcessingState, files: [file] },
+      { type: 'bridge/file_failed', data: { id: 'err1', index: 0, error: 'quota_daily_limit_phase1' } },
+    );
+    expect(state.files[0].status).toBe('error');
+    expect(state.files[0].errorText).toBe('quota_daily_limit_phase1');
+    expect(state.files[0].progress).toBe(0);
+  });
+
   it('resets processing files to queued on cancelled batch completion', () => {
     const file = makeFile({ status: 'processing', progress: 50, phase: 1 });
     const state = processingReducer(

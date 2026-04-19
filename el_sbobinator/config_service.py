@@ -117,7 +117,7 @@ def _resolve_user_home() -> str:
         try:
             import pwd  # type: ignore
 
-            candidates.append(pwd.getpwuid(os.getuid()).pw_dir)
+            candidates.append(pwd.getpwuid(os.getuid()).pw_dir)  # type: ignore[attr-defined]
         except Exception:
             pass
 
@@ -189,9 +189,9 @@ def _dpapi_protect_text_windows(text: str) -> str:
         import ctypes
         from ctypes import wintypes
 
-        DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)
+        DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)  # type: ignore[arg-type]
 
-        def _bytes_to_blob(data: bytes) -> DATA_BLOB:
+        def _bytes_to_blob(data: bytes) -> DATA_BLOB:  # type: ignore[valid-type]
             buf = ctypes.create_string_buffer(data)
             return DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
 
@@ -266,9 +266,9 @@ def _dpapi_unprotect_text_windows_once(b64: str) -> str:
         import ctypes
         from ctypes import wintypes
 
-        DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)
+        DATA_BLOB = _dpapi_make_blob_class(ctypes, wintypes)  # type: ignore[arg-type]
 
-        def _bytes_to_blob(data: bytes) -> DATA_BLOB:
+        def _bytes_to_blob(data: bytes) -> DATA_BLOB:  # type: ignore[valid-type]
             buf = ctypes.create_string_buffer(data)
             return DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
 

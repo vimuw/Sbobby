@@ -2,6 +2,8 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* ═══ DESIGN TOKENS / CSS VARIABLES ═══ */
+
 :root {
   --font-display: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
 
@@ -207,6 +209,7 @@
   box-shadow: 0 24px 50px rgba(0, 0, 0, 0.36);
 }
 
+/* ═══ FOOTER ═══ */
 :root:not([data-theme="dark"]) footer a,
 :root:not([data-theme="dark"]) footer span {
   color: var(--text-secondary);
@@ -282,6 +285,8 @@
   --font-sans: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
 }
 
+/* ═══ RESET & BASE ═══ */
+
 html,
 body,
 #root {
@@ -354,6 +359,8 @@ button {
   background: var(--accent-ring);
 }
 
+/* ═══ LAYOUT SHELL ═══ */
+
 .app-shell {
   position: relative;
   isolation: isolate;
@@ -385,6 +392,8 @@ button {
   height: 300px;
   background: rgba(148, 163, 184, 0.1);
 }
+
+/* ═══ HEADER & NAV ═══ */
 
 .brand-mark {
   font-family: var(--font-display);
@@ -608,6 +617,8 @@ button {
   height: 42px;
   border-radius: 14px;
 }
+
+/* ═══ MODALS ═══ */
 
 .modal-action-button {
   display: inline-flex;
@@ -835,6 +846,8 @@ button {
   background: var(--bg-elevated);
 }
 
+/* ═══ DROPZONE ═══ */
+
 .dropzone-card {
   position: relative;
   overflow: hidden;
@@ -883,6 +896,8 @@ button {
   animation: dz-march 0.7s linear infinite;
 }
 
+/* ═══ QUEUE & CARDS ═══ */
+
 .queue-card {
   position: relative;
   overflow: hidden;
@@ -922,6 +937,8 @@ button {
   pointer-events: none;
   animation: processing-card-pulse 1.8s ease-in-out infinite;
 }
+
+/* ═══ STATUS BANNER ═══ */
 
 .processing-chip {
   background: var(--processing-bg);
@@ -964,6 +981,8 @@ button {
   height: 1px;
   background: var(--border-subtle);
 }
+
+/* ═══ CONSOLE ═══ */
 
 .console-shell {
   border-radius: 26px;
@@ -1048,6 +1067,8 @@ button {
   box-shadow: 0 0 0 4px var(--accent-ring);
 }
 
+/* ═══ EDITOR SHELL & PAGE ═══ */
+
 .editor-shell {
   border: 0;
   border-radius: 0;
@@ -1055,6 +1076,8 @@ button {
   box-shadow: none;
   overflow: hidden;
 }
+
+/* ═══ EDITOR TOOLBAR ═══ */
 
 .editor-toolbar {
   display: flex;
@@ -1163,6 +1186,8 @@ button {
     padding: 12px 8px 24px;
   }
 }
+
+/* ═══ EDITOR FIND / REPLACE ═══ */
 
 .find-bar-float {
   position: absolute;
@@ -1377,6 +1402,8 @@ button {
   background: var(--accent-ring);
 }
 
+/* ═══ WORD COUNT ═══ */
+
 .editor-wordcount {
   display: flex;
   align-items: center;
@@ -1435,11 +1462,7 @@ button {
   white-space: nowrap;
 }
 
-.link-apply-btn:hover {
-  background: var(--accent-ring);
-}
-
-/* ── TOC Left Sidebar ─────────────────────────── */
+/* ═══ EDITOR TOC ═══ */
 .toc-left-sidebar {
   flex-shrink: 0;
   display: flex;
@@ -1796,6 +1819,8 @@ button {
   flex-shrink: 0;
 }
 
+/* ═══ CONTEXT MENU ═══ */
+
 .context-menu {
   width: 204px;
   overflow: hidden;
@@ -2006,6 +2031,8 @@ button {
   transform: scale(1.12);
 }
 
+/* ═══ UTILITY / ANIMATIONS ═══ */
+
 @media print {
   body * {
     visibility: hidden;
@@ -2030,6 +2057,8 @@ button {
     display: none;
   }
 }
+
+/* ═══ SETTINGS MODAL ═══ */
 
 .obscured-text {
   -webkit-text-security: disc;

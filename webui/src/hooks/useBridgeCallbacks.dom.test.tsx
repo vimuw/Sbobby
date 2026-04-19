@@ -141,3 +141,104 @@ describe('useBridgeCallbacks auto-continue', () => {
     expect(onBatchFullyDone).not.toHaveBeenCalled();
   });
 });
+
+function makeMinimalHook(overrides: Partial<Parameters<typeof useBridgeCallbacks>[0]> = {}) {
+  const filesRef = { current: [] as FileItem[] };
+  const appStateRef = { current: 'idle' as AppStatus };
+  const autoContinueRef = { current: false };
+  const startProcessingRef = { current: vi.fn<(isContinuation?: boolean) => Promise<boolean>>().mockResolvedValue(false) };
+  const opts = {
+    dispatch: vi.fn(),
+    appendConsole: vi.fn(),
+    filesRef: filesRef as unknown as ReturnType<typeof useRef<FileItem[]>>,
+    appStateRef: appStateRef as unknown as ReturnType<typeof useRef<AppStatus>>,
+    enqueueUniqueFiles: vi.fn(),
+    setRegeneratePrompt: vi.fn(),
+    setAskNewKeyPrompt: vi.fn(),
+    autoContinueRef: autoContinueRef as unknown as ReturnType<typeof useRef<boolean>>,
+    startProcessingRef: startProcessingRef as unknown as ReturnType<typeof useRef<(isContinuation?: boolean) => Promise<boolean>>>,
+    onFileContinued: vi.fn(),
+    onBatchReset: vi.fn(),
+    onBatchFullyDone: vi.fn<(data: ProcessDonePayload) => void>(),
+    ...overrides,
+  };
+  return opts;
+}
+
+describe('useBridgeCallbacks — direct bridge callbacks', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    setPywebview({});
+    window.elSbobinatorBridge = null;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    setPywebview(undefined);
+    window.elSbobinatorBridge = null;
+  });
+
+  it('appendConsole callback forwards message', () => {
+    const appendConsole = vi.fn();
+    const opts = makeMinimalHook({ appendConsole });
+    renderHook(() => { useBridgeCallbacks(opts); });
+    act(() => { window.elSbobinatorBridge?.appendConsole('hello'); });
+    expect(appendConsole).toHaveBeenCalledWith('hello');
+  });
+
+  it('askRegenerate callback forwards data to setRegeneratePrompt', () => {
+    const setRegeneratePrompt = vi.fn();
+    const opts = makeMinimalHook({ setRegeneratePrompt });
+    renderHook(() => { useBridgeCallbacks(opts); });
+    act(() => { window.elSbobinatorBridge?.askRegenerate({ filename: 'test.mp3' }); });
+    expect(setRegeneratePrompt).toHaveBeenCalledWith(expect.objectContaining({ filename: 'test.mp3' }));
+  });
+
+  it('askNewKey callback sets askNewKeyPrompt', () => {
+    const setAskNewKeyPrompt = vi.fn();
+    const opts = makeMinimalHook({ setAskNewKeyPrompt });
+    renderHook(() => { useBridgeCallbacks(opts); });
+    act(() => { window.elSbobinatorBridge?.askNewKey(); });
+    expect(setAskNewKeyPrompt).toHaveBeenCalledWith(true);
+  });
+
+  it('filesDropped calls enqueueUniqueFiles when appState is idle', () => {
+    const enqueueUniqueFiles = vi.fn();
+    const opts = makeMinimalHook({ enqueueUniqueFiles });
+    renderHook(() => { useBridgeCallbacks(opts); });
+    act(() => {
+      window.elSbobinatorBridge?.filesDropped([{ id: 'x', name: 'f.mp3', path: '/f.mp3', size: 100, duration: 30 }]);
+    });
+    expect(enqueueUniqueFiles).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ name: 'f.mp3' })]),
+    );
+  });
+
+  it('fileDone callback: covers notification path for completed file', () => {
+    const showNotification = vi.fn();
+    setPywebview({ show_notification: showNotification });
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    const doneFile: FileItem = {
+      id: 'file-1', name: 'audio.mp3', size: 1, duration: 60, path: '/a.mp3', status: 'done', progress: 1, phase: 0,
+    };
+    const opts = makeMinimalHook();
+    opts.filesRef = { current: [doneFile] } as unknown as ReturnType<typeof useRef<FileItem[]>>;
+    renderHook(() => { useBridgeCallbacks(opts); });
+    localStorage.removeItem('notifications_enabled');
+    act(() => {
+      window.elSbobinatorBridge?.fileDone({
+        id: 'file-1', index: 0, output_html: '/out.html', output_dir: '/sessions/x', effective_model: 'gemini-2.5-flash',
+      });
+    });
+    vi.restoreAllMocks();
+  });
+
+  it('processDone with no queued files and autoContinue=false calls onBatchFullyDone', async () => {
+    const onBatchFullyDone = vi.fn<(data: ProcessDonePayload) => void>();
+    const opts = makeMinimalHook({ onBatchFullyDone });
+    renderHook(() => { useBridgeCallbacks(opts); });
+    const payload = { completed: 1, failed: 0, total: 1 };
+    act(() => { window.elSbobinatorBridge?.processDone(payload); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    expect(onBatchFullyDone).toHaveBeenCalledWith(payload);
+  });
+});

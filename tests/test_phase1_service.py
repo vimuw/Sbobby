@@ -256,7 +256,7 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
                 "el_sbobinator.phase1_service.retry_with_quota", side_effect=fake_retry
             ),
         ):
-            return process_phase1_transcription(
+            return process_phase1_transcription(  # type: ignore[arg-type]
                 client=object(),
                 model_name="gemini-2.5-flash",
                 model_state=model_state,
@@ -265,7 +265,7 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
                 save_session=lambda: True,
                 runtime=_FakeRuntime(),
                 on_model_switched=on_switched,
-                **self._COMMON_KWARGS,
+                **self._COMMON_KWARGS,  # type: ignore[arg-type]
             ), call_count[0]
 
     def test_recovery_succeeds_on_extra_pass(self):
@@ -397,7 +397,7 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
                     side_effect=fake_retry,
                 ),
             ):
-                _client, transcript, _prev = process_phase1_transcription(
+                _client, transcript, _prev = process_phase1_transcription(  # type: ignore[arg-type]
                     client=object(),
                     model_name="gemini-2.5-flash",
                     model_state=model_state,
@@ -406,7 +406,7 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
                     save_session=lambda: True,
                     runtime=_FakeRuntime(),
                     on_model_switched=lambda old, new: switched.append((old, new)),
-                    **self._COMMON_KWARGS,
+                    **self._COMMON_KWARGS,  # type: ignore[arg-type]
                 )
 
             saved_chunks = os.listdir(chunks_dir)
@@ -452,14 +452,14 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
                     side_effect=fake_retry,
                 ),
             ):
-                process_phase1_transcription(
+                process_phase1_transcription(  # type: ignore[arg-type]
                     client=object(),
                     model_name="gemini-2.5-flash",
                     phase1_chunks_dir=chunks_dir,
                     session=session,
                     save_session=lambda: True,
                     runtime=_FakeRuntime(),
-                    **self._COMMON_KWARGS,
+                    **self._COMMON_KWARGS,  # type: ignore[arg-type]
                 )
 
         self.assertEqual(

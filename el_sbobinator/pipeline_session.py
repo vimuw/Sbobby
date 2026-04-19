@@ -19,6 +19,7 @@ from el_sbobinator.pipeline_settings import (
     load_and_sanitize_settings,
 )
 from el_sbobinator.session_store import (
+    SessionPaths,
     ensure_session_dirs,
     load_session as load_saved_session,
     new_session,
@@ -42,7 +43,7 @@ class PipelineSessionContext:
     input_path: str
     session_dir_hint: str | None
     resume_session: bool
-    session_paths: object
+    session_paths: SessionPaths
     session: dict
     settings: PipelineSettings
     settings_changed: bool

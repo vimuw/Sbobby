@@ -29,3 +29,29 @@ max-complexity = 20
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+include = ["el_sbobinator", "scripts", "tests"]
+exclude = [".venv", "build", "dist", "test_dist", "webui/dist", "webui/node_modules"]
+reportMissingModuleSource = "none"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["el_sbobinator"]
+omit = [
+    "*/__init__.py",
+    "el_sbobinator/app.py",
+    "el_sbobinator/webview_entry.py",
+    "el_sbobinator/ffmpeg_utils.py",
+    "el_sbobinator/updater.py",
+    "el_sbobinator/config_service.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

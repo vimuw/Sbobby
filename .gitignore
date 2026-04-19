@@ -30,6 +30,14 @@ _smoke/
 Thumbs.db
 .DS_Store
 
+# Coverage and type-check output artifacts
+.coverage
+coverage.xml
+htmlcov/
+pyright_clean.txt
+pyright_errors.txt
+pyright_full.txt
+
 # Media files
 *.mp3
 *.mp4
