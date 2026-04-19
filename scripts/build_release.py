@@ -222,7 +222,9 @@ def pyinstaller_command(target: str, ui: str) -> list[str]:
     command.extend(
         [
             "--add-data",
-            "webui/dist;webui/dist" if os.name == "nt" else "webui/dist:webui/dist",
+            f"{ROOT / 'webui' / 'dist'};webui/dist"
+            if os.name == "nt"
+            else f"{ROOT / 'webui' / 'dist'}:webui/dist",
             "--collect-all",
             "imageio_ffmpeg",
             "--collect-all",
