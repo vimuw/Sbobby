@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from el_sbobinator.generation_service import QuotaDailyLimitError
-from el_sbobinator.revision_service import (
+from el_sbobinator.services.generation_service import QuotaDailyLimitError
+from el_sbobinator.services.revision_service import (
     _paragraphs_within_budget,
     build_macro_blocks,
     process_boundary_revision_phase,
@@ -188,11 +188,11 @@ class TestBoundaryRevisionPhase(unittest.TestCase):
             # Force SequenceMatcher to return 0.99 so the similarity gate triggers AI,
             # then make the AI call fail.
             with patch(
-                "el_sbobinator.revision_service.difflib.SequenceMatcher"
+                "el_sbobinator.services.revision_service.difflib.SequenceMatcher"
             ) as mock_sm:
                 mock_sm.return_value.ratio.return_value = 0.99
                 with patch(
-                    "el_sbobinator.revision_service.retry_with_quota",
+                    "el_sbobinator.services.revision_service.retry_with_quota",
                     side_effect=RuntimeError("network error"),
                 ):
                     process_boundary_revision_phase(
@@ -293,7 +293,9 @@ class TestBoundaryRevisionPhase(unittest.TestCase):
 
             session = _session()
 
-            with patch("el_sbobinator.revision_service.retry_with_quota") as mock_rq:
+            with patch(
+                "el_sbobinator.services.revision_service.retry_with_quota"
+            ) as mock_rq:
                 _run_boundary(bdir, rdir, session)
 
             mock_rq.assert_not_called()
@@ -317,11 +319,12 @@ class TestProcessMacroRevisionPhase(unittest.TestCase):
         """Run process_macro_revision_phase with mocked retry_with_quota and sleep."""
         with (
             patch(
-                "el_sbobinator.revision_service.retry_with_quota",
+                "el_sbobinator.services.revision_service.retry_with_quota",
                 side_effect=rq_side_effect,
             ),
             patch(
-                "el_sbobinator.revision_service.sleep_with_cancel", return_value=True
+                "el_sbobinator.services.revision_service.sleep_with_cancel",
+                return_value=True,
             ),
         ):
             _, revised_text = process_macro_revision_phase(
@@ -451,11 +454,11 @@ class TestProcessMacroRevisionPhase(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.revision_service.retry_with_quota",
+                    "el_sbobinator.services.revision_service.retry_with_quota",
                     side_effect=main_fail_retry_quota,
                 ),
                 patch(
-                    "el_sbobinator.revision_service.sleep_with_cancel",
+                    "el_sbobinator.services.revision_service.sleep_with_cancel",
                     return_value=True,
                 ),
             ):

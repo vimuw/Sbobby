@@ -17,8 +17,8 @@ import threading
 import time
 from datetime import datetime
 
-from el_sbobinator.config_service import USER_HOME
 from el_sbobinator.model_registry import DEFAULT_FALLBACK_MODELS, DEFAULT_MODEL
+from el_sbobinator.services.config_service import USER_HOME
 
 SESSION_CLEANUP_MAX_AGE_DAYS = 14
 PRECONVERTED_AUDIO_FINAL = "el_sbobinator_preconverted_mono16k.mp3"

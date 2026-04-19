@@ -203,7 +203,15 @@ def build_webui(skip_npm_install: bool) -> None:
 
 
 def pyinstaller_command(target: str, ui: str) -> list[str]:
-    command = [sys.executable, "-m", "PyInstaller", "--noconfirm"]
+    spec_dir = PACKAGING_DIR / ("windows" if target == "windows" else "macos")
+    command = [
+        sys.executable,
+        "-m",
+        "PyInstaller",
+        "--noconfirm",
+        "--specpath",
+        str(spec_dir),
+    ]
     if target == "windows":
         command.extend(["--clean", "--onedir", "--windowed"])
         command.extend(["--icon", str(ROOT / "assets" / "icon.ico")])
@@ -345,7 +353,7 @@ def command_build(args: argparse.Namespace) -> None:
 
 
 def command_validate(args: argparse.Namespace) -> None:
-    from el_sbobinator.validation_service import validate_environment
+    from el_sbobinator.services.validation_service import validate_environment
 
     result = validate_environment(
         api_key=args.api_key, validate_api_key=bool(args.check_api_key)

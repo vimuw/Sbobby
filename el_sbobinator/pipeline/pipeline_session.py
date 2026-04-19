@@ -11,13 +11,13 @@ import os
 import re
 from dataclasses import dataclass
 
-from el_sbobinator.audio_service import preconvert_media_to_mp3
-from el_sbobinator.config_service import load_config
-from el_sbobinator.pipeline_settings import (
+from el_sbobinator.pipeline.pipeline_settings import (
     PipelineSettings,
     build_default_pipeline_settings,
     load_and_sanitize_settings,
 )
+from el_sbobinator.services.audio_service import preconvert_media_to_mp3
+from el_sbobinator.services.config_service import load_config
 from el_sbobinator.session_store import (
     SessionPaths,
     ensure_session_dirs,

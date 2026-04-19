@@ -10,7 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from el_sbobinator.config_service import load_config
 from el_sbobinator.model_registry import (
     DEFAULT_FALLBACK_MODELS,
     DEFAULT_MODEL,
@@ -19,6 +18,7 @@ from el_sbobinator.model_registry import (
     sanitize_fallback_models,
     sanitize_model_name,
 )
+from el_sbobinator.services.config_service import load_config
 
 
 @dataclass(frozen=True)

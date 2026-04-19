@@ -5,13 +5,13 @@ import unittest
 from typing import ClassVar
 from unittest.mock import patch
 
-from el_sbobinator.generation_service import (
+from el_sbobinator.model_registry import build_model_state
+from el_sbobinator.services.generation_service import (
     AllModelsUnavailableError,
     DegenerateOutputError,
     QuotaDailyLimitError,
 )
-from el_sbobinator.model_registry import build_model_state
-from el_sbobinator.phase1_service import process_phase1_transcription
+from el_sbobinator.services.phase1_service import process_phase1_transcription
 
 
 class _FakeRuntime:
@@ -45,11 +45,11 @@ class Phase1SessionErrorKeyTests(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.phase1_service.cut_audio_chunk_to_mp3",
+                    "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
                     return_value=(True, None),
                 ),
                 patch(
-                    "el_sbobinator.phase1_service.retry_with_quota",
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
                     side_effect=QuotaDailyLimitError("daily"),
                 ),
             ):
@@ -105,15 +105,15 @@ class Phase1SessionErrorKeyTests(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.phase1_service.cut_audio_chunk_to_mp3",
+                    "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
                     return_value=(True, None),
                 ),
                 patch(
-                    "el_sbobinator.phase1_service.generation_service.make_inline_audio_part",
+                    "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
                     return_value=object(),
                 ),
                 patch(
-                    "el_sbobinator.phase1_service.retry_with_quota",
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
                     side_effect=lambda fn, **kwargs: (
                         kwargs["client"],
                         fn(kwargs["client"]),
@@ -157,17 +157,17 @@ class Phase1SessionErrorKeyTests(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.phase1_service.cut_audio_chunk_to_mp3",
+                    "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
                     return_value=(True, None),
                 ),
                 patch(
-                    "el_sbobinator.phase1_service.generation_service.make_inline_audio_part",
+                    "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
                     return_value=object(),
                 ),
                 patch(
-                    "el_sbobinator.phase1_service.retry_with_quota",
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
                     side_effect=__import__(
-                        "el_sbobinator.generation_service",
+                        "el_sbobinator.services.generation_service",
                         fromlist=["DegenerateOutputError"],
                     ).DegenerateOutputError(
                         "Tutti i modelli della chain hanno prodotto output degenerato o non valido."
@@ -246,15 +246,16 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
 
         with (
             patch(
-                "el_sbobinator.phase1_service.cut_audio_chunk_to_mp3",
+                "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
                 return_value=(True, None),
             ),
             patch(
-                "el_sbobinator.phase1_service.generation_service.make_inline_audio_part",
+                "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
                 return_value=object(),
             ),
             patch(
-                "el_sbobinator.phase1_service.retry_with_quota", side_effect=fake_retry
+                "el_sbobinator.services.phase1_service.retry_with_quota",
+                side_effect=fake_retry,
             ),
         ):
             return process_phase1_transcription(  # type: ignore[arg-type]
@@ -386,15 +387,15 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.phase1_service.cut_audio_chunk_to_mp3",
+                    "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
                     return_value=(True, None),
                 ),
                 patch(
-                    "el_sbobinator.phase1_service.generation_service.make_inline_audio_part",
+                    "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
                     return_value=object(),
                 ),
                 patch(
-                    "el_sbobinator.phase1_service.retry_with_quota",
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
                     side_effect=fake_retry,
                 ),
             ):
@@ -443,13 +444,16 @@ class ChainExhaustionRecoveryTests(unittest.TestCase):
             os.makedirs(chunks_dir)
 
             with (
-                patch("el_sbobinator.phase1_service.cut_audio_chunk_to_mp3", cut_mock),
                 patch(
-                    "el_sbobinator.phase1_service.generation_service.make_inline_audio_part",
+                    "el_sbobinator.services.phase1_service.cut_audio_chunk_to_mp3",
+                    cut_mock,
+                ),
+                patch(
+                    "el_sbobinator.services.phase1_service.generation_service.make_inline_audio_part",
                     inline_mock,
                 ),
                 patch(
-                    "el_sbobinator.phase1_service.retry_with_quota",
+                    "el_sbobinator.services.phase1_service.retry_with_quota",
                     side_effect=fake_retry,
                 ),
             ):

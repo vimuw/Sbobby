@@ -13,17 +13,17 @@ from collections.abc import Callable
 from google.genai import types
 
 from el_sbobinator.dedup_utils import local_macro_cleanup
-from el_sbobinator.generation_service import (
+from el_sbobinator.logging_utils import get_logger
+from el_sbobinator.model_registry import ModelState
+from el_sbobinator.pipeline.pipeline_session import record_step_metric
+from el_sbobinator.prompts import PROMPT_REVISIONE_CONFINE
+from el_sbobinator.services.generation_service import (
     QuotaDailyLimitError,
     current_model_name,
     extract_response_text,
     retry_with_quota,
     sleep_with_cancel,
 )
-from el_sbobinator.logging_utils import get_logger
-from el_sbobinator.model_registry import ModelState
-from el_sbobinator.pipeline_session import record_step_metric
-from el_sbobinator.prompts import PROMPT_REVISIONE_CONFINE
 from el_sbobinator.session_store import _update_session
 from el_sbobinator.shared import _atomic_write_text
 

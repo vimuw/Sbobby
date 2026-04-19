@@ -21,9 +21,9 @@ from typing import ClassVar
 import webview
 
 # Lazy imports to avoid loading heavy deps at startup:
-# from el_sbobinator.pipeline import esegui_sbobinatura  -- imported lazily in start_processing
-# from el_sbobinator.audio_service import probe_media_duration -- imported lazily in _build_file_descriptor
-# from el_sbobinator.validation_service import validate_environment -- imported lazily in validate_environment
+# from el_sbobinator.pipeline.pipeline import esegui_sbobinatura  -- imported lazily in start_processing
+# from el_sbobinator.services.audio_service import probe_media_duration -- imported lazily in _build_file_descriptor
+# from el_sbobinator.services.validation_service import validate_environment -- imported lazily in validate_environment
 from el_sbobinator.bridge_types import (
     BridgeFileItem,
     FileDonePayload,
@@ -32,7 +32,6 @@ from el_sbobinator.bridge_types import (
     SetCurrentFilePayload,
     ValidationResult,
 )
-from el_sbobinator.config_service import get_desktop_dir, load_config, save_config
 from el_sbobinator.file_ops import (
     export_doc_html,
     extract_html_shell,
@@ -45,7 +44,12 @@ from el_sbobinator.file_ops import (
 from el_sbobinator.logging_utils import configure_logging, get_logger
 from el_sbobinator.media_server import LocalMediaServer
 from el_sbobinator.model_registry import DEFAULT_FALLBACK_MODELS, MODEL_OPTIONS
-from el_sbobinator.pipeline_adapter import PipelineAdapter, _drain_dnd_paths
+from el_sbobinator.pipeline.pipeline_adapter import PipelineAdapter, _drain_dnd_paths
+from el_sbobinator.services.config_service import (
+    get_desktop_dir,
+    load_config,
+    save_config,
+)
 from el_sbobinator.shared import (
     DEFAULT_MODEL,
     SESSION_CLEANUP_MAX_AGE_DAYS,
@@ -353,7 +357,7 @@ class ElSbobinatorApi:
         except Exception:
             size = 0
         try:
-            from el_sbobinator.audio_service import probe_media_duration
+            from el_sbobinator.services.audio_service import probe_media_duration
 
             dur_val, _reason = probe_media_duration(path)
             duration = dur_val if dur_val else 0
@@ -500,7 +504,7 @@ class ElSbobinatorApi:
 
         # Process files sequentially in background
         def _run():
-            from el_sbobinator.pipeline import esegui_sbobinatura
+            from el_sbobinator.pipeline.pipeline import esegui_sbobinatura
 
             active_api_key = api_key
             completed_count = 0
@@ -659,7 +663,7 @@ class ElSbobinatorApi:
     ) -> dict:
         """Run an explicit environment validation without starting a full transcription."""
         try:
-            from el_sbobinator.validation_service import (
+            from el_sbobinator.services.validation_service import (
                 validate_environment as _validate_env,
             )
 
@@ -785,9 +789,9 @@ class ElSbobinatorApi:
         Usato quando l'HTML manca sia al path originale sia nelle session dirs
         (es. sessioni create prima che l'HTML venisse salvato nella session dir).
         """
-        from el_sbobinator.config_service import safe_output_basename
-        from el_sbobinator.export_service import export_final_html_document
-        from el_sbobinator.pipeline_session import read_text_file
+        from el_sbobinator.pipeline.pipeline_session import read_text_file
+        from el_sbobinator.services.config_service import safe_output_basename
+        from el_sbobinator.services.export_service import export_final_html_document
         from el_sbobinator.shared import _atomic_write_json
 
         session_root = self._get_session_root()

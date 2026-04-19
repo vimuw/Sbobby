@@ -9,7 +9,7 @@ from el_sbobinator.model_registry import (
     default_macro_char_limit_for_model,
     sanitize_fallback_models,
 )
-from el_sbobinator.pipeline_settings import load_and_sanitize_settings
+from el_sbobinator.pipeline.pipeline_settings import load_and_sanitize_settings
 
 
 class ResumeModelStateTests(unittest.TestCase):

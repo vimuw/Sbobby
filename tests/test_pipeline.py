@@ -7,7 +7,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from el_sbobinator.pipeline import esegui_sbobinatura
+from el_sbobinator.pipeline.pipeline import esegui_sbobinatura
 
 
 class _FakeLogger:
@@ -161,35 +161,53 @@ class PipelineCancellationTests(unittest.TestCase):
             with (
                 patch("google.genai.Client", _FakeClient),
                 patch(
-                    "el_sbobinator.pipeline.initialize_session_context",
+                    "el_sbobinator.pipeline.pipeline.initialize_session_context",
                     return_value=session_ctx,
                 ),
-                patch("el_sbobinator.pipeline.attach_file_handler", return_value=None),
-                patch("el_sbobinator.pipeline.detach_file_handler"),
-                patch("el_sbobinator.pipeline.get_logger", return_value=_FakeLogger()),
-                patch("el_sbobinator.pipeline.load_fallback_keys", return_value=[]),
-                patch("el_sbobinator.pipeline.resolve_ffmpeg", return_value="ffmpeg"),
                 patch(
-                    "el_sbobinator.pipeline.probe_media_duration",
+                    "el_sbobinator.pipeline.pipeline.attach_file_handler",
+                    return_value=None,
+                ),
+                patch("el_sbobinator.pipeline.pipeline.detach_file_handler"),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.get_logger",
+                    return_value=_FakeLogger(),
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.load_fallback_keys",
+                    return_value=[],
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.resolve_ffmpeg",
+                    return_value="ffmpeg",
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.probe_media_duration",
                     return_value=(120.0, None),
                 ),
-                patch("el_sbobinator.pipeline.persist_phase1_metadata"),
-                patch("el_sbobinator.pipeline.normalize_stage", return_value="phase1"),
+                patch("el_sbobinator.pipeline.pipeline.persist_phase1_metadata"),
                 patch(
-                    "el_sbobinator.pipeline.list_phase1_chunks",
+                    "el_sbobinator.pipeline.pipeline.normalize_stage",
+                    return_value="phase1",
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.list_phase1_chunks",
                     return_value=[(0, 0, 60, "chunk_000_0_60.md")],
                 ),
-                patch("el_sbobinator.pipeline.phase1_has_progress", return_value=True),
                 patch(
-                    "el_sbobinator.pipeline.ensure_preconverted_audio",
+                    "el_sbobinator.pipeline.pipeline.phase1_has_progress",
+                    return_value=True,
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.ensure_preconverted_audio",
                     return_value=(False, None),
                 ),
                 patch(
-                    "el_sbobinator.pipeline.reset_for_regeneration",
+                    "el_sbobinator.pipeline.pipeline.reset_for_regeneration",
                     side_effect=fake_reset,
                 ),
                 patch(
-                    "el_sbobinator.pipeline.process_phase1_transcription",
+                    "el_sbobinator.pipeline.pipeline.process_phase1_transcription",
                     side_effect=fake_phase1,
                 ),
             ):
@@ -243,28 +261,49 @@ class PipelineCancellationTests(unittest.TestCase):
             with (
                 patch("google.genai.Client", _FakeClient),
                 patch(
-                    "el_sbobinator.pipeline.initialize_session_context",
+                    "el_sbobinator.pipeline.pipeline.initialize_session_context",
                     return_value=session_ctx,
                 ),
-                patch("el_sbobinator.pipeline.attach_file_handler", return_value=None),
-                patch("el_sbobinator.pipeline.detach_file_handler"),
-                patch("el_sbobinator.pipeline.get_logger", return_value=_FakeLogger()),
-                patch("el_sbobinator.pipeline.load_fallback_keys", return_value=[]),
-                patch("el_sbobinator.pipeline.resolve_ffmpeg", return_value="ffmpeg"),
                 patch(
-                    "el_sbobinator.pipeline.probe_media_duration",
+                    "el_sbobinator.pipeline.pipeline.attach_file_handler",
+                    return_value=None,
+                ),
+                patch("el_sbobinator.pipeline.pipeline.detach_file_handler"),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.get_logger",
+                    return_value=_FakeLogger(),
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.load_fallback_keys",
+                    return_value=[],
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.resolve_ffmpeg",
+                    return_value="ffmpeg",
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.probe_media_duration",
                     return_value=(120.0, None),
                 ),
-                patch("el_sbobinator.pipeline.persist_phase1_metadata"),
-                patch("el_sbobinator.pipeline.normalize_stage", return_value="phase1"),
-                patch("el_sbobinator.pipeline.list_phase1_chunks", return_value=[]),
-                patch("el_sbobinator.pipeline.phase1_has_progress", return_value=False),
+                patch("el_sbobinator.pipeline.pipeline.persist_phase1_metadata"),
                 patch(
-                    "el_sbobinator.pipeline.ensure_preconverted_audio",
+                    "el_sbobinator.pipeline.pipeline.normalize_stage",
+                    return_value="phase1",
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.list_phase1_chunks",
+                    return_value=[],
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.phase1_has_progress",
+                    return_value=False,
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.ensure_preconverted_audio",
                     return_value=(False, None),
                 ),
                 patch(
-                    "el_sbobinator.pipeline.process_phase1_transcription",
+                    "el_sbobinator.pipeline.pipeline.process_phase1_transcription",
                     side_effect=fake_phase1,
                 ),
             ):
@@ -286,27 +325,45 @@ class PipelineCancellationTests(unittest.TestCase):
             with (
                 patch("google.genai.Client", _FakeClient),
                 patch(
-                    "el_sbobinator.pipeline.initialize_session_context",
+                    "el_sbobinator.pipeline.pipeline.initialize_session_context",
                     return_value=session_ctx,
                 ),
-                patch("el_sbobinator.pipeline.attach_file_handler", return_value=None),
-                patch("el_sbobinator.pipeline.detach_file_handler"),
-                patch("el_sbobinator.pipeline.get_logger", return_value=_FakeLogger()),
-                patch("el_sbobinator.pipeline.load_fallback_keys", return_value=[]),
-                patch("el_sbobinator.pipeline.resolve_ffmpeg", return_value="ffmpeg"),
                 patch(
-                    "el_sbobinator.pipeline.probe_media_duration",
+                    "el_sbobinator.pipeline.pipeline.attach_file_handler",
+                    return_value=None,
+                ),
+                patch("el_sbobinator.pipeline.pipeline.detach_file_handler"),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.get_logger",
+                    return_value=_FakeLogger(),
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.load_fallback_keys",
+                    return_value=[],
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.resolve_ffmpeg",
+                    return_value="ffmpeg",
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.probe_media_duration",
                     return_value=(120.0, None),
                 ),
-                patch("el_sbobinator.pipeline.persist_phase1_metadata"),
-                patch("el_sbobinator.pipeline.normalize_stage", return_value="phase1"),
+                patch("el_sbobinator.pipeline.pipeline.persist_phase1_metadata"),
                 patch(
-                    "el_sbobinator.pipeline.list_phase1_chunks",
+                    "el_sbobinator.pipeline.pipeline.normalize_stage",
+                    return_value="phase1",
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.list_phase1_chunks",
                     return_value=[(0, 0, 60, "chunk_000_0_60.md")],
                 ),
-                patch("el_sbobinator.pipeline.phase1_has_progress", return_value=True),
                 patch(
-                    "el_sbobinator.pipeline.ensure_preconverted_audio",
+                    "el_sbobinator.pipeline.pipeline.phase1_has_progress",
+                    return_value=True,
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.ensure_preconverted_audio",
                     return_value=(False, None),
                 ),
             ):
@@ -345,27 +402,45 @@ class PipelineCancellationTests(unittest.TestCase):
             with (
                 patch("google.genai.Client", _FakeClient),
                 patch(
-                    "el_sbobinator.pipeline.initialize_session_context",
+                    "el_sbobinator.pipeline.pipeline.initialize_session_context",
                     return_value=session_ctx,
                 ),
-                patch("el_sbobinator.pipeline.attach_file_handler", return_value=None),
-                patch("el_sbobinator.pipeline.detach_file_handler"),
-                patch("el_sbobinator.pipeline.get_logger", return_value=_FakeLogger()),
-                patch("el_sbobinator.pipeline.load_fallback_keys", return_value=[]),
-                patch("el_sbobinator.pipeline.resolve_ffmpeg", return_value="ffmpeg"),
                 patch(
-                    "el_sbobinator.pipeline.probe_media_duration",
+                    "el_sbobinator.pipeline.pipeline.attach_file_handler",
+                    return_value=None,
+                ),
+                patch("el_sbobinator.pipeline.pipeline.detach_file_handler"),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.get_logger",
+                    return_value=_FakeLogger(),
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.load_fallback_keys",
+                    return_value=[],
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.resolve_ffmpeg",
+                    return_value="ffmpeg",
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.probe_media_duration",
                     return_value=(120.0, None),
                 ),
-                patch("el_sbobinator.pipeline.persist_phase1_metadata"),
-                patch("el_sbobinator.pipeline.normalize_stage", return_value="phase1"),
+                patch("el_sbobinator.pipeline.pipeline.persist_phase1_metadata"),
                 patch(
-                    "el_sbobinator.pipeline.list_phase1_chunks",
+                    "el_sbobinator.pipeline.pipeline.normalize_stage",
+                    return_value="phase1",
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.list_phase1_chunks",
                     return_value=[(0, 0, 60, "chunk_000_0_60.md")],
                 ),
-                patch("el_sbobinator.pipeline.phase1_has_progress", return_value=True),
                 patch(
-                    "el_sbobinator.pipeline.ensure_preconverted_audio"
+                    "el_sbobinator.pipeline.pipeline.phase1_has_progress",
+                    return_value=True,
+                ),
+                patch(
+                    "el_sbobinator.pipeline.pipeline.ensure_preconverted_audio"
                 ) as mock_preconvert,
             ):
                 thread = threading.Thread(
@@ -418,48 +493,66 @@ class PipelineCleanupCacheTests(unittest.TestCase):
         return [
             patch("google.genai.Client", _FakeClient),
             patch(
-                "el_sbobinator.pipeline.initialize_session_context",
+                "el_sbobinator.pipeline.pipeline.initialize_session_context",
                 return_value=session_ctx,
             ),
-            patch("el_sbobinator.pipeline.attach_file_handler", return_value=None),
-            patch("el_sbobinator.pipeline.detach_file_handler"),
-            patch("el_sbobinator.pipeline.get_logger", return_value=_FakeLogger()),
-            patch("el_sbobinator.pipeline.load_fallback_keys", return_value=[]),
-            patch("el_sbobinator.pipeline.resolve_ffmpeg", return_value="ffmpeg"),
             patch(
-                "el_sbobinator.pipeline.probe_media_duration",
+                "el_sbobinator.pipeline.pipeline.attach_file_handler", return_value=None
+            ),
+            patch("el_sbobinator.pipeline.pipeline.detach_file_handler"),
+            patch(
+                "el_sbobinator.pipeline.pipeline.get_logger", return_value=_FakeLogger()
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.load_fallback_keys", return_value=[]
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.resolve_ffmpeg", return_value="ffmpeg"
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.probe_media_duration",
                 return_value=(120.0, None),
             ),
-            patch("el_sbobinator.pipeline.persist_phase1_metadata"),
-            patch("el_sbobinator.pipeline.normalize_stage", return_value="phase1"),
-            patch("el_sbobinator.pipeline.list_phase1_chunks", return_value=[]),
-            patch("el_sbobinator.pipeline.phase1_has_progress", return_value=False),
+            patch("el_sbobinator.pipeline.pipeline.persist_phase1_metadata"),
             patch(
-                "el_sbobinator.pipeline.ensure_preconverted_audio",
+                "el_sbobinator.pipeline.pipeline.normalize_stage", return_value="phase1"
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.list_phase1_chunks", return_value=[]
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.phase1_has_progress",
+                return_value=False,
+            ),
+            patch(
+                "el_sbobinator.pipeline.pipeline.ensure_preconverted_audio",
                 return_value=(True, preconv_path),
             ),
             patch(
-                "el_sbobinator.pipeline.restore_phase1_progress",
+                "el_sbobinator.pipeline.pipeline.restore_phase1_progress",
                 return_value=SimpleNamespace(
                     existing_chunks=[], start_sec=0, full_transcript="", prev_memory=""
                 ),
             ),
             patch(
-                "el_sbobinator.pipeline.process_phase1_transcription",
+                "el_sbobinator.pipeline.pipeline.process_phase1_transcription",
                 return_value=(_FakeClient(), "transcript", ""),
             ),
-            patch("el_sbobinator.pipeline.build_macro_blocks", return_value=["block"]),
-            patch("el_sbobinator.pipeline._atomic_write_json"),
             patch(
-                "el_sbobinator.pipeline.process_macro_revision_phase",
+                "el_sbobinator.pipeline.pipeline.build_macro_blocks",
+                return_value=["block"],
+            ),
+            patch("el_sbobinator.pipeline.pipeline._atomic_write_json"),
+            patch(
+                "el_sbobinator.pipeline.pipeline.process_macro_revision_phase",
                 return_value=(_FakeClient(), "revised"),
             ),
             patch(
-                "el_sbobinator.pipeline.process_boundary_revision_phase",
+                "el_sbobinator.pipeline.pipeline.process_boundary_revision_phase",
                 return_value=_FakeClient(),
             ),
             patch(
-                "el_sbobinator.pipeline.export_final_html_document",
+                "el_sbobinator.pipeline.pipeline.export_final_html_document",
                 side_effect=fake_export,
             ),
         ]
@@ -495,7 +588,7 @@ class PipelineCleanupCacheTests(unittest.TestCase):
                     session_ctx, preconv_path, html_path, tmpdir
                 )
                 spy = patch(
-                    "el_sbobinator.pipeline.invalidate_session_storage_cache",
+                    "el_sbobinator.pipeline.pipeline.invalidate_session_storage_cache",
                     wraps=_shared.invalidate_session_storage_cache,
                 )
 
@@ -537,7 +630,9 @@ class PipelineCleanupCacheTests(unittest.TestCase):
             base_patches = self._make_pipeline_patches(
                 session_ctx, preconv_path, html_path, tmpdir
             )
-            spy = patch("el_sbobinator.pipeline.invalidate_session_storage_cache")
+            spy = patch(
+                "el_sbobinator.pipeline.pipeline.invalidate_session_storage_cache"
+            )
             _real_remove = os.remove
 
             def _selective_remove(p):

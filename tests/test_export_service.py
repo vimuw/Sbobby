@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 
-from el_sbobinator.export_service import (
+from el_sbobinator.services.export_service import (
     export_final_html_document,
     resolve_output_html_path,
 )

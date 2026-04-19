@@ -13,13 +13,17 @@ import tempfile
 
 from google import genai
 
-from el_sbobinator.audio_service import resolve_ffmpeg
 from el_sbobinator.bridge_types import ValidationCheck, ValidationResult
-from el_sbobinator.config_service import CONFIG_FILE, USER_HOME, get_desktop_dir
 from el_sbobinator.model_registry import (
     DEFAULT_FALLBACK_MODELS,
     sanitize_fallback_models,
     sanitize_model_name,
+)
+from el_sbobinator.services.audio_service import resolve_ffmpeg
+from el_sbobinator.services.config_service import (
+    CONFIG_FILE,
+    USER_HOME,
+    get_desktop_dir,
 )
 from el_sbobinator.shared import DEFAULT_MODEL
 

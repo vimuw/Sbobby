@@ -57,7 +57,7 @@ class WorkflowEndToEndTests(unittest.TestCase):
             with (
                 patch("google.genai.Client", _FakeClient),
                 patch(
-                    "el_sbobinator.pipeline.esegui_sbobinatura",
+                    "el_sbobinator.pipeline.pipeline.esegui_sbobinatura",
                     side_effect=fake_pipeline,
                 ),
             ):
@@ -94,7 +94,7 @@ class WorkflowEndToEndTests(unittest.TestCase):
             with (
                 patch("google.genai.Client", _FakeClient),
                 patch(
-                    "el_sbobinator.pipeline.esegui_sbobinatura",
+                    "el_sbobinator.pipeline.pipeline.esegui_sbobinatura",
                     side_effect=RuntimeError("boom"),
                 ),
             ):

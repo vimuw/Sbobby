@@ -3,7 +3,7 @@ import tempfile
 import threading
 import unittest
 
-from el_sbobinator.pipeline_hooks import PipelineRuntime
+from el_sbobinator.pipeline.pipeline_hooks import PipelineRuntime
 
 
 class _DummyTarget:

@@ -2,7 +2,8 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from el_sbobinator.generation_service import (
+from el_sbobinator.model_registry import build_model_state
+from el_sbobinator.services.generation_service import (
     AllModelsUnavailableError,
     DegenerateOutputError,
     QuotaDailyLimitError,
@@ -10,7 +11,6 @@ from el_sbobinator.generation_service import (
     detect_degenerate_output,
     retry_with_quota,
 )
-from el_sbobinator.model_registry import build_model_state
 
 
 class _FakeRuntime:
@@ -113,7 +113,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             raise err
 
         with patch(
-            "el_sbobinator.generation_service.sleep_with_cancel",
+            "el_sbobinator.services.generation_service.sleep_with_cancel",
             side_effect=AssertionError("404 must not sleep before switching model"),
         ):
             client, result = retry_with_quota(
@@ -326,11 +326,11 @@ class RetryWithQuotaTests(unittest.TestCase):
 
         with (
             patch(
-                "el_sbobinator.generation_service.try_rotate_key",
+                "el_sbobinator.services.generation_service.try_rotate_key",
                 return_value=(rotated_client, True, "fallback-key"),
             ) as mock_rotate,
             patch(
-                "el_sbobinator.generation_service.sleep_with_cancel",
+                "el_sbobinator.services.generation_service.sleep_with_cancel",
                 side_effect=AssertionError(
                     "503 exhausted-key path must rotate immediately, not sleep-retry"
                 ),
@@ -380,7 +380,9 @@ class RetryWithQuotaTests(unittest.TestCase):
             err.code = 503  # type: ignore[attr-defined]
             raise err
 
-        with patch("el_sbobinator.generation_service.try_rotate_key") as mock_rotate:
+        with patch(
+            "el_sbobinator.services.generation_service.try_rotate_key"
+        ) as mock_rotate:
             with self.assertRaises(RuntimeError):
                 self._run(fn, max_attempts=2)
 
@@ -399,7 +401,7 @@ class RetryWithQuotaTests(unittest.TestCase):
             raise RuntimeError("429 quota exceeded daily limit per day")
 
         with patch(
-            "el_sbobinator.generation_service.try_rotate_key",
+            "el_sbobinator.services.generation_service.try_rotate_key",
             side_effect=AssertionError(
                 "La rotazione non deve partire dopo l'annullamento"
             ),
@@ -442,7 +444,9 @@ class RetryWithQuotaTests(unittest.TestCase):
         def fn(_client):
             raise RuntimeError("429 quota exceeded daily limit per day")
 
-        with patch("el_sbobinator.generation_service.genai.Client", _ValidClient):
+        with patch(
+            "el_sbobinator.services.generation_service.genai.Client", _ValidClient
+        ):
             returned_client, result = retry_with_quota(
                 fn,
                 client=client,
@@ -701,7 +705,8 @@ class RetryWithQuotaTests(unittest.TestCase):
             return True
 
         with patch(
-            "el_sbobinator.generation_service.sleep_with_cancel", side_effect=mock_sleep
+            "el_sbobinator.services.generation_service.sleep_with_cancel",
+            side_effect=mock_sleep,
         ):
             returned_client, result = retry_with_quota(
                 fn,
@@ -1083,7 +1088,7 @@ class IsModelUnavailableTests(unittest.TestCase):
 
 class Phase1TemperatureTests(unittest.TestCase):
     def setUp(self):
-        from el_sbobinator.generation_service import _phase1_temperature
+        from el_sbobinator.services.generation_service import _phase1_temperature
 
         self._t = _phase1_temperature
 
@@ -1109,7 +1114,7 @@ class Phase1TemperatureTests(unittest.TestCase):
             else opt
             for opt in MODEL_OPTIONS
         )
-        with patch("el_sbobinator.generation_service.MODEL_OPTIONS", patched):
+        with patch("el_sbobinator.services.generation_service.MODEL_OPTIONS", patched):
             self.assertEqual(self._t("gemini-2.5-flash"), 0.99)
 
 

@@ -7,7 +7,7 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 
-import el_sbobinator.config_service as cs
+import el_sbobinator.services.config_service as cs
 
 _FAKE_CFG: dict = {
     "api_key": "key-test",
@@ -37,7 +37,9 @@ class TestLoadConfigCache(unittest.TestCase):
         cs._config_cache = dict(_FAKE_CFG)
         cs._config_cache_ts = time.monotonic()
 
-        with patch("el_sbobinator.config_service.os.path.exists") as mock_exists:
+        with patch(
+            "el_sbobinator.services.config_service.os.path.exists"
+        ) as mock_exists:
             result = cs.load_config()
             mock_exists.assert_not_called()
 
@@ -84,7 +86,9 @@ class TestLoadConfigCache(unittest.TestCase):
         cs._config_cache = dict(_FAKE_CFG)
         cs._config_cache_ts = time.monotonic() - (cs._CONFIG_CACHE_TTL + 1.0)
 
-        with patch("el_sbobinator.config_service.os.path.exists", return_value=False):
+        with patch(
+            "el_sbobinator.services.config_service.os.path.exists", return_value=False
+        ):
             result = cs.load_config()
 
         self.assertEqual(result["api_key"], "")
@@ -92,24 +96,30 @@ class TestLoadConfigCache(unittest.TestCase):
     def test_miss_on_none_cache_consults_disk(self) -> None:
         """No cache populated → os.path.exists is called."""
         with patch(
-            "el_sbobinator.config_service.os.path.exists", return_value=False
+            "el_sbobinator.services.config_service.os.path.exists", return_value=False
         ) as mock_exists:
             cs.load_config()
             mock_exists.assert_called()
 
     def test_miss_populates_cache(self) -> None:
         """After a miss the cache is populated for the next call."""
-        with patch("el_sbobinator.config_service.os.path.exists", return_value=False):
+        with patch(
+            "el_sbobinator.services.config_service.os.path.exists", return_value=False
+        ):
             cs.load_config()
 
         self.assertIsNotNone(cs._config_cache)
 
     def test_second_call_after_miss_hits_cache(self) -> None:
         """The second call within TTL avoids disk entirely."""
-        with patch("el_sbobinator.config_service.os.path.exists", return_value=False):
+        with patch(
+            "el_sbobinator.services.config_service.os.path.exists", return_value=False
+        ):
             cs.load_config()
 
-        with patch("el_sbobinator.config_service.os.path.exists") as mock_exists:
+        with patch(
+            "el_sbobinator.services.config_service.os.path.exists"
+        ) as mock_exists:
             cs.load_config()
             mock_exists.assert_not_called()
 
@@ -123,16 +133,20 @@ class TestLoadConfigCache(unittest.TestCase):
 
         with (
             patch(
-                "el_sbobinator.config_service.platform.system", return_value="Windows"
+                "el_sbobinator.services.config_service.platform.system",
+                return_value="Windows",
             ),
-            patch("el_sbobinator.config_service.os.path.exists", return_value=False),
-            patch("el_sbobinator.config_service.os.makedirs"),
             patch(
-                "el_sbobinator.config_service._dpapi_protect_text_windows",
+                "el_sbobinator.services.config_service.os.path.exists",
+                return_value=False,
+            ),
+            patch("el_sbobinator.services.config_service.os.makedirs"),
+            patch(
+                "el_sbobinator.services.config_service._dpapi_protect_text_windows",
                 return_value="",
             ),
             patch("builtins.open", MagicMock()),
-            patch("el_sbobinator.config_service.os.replace"),
+            patch("el_sbobinator.services.config_service.os.replace"),
         ):
             cs.save_config("new-key")
 
@@ -176,16 +190,20 @@ class TestCacheGenerationCounter(unittest.TestCase):
         initial_gen = cs._config_cache_gen
         with (
             patch(
-                "el_sbobinator.config_service.platform.system", return_value="Windows"
+                "el_sbobinator.services.config_service.platform.system",
+                return_value="Windows",
             ),
-            patch("el_sbobinator.config_service.os.path.exists", return_value=False),
-            patch("el_sbobinator.config_service.os.makedirs"),
             patch(
-                "el_sbobinator.config_service._dpapi_protect_text_windows",
+                "el_sbobinator.services.config_service.os.path.exists",
+                return_value=False,
+            ),
+            patch("el_sbobinator.services.config_service.os.makedirs"),
+            patch(
+                "el_sbobinator.services.config_service._dpapi_protect_text_windows",
                 return_value="",
             ),
             patch("builtins.open", MagicMock()),
-            patch("el_sbobinator.config_service.os.replace"),
+            patch("el_sbobinator.services.config_service.os.replace"),
         ):
             cs.save_config("some-key")
         self.assertEqual(cs._config_cache_gen, initial_gen + 1)
@@ -220,16 +238,23 @@ class TestSaveConfigWriteLock(unittest.TestCase):
 
         with (
             patch(
-                "el_sbobinator.config_service.platform.system", return_value="Windows"
+                "el_sbobinator.services.config_service.platform.system",
+                return_value="Windows",
             ),
-            patch("el_sbobinator.config_service.os.path.exists", return_value=False),
-            patch("el_sbobinator.config_service.os.makedirs"),
             patch(
-                "el_sbobinator.config_service._dpapi_protect_text_windows",
+                "el_sbobinator.services.config_service.os.path.exists",
+                return_value=False,
+            ),
+            patch("el_sbobinator.services.config_service.os.makedirs"),
+            patch(
+                "el_sbobinator.services.config_service._dpapi_protect_text_windows",
                 return_value="",
             ),
             patch("builtins.open", MagicMock()),
-            patch("el_sbobinator.config_service.os.replace", side_effect=_check_lock),
+            patch(
+                "el_sbobinator.services.config_service.os.replace",
+                side_effect=_check_lock,
+            ),
         ):
             cs.save_config("test-key")
 
@@ -240,12 +265,16 @@ class TestSaveConfigWriteLock(unittest.TestCase):
         """_write_lock must be released even when the file write fails (early return path)."""
         with (
             patch(
-                "el_sbobinator.config_service.platform.system", return_value="Windows"
+                "el_sbobinator.services.config_service.platform.system",
+                return_value="Windows",
             ),
-            patch("el_sbobinator.config_service.os.path.exists", return_value=False),
-            patch("el_sbobinator.config_service.os.makedirs"),
             patch(
-                "el_sbobinator.config_service._dpapi_protect_text_windows",
+                "el_sbobinator.services.config_service.os.path.exists",
+                return_value=False,
+            ),
+            patch("el_sbobinator.services.config_service.os.makedirs"),
+            patch(
+                "el_sbobinator.services.config_service._dpapi_protect_text_windows",
                 return_value="",
             ),
             patch("builtins.open", side_effect=OSError("disk full")),
@@ -272,7 +301,7 @@ class TestSaveConfigWriteLock(unittest.TestCase):
             try:
                 barrier.wait()
                 with patch(
-                    "el_sbobinator.config_service.os.replace",
+                    "el_sbobinator.services.config_service.os.replace",
                     side_effect=_tracked_replace,
                 ):
                     cs.save_config(key)
@@ -282,12 +311,16 @@ class TestSaveConfigWriteLock(unittest.TestCase):
 
         with (
             patch(
-                "el_sbobinator.config_service.platform.system", return_value="Windows"
+                "el_sbobinator.services.config_service.platform.system",
+                return_value="Windows",
             ),
-            patch("el_sbobinator.config_service.os.path.exists", return_value=False),
-            patch("el_sbobinator.config_service.os.makedirs"),
             patch(
-                "el_sbobinator.config_service._dpapi_protect_text_windows",
+                "el_sbobinator.services.config_service.os.path.exists",
+                return_value=False,
+            ),
+            patch("el_sbobinator.services.config_service.os.makedirs"),
+            patch(
+                "el_sbobinator.services.config_service._dpapi_protect_text_windows",
                 return_value="",
             ),
             patch("builtins.open", MagicMock()),

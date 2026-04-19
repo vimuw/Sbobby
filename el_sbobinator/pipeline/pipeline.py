@@ -15,26 +15,14 @@ import time
 
 from google import genai
 
-from el_sbobinator import generation_service
-from el_sbobinator.audio_service import (
-    probe_media_duration,
-    resolve_ffmpeg,
-)
-from el_sbobinator.config_service import safe_output_basename
-from el_sbobinator.export_service import export_final_html_document
-from el_sbobinator.generation_service import (
-    extract_client_api_key,
-    load_fallback_keys,
-)
 from el_sbobinator.logging_utils import (
     attach_file_handler,
     detach_file_handler,
     get_logger,
 )
 from el_sbobinator.model_registry import build_model_state
-from el_sbobinator.phase1_service import process_phase1_transcription
-from el_sbobinator.pipeline_hooks import PipelineRuntime
-from el_sbobinator.pipeline_session import (
+from el_sbobinator.pipeline.pipeline_hooks import PipelineRuntime
+from el_sbobinator.pipeline.pipeline_session import (
     ensure_preconverted_audio,
     initialize_session_context,
     list_phase1_chunks,
@@ -46,7 +34,19 @@ from el_sbobinator.pipeline_session import (
     restore_phase1_progress,
 )
 from el_sbobinator.prompts import PROMPT_REVISIONE, PROMPT_SISTEMA
-from el_sbobinator.revision_service import (
+from el_sbobinator.services import generation_service
+from el_sbobinator.services.audio_service import (
+    probe_media_duration,
+    resolve_ffmpeg,
+)
+from el_sbobinator.services.config_service import safe_output_basename
+from el_sbobinator.services.export_service import export_final_html_document
+from el_sbobinator.services.generation_service import (
+    extract_client_api_key,
+    load_fallback_keys,
+)
+from el_sbobinator.services.phase1_service import process_phase1_transcription
+from el_sbobinator.services.revision_service import (
     build_macro_blocks,
     process_boundary_revision_phase,
     process_macro_revision_phase,

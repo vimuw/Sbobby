@@ -18,9 +18,9 @@ from collections.abc import Callable
 from google import genai
 from google.genai import types
 
-from el_sbobinator.config_service import load_config
 from el_sbobinator.logging_utils import get_logger
 from el_sbobinator.model_registry import MODEL_OPTIONS, ModelState, next_model_in_chain
+from el_sbobinator.services.config_service import load_config
 
 # ---------------------------------------------------------------------------
 # Module-level constants

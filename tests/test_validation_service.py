@@ -4,7 +4,10 @@ import unittest
 from typing import ClassVar
 from unittest.mock import patch
 
-from el_sbobinator.validation_service import _check_writable_dir, validate_environment
+from el_sbobinator.services.validation_service import (
+    _check_writable_dir,
+    validate_environment,
+)
 
 
 class _AlwaysOkModels:
@@ -76,8 +79,13 @@ class _NoGenerateContentClient:
 
 
 class ValidationServiceTests(unittest.TestCase):
-    @patch("el_sbobinator.validation_service.get_desktop_dir", return_value=".")
-    @patch("el_sbobinator.validation_service.resolve_ffmpeg", return_value="ffmpeg.exe")
+    @patch(
+        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg.exe",
+    )
     @patch("google.genai.Client", _AlwaysOkClient)
     def test_validate_environment_with_api_key(self, *_mocks):
         result = validate_environment(
@@ -99,8 +107,13 @@ class ValidationServiceTests(unittest.TestCase):
         ]
         self.assertIn("gemini-2.5-flash-lite", details)
 
-    @patch("el_sbobinator.validation_service.get_desktop_dir", return_value=".")
-    @patch("el_sbobinator.validation_service.resolve_ffmpeg", return_value="ffmpeg.exe")
+    @patch(
+        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg.exe",
+    )
     @patch("google.genai.Client", _FallbackFailClient)
     def test_validate_environment_keeps_primary_ok_when_fallback_fails(self, *_mocks):
         result = validate_environment(
@@ -125,8 +138,13 @@ class ValidationServiceTests(unittest.TestCase):
             "Modello fallback 1 non accessibile con questa chiave.",
         )
 
-    @patch("el_sbobinator.validation_service.get_desktop_dir", return_value=".")
-    @patch("el_sbobinator.validation_service.resolve_ffmpeg", return_value="ffmpeg.exe")
+    @patch(
+        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg.exe",
+    )
     @patch("google.genai.Client", _PrimaryFailClient)
     def test_validate_environment_reports_primary_model_failure_distinctly_from_key_error(
         self, *_mocks
@@ -151,8 +169,13 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertNotIn("fallback", api_check["message"].lower())
         self.assertIn("gemini-2.5-flash", api_check["details"])  # type: ignore[typeddict-item]
 
-    @patch("el_sbobinator.validation_service.get_desktop_dir", return_value=".")
-    @patch("el_sbobinator.validation_service.resolve_ffmpeg", return_value="ffmpeg.exe")
+    @patch(
+        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg.exe",
+    )
     @patch("google.genai.Client", _ClientCtorFail)
     def test_validate_environment_reports_client_creation_failure_without_unbound_state(
         self, *_mocks
@@ -172,8 +195,13 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertEqual(api_check["label"], "API Key Gemini")
         self.assertIn("invalid API key", api_check["details"])  # type: ignore[typeddict-item]
 
-    @patch("el_sbobinator.validation_service.get_desktop_dir", return_value=".")
-    @patch("el_sbobinator.validation_service.resolve_ffmpeg", return_value="ffmpeg.exe")
+    @patch(
+        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg.exe",
+    )
     @patch("google.genai.Client", _NoGenerateContentClient)
     def test_validate_environment_rejects_models_without_generate_content(
         self, *_mocks
@@ -192,8 +220,13 @@ class ValidationServiceTests(unittest.TestCase):
         self.assertEqual(api_check["status"], "error")
         self.assertIn("generateContent", api_check["details"])  # type: ignore[typeddict-item]
 
-    @patch("el_sbobinator.validation_service.get_desktop_dir", return_value=".")
-    @patch("el_sbobinator.validation_service.resolve_ffmpeg", return_value="ffmpeg.exe")
+    @patch(
+        "el_sbobinator.services.validation_service.get_desktop_dir", return_value="."
+    )
+    @patch(
+        "el_sbobinator.services.validation_service.resolve_ffmpeg",
+        return_value="ffmpeg.exe",
+    )
     @patch("google.genai.Client", _MiddleFailClient)
     def test_validate_environment_continues_after_middle_fallback_failure(
         self, *_mocks

@@ -147,7 +147,7 @@ class AppWebviewTests(unittest.TestCase):
             result[0]["name"], __import__("os").path.basename(window.dialog_result)
         )
 
-    @patch("el_sbobinator.validation_service.validate_environment")
+    @patch("el_sbobinator.services.validation_service.validate_environment")
     def test_validate_environment_returns_backend_result(self, mock_validate):
         api = ElSbobinatorApi()
         mock_validate.return_value = {
@@ -224,7 +224,7 @@ class AppWebviewTests(unittest.TestCase):
         self.assertTrue(regenerate_event.wait(timeout=1))
         self.assertEqual(received["regenerate"], {"regenerate": None})
 
-    @patch("el_sbobinator.pipeline.esegui_sbobinatura")
+    @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
     def test_process_done_marks_cancelled_when_run_status_is_cancelled(
         self, mock_pipeline_run
     ):
@@ -283,7 +283,7 @@ class AppWebviewTests(unittest.TestCase):
         self.assertEqual(process_done_events[0]["failed"], 0)
         self.assertEqual(process_done_events[0]["total"], 1)
 
-    @patch("el_sbobinator.pipeline.esegui_sbobinatura")
+    @patch("el_sbobinator.pipeline.pipeline.esegui_sbobinatura")
     def test_start_processing_honors_file_level_resume_override(
         self, mock_pipeline_run
     ):

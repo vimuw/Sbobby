@@ -13,7 +13,7 @@ import os
 import tempfile
 from dataclasses import dataclass
 
-from el_sbobinator.pipeline_settings import build_default_pipeline_settings
+from el_sbobinator.pipeline.pipeline_settings import build_default_pipeline_settings
 from el_sbobinator.shared import (
     SESSION_ROOT,
     SESSION_SCHEMA_VERSION,

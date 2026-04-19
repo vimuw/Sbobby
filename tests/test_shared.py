@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from el_sbobinator import shared
-from el_sbobinator.pipeline_settings import (
+from el_sbobinator.pipeline.pipeline_settings import (
     build_default_pipeline_settings,
     load_and_sanitize_settings,
 )

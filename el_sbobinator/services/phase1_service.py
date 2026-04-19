@@ -15,10 +15,13 @@ from collections.abc import Callable
 
 from google.genai import types
 
-from el_sbobinator import generation_service
-from el_sbobinator.audio_service import cut_audio_chunk_to_mp3
-from el_sbobinator.config_service import debug_log
-from el_sbobinator.generation_service import (
+from el_sbobinator.logging_utils import get_logger
+from el_sbobinator.model_registry import ModelState
+from el_sbobinator.pipeline.pipeline_session import record_step_metric
+from el_sbobinator.services import generation_service
+from el_sbobinator.services.audio_service import cut_audio_chunk_to_mp3
+from el_sbobinator.services.config_service import debug_log
+from el_sbobinator.services.generation_service import (
     AllModelsUnavailableError,
     DegenerateOutputError,
     PermanentError,
@@ -29,9 +32,6 @@ from el_sbobinator.generation_service import (
     retry_with_quota,
     sleep_with_cancel,
 )
-from el_sbobinator.logging_utils import get_logger
-from el_sbobinator.model_registry import ModelState
-from el_sbobinator.pipeline_session import record_step_metric
 from el_sbobinator.session_store import _update_session
 from el_sbobinator.shared import _atomic_write_text
 

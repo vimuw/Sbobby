@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from el_sbobinator.pipeline_session import (
+from el_sbobinator.pipeline.pipeline_session import (
     ensure_preconverted_audio,
     initialize_session_context,
     normalize_stage,
@@ -13,7 +13,7 @@ from el_sbobinator.pipeline_session import (
     reset_for_regeneration,
     restore_phase1_progress,
 )
-from el_sbobinator.pipeline_settings import PipelineSettings
+from el_sbobinator.pipeline.pipeline_settings import PipelineSettings
 from el_sbobinator.shared import PRECONVERTED_AUDIO_FINAL, PRECONVERTED_AUDIO_PARTIAL
 
 
@@ -99,13 +99,13 @@ class PipelineSessionHelpersTests(unittest.TestCase):
             }
 
             with (
-                patch("el_sbobinator.pipeline_session.reset_session_dirs"),
+                patch("el_sbobinator.pipeline.pipeline_session.reset_session_dirs"),
                 patch(
-                    "el_sbobinator.pipeline_session.load_config",
+                    "el_sbobinator.pipeline.pipeline_session.load_config",
                     return_value={"preferred_model": "gemini-2.5-flash-lite"},
                 ),
                 patch(
-                    "el_sbobinator.pipeline_session.build_default_pipeline_settings",
+                    "el_sbobinator.pipeline.pipeline_session.build_default_pipeline_settings",
                     return_value=fresh_settings,
                 ),
             ):
@@ -175,11 +175,11 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                 return True, None
 
             with patch(
-                "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
+                "el_sbobinator.pipeline.pipeline_session.preconvert_media_to_mp3",
                 side_effect=fake_preconvert,
             ):
                 with patch(
-                    "el_sbobinator.pipeline_session.invalidate_session_storage_cache"
+                    "el_sbobinator.pipeline.pipeline_session.invalidate_session_storage_cache"
                 ) as mock_invalidate:
                     enabled, result_path = ensure_preconverted_audio(  # type: ignore[arg-type]
                         context,  # type: ignore[arg-type]
@@ -230,7 +230,7 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                 )
 
                 with patch(
-                    "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
+                    "el_sbobinator.pipeline.pipeline_session.preconvert_media_to_mp3",
                     side_effect=fake_preconvert,
                 ):
                     enabled, result_path = ensure_preconverted_audio(  # type: ignore[arg-type]
@@ -273,11 +273,11 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                 _shared.get_session_storage_info()
 
                 with patch(
-                    "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
+                    "el_sbobinator.pipeline.pipeline_session.preconvert_media_to_mp3",
                     side_effect=fake_preconvert,
                 ):
                     with patch(
-                        "el_sbobinator.pipeline_session.invalidate_session_storage_cache"
+                        "el_sbobinator.pipeline.pipeline_session.invalidate_session_storage_cache"
                     ) as mock_invalidate:
                         ensure_preconverted_audio(  # type: ignore[arg-type]
                             context,  # type: ignore[arg-type]
@@ -301,15 +301,15 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                 return True, None
 
             with patch(
-                "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
+                "el_sbobinator.pipeline.pipeline_session.preconvert_media_to_mp3",
                 side_effect=fake_preconvert,
             ):
                 with patch(
-                    "el_sbobinator.pipeline_session.os.replace",
+                    "el_sbobinator.pipeline.pipeline_session.os.replace",
                     side_effect=PermissionError("locked"),
                 ):
                     with patch(
-                        "el_sbobinator.pipeline_session.invalidate_session_storage_cache"
+                        "el_sbobinator.pipeline.pipeline_session.invalidate_session_storage_cache"
                     ) as mock_invalidate:
                         ensure_preconverted_audio(  # type: ignore[arg-type]
                             context,  # type: ignore[arg-type]
@@ -338,7 +338,7 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                 return True, None
 
             with patch(
-                "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
+                "el_sbobinator.pipeline.pipeline_session.preconvert_media_to_mp3",
                 side_effect=fake_preconvert,
             ):
                 enabled, result_path = ensure_preconverted_audio(  # type: ignore[arg-type]
@@ -368,7 +368,7 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                 return False, "cancelled"
 
             with patch(
-                "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
+                "el_sbobinator.pipeline.pipeline_session.preconvert_media_to_mp3",
                 side_effect=fake_preconvert,
             ):
                 enabled, result_path = ensure_preconverted_audio(  # type: ignore[arg-type]
@@ -398,11 +398,11 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                 return True, None
 
             with patch(
-                "el_sbobinator.pipeline_session.preconvert_media_to_mp3",
+                "el_sbobinator.pipeline.pipeline_session.preconvert_media_to_mp3",
                 side_effect=fake_preconvert,
             ):
                 with patch(
-                    "el_sbobinator.pipeline_session.os.replace",
+                    "el_sbobinator.pipeline.pipeline_session.os.replace",
                     side_effect=PermissionError("locked"),
                 ):
                     enabled, result_path = ensure_preconverted_audio(  # type: ignore[arg-type]
@@ -469,7 +469,7 @@ class InitializeSessionContextTests(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.pipeline_session.load_config",
+                    "el_sbobinator.pipeline.pipeline_session.load_config",
                     return_value={
                         "preferred_model": "gemini-2.5-flash-lite",
                         "fallback_models": [],
@@ -550,14 +550,14 @@ class InitializeSessionContextTests(unittest.TestCase):
             }
             with (
                 patch(
-                    "el_sbobinator.pipeline_session.load_config",
+                    "el_sbobinator.pipeline.pipeline_session.load_config",
                     return_value={
                         "preferred_model": "gemini-2.5-flash",
                         "fallback_models": [],
                     },
                 ),
                 patch(
-                    "el_sbobinator.pipeline_session.build_default_pipeline_settings",
+                    "el_sbobinator.pipeline.pipeline_session.build_default_pipeline_settings",
                     return_value=new_defaults,
                 ),
                 patch(
@@ -589,14 +589,14 @@ class InitializeSessionContextTests(unittest.TestCase):
             }
             with (
                 patch(
-                    "el_sbobinator.pipeline_session.load_config",
+                    "el_sbobinator.pipeline.pipeline_session.load_config",
                     return_value={
                         "preferred_model": "gemini-2.5-flash",
                         "fallback_models": [],
                     },
                 ),
                 patch(
-                    "el_sbobinator.pipeline_session.build_default_pipeline_settings",
+                    "el_sbobinator.pipeline.pipeline_session.build_default_pipeline_settings",
                     return_value=new_defaults,
                 ),
                 patch(
