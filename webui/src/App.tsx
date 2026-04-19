@@ -67,7 +67,7 @@ export default function App() {
 
   const { consoleLogs, appendConsole } = useConsole();
   const { themeMode, setThemeMode } = useTheme();
-  const { updateAvailable, dismissUpdate } = useUpdateChecker();
+  const { updateAvailable, latestVersion, isCheckingUpdate, hasChecked, checkForUpdates, dismissUpdate } = useUpdateChecker();
   const {
     apiReady,
     bridgeDelayed,
@@ -519,6 +519,7 @@ export default function App() {
         setShowConsole={setShowConsole}
         setIsSettingsOpen={setIsSettingsOpen}
         updateAvailable={updateAvailable}
+        latestVersion={latestVersion}
         dismissUpdate={dismissUpdate}
       />
       <main className="flex-1 max-w-3xl w-full mx-auto px-5 sm:px-6 py-8 flex flex-col gap-6">
@@ -607,13 +608,13 @@ export default function App() {
         )}
       </main>
 
-      <footer className="text-center py-6 text-xs flex items-center justify-center gap-4" style={{ color: 'var(--text-faint)', borderTop: '1px solid var(--border-subtle)' }}>
+      <footer className="text-center py-6 text-sm flex items-center justify-center gap-4" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)' }}>
         <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="flex items-center gap-1 hover:opacity-80 transition-opacity" style={{ color: 'inherit', textDecoration: 'none' }}>
-          <Github className="w-3.5 h-3.5" /> GitHub
+          <Github className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
         </a>
         <span>·</span>
         <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(KOFI_URL); }} className="hover:opacity-80 transition-opacity" style={{ color: 'inherit', textDecoration: 'none' }}>
-          ☕ Offrimi un caffè
+          ☕ Offrimi un caffè su Ko-fi!
         </a>
       </footer>
 
@@ -653,6 +654,10 @@ export default function App() {
         setFallbackModels={setFallbackModels}
         availableModels={availableModels}
         appendConsole={appendConsole}
+        latestVersion={latestVersion}
+        checkForUpdates={checkForUpdates}
+        isCheckingUpdate={isCheckingUpdate}
+        hasChecked={hasChecked}
       />
       <React.Suspense fallback={null}>
         <PreviewModal

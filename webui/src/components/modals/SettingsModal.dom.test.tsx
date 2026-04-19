@@ -24,6 +24,10 @@ const makeProps = () => ({
   setFallbackModels: vi.fn(),
   availableModels: [],
   appendConsole: vi.fn(),
+  latestVersion: null,
+  checkForUpdates: vi.fn(),
+  isCheckingUpdate: false,
+  hasChecked: true,
 });
 
 beforeEach(() => {

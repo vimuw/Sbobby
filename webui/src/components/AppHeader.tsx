@@ -19,13 +19,14 @@ interface AppHeaderProps {
   setShowConsole: (v: boolean) => void;
   setIsSettingsOpen: (v: boolean) => void;
   updateAvailable: string | null;
+  latestVersion: string | null;
   dismissUpdate: (version: string) => void;
 }
 
 export function AppHeader({
   apiReady, bridgeDelayed, hasApiKey, isApiKeyValid, appState,
   themeMode, setThemeMode, showConsole, setShowConsole, setIsSettingsOpen,
-  updateAvailable, dismissUpdate,
+  updateAvailable, latestVersion, dismissUpdate,
 }: AppHeaderProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
@@ -157,8 +158,36 @@ export function AppHeader({
             >
               <Terminal className="w-5 h-5" />
             </button>
-            <button onClick={() => setIsSettingsOpen(true)} className="icon-button icon-btn-settings" aria-label="Apri impostazioni">
-              <Settings className="w-5 h-5" />
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="icon-button icon-btn-settings"
+              aria-label={latestVersion && !updateAvailable ? `Apri impostazioni — Aggiornamento disponibile: ${latestVersion}` : 'Apri impostazioni'}
+              title={latestVersion && !updateAvailable ? `Aggiornamento disponibile: ${latestVersion}` : undefined}
+            >
+              <span style={{ position: 'relative', display: 'inline-flex' }}>
+                <Settings className="w-5 h-5" />
+                {latestVersion && !updateAvailable && (
+                  <span role="img" aria-label="Aggiornamento disponibile" style={{ position: 'absolute', top: -3, right: -3, display: 'inline-flex' }}>
+                    <span
+                      className="animate-ping"
+                      style={{
+                        position: 'absolute',
+                        width: 11, height: 11, borderRadius: '50%',
+                        background: 'var(--warning-text)',
+                        opacity: 0.6,
+                      }}
+                    />
+                    <span
+                      style={{
+                        position: 'relative',
+                        width: 11, height: 11, borderRadius: '50%',
+                        background: 'var(--warning-text)',
+                        border: '2px solid var(--header-bg)',
+                      }}
+                    />
+                  </span>
+                )}
+              </span>
             </button>
           </div>
         </div>
@@ -179,7 +208,7 @@ export function AppHeader({
                   <span>Fascia oraria di punta (15:00–20:00): tutti i modelli Gemini Flash possono subire <strong>rallentamenti o errori 503</strong> per traffico elevato sui server Google. Gemini 3 Flash è il più colpito; Gemini 2.5 Flash è generalmente più stabile, ma non immune da problemi.</span>
                 </div>
                 <button
-                  onClick={() => { localStorage.setItem('peakBannerDismissedUntil', String(Date.now() + 3_600_000)); setIsPeakDismissed(true); }}
+                  onClick={() => { const next = new Date(); next.setDate(next.getDate() + 1); next.setHours(15, 0, 0, 0); localStorage.setItem('peakBannerDismissedUntil', String(next.getTime())); setIsPeakDismissed(true); }}
                   className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--warning-text)', padding: '2px', lineHeight: 1 }}
                   aria-label="Chiudi avviso fascia oraria"
@@ -229,20 +258,20 @@ export function AppHeader({
                         window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
                       }
                     }}
-                    className="flex items-center gap-1.5 text-xs"
+                    className="flex items-center gap-1.5 text-sm"
                     style={{ background: 'none', border: 'none', padding: 0, cursor: isUpdating ? 'default' : 'pointer', textDecoration: 'underline', color: 'var(--accent-text, var(--text-primary))', opacity: isUpdating ? 0.5 : 1 }}
                   >
                     {isUpdating
                       ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Download in corso…</>
-                      : 'Installa aggiornamento'}
+                      : 'Aggiorna'}
                   </button>
                   <button
                     onClick={() => dismissUpdate(updateAvailable)}
                     aria-label="Chiudi avviso aggiornamento"
-                    className="text-xs"
-                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', color: 'var(--text-muted)' }}
+                    className="flex items-center"
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-muted)' }}
                   >
-                    Ignora
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>

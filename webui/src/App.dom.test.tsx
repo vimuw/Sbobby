@@ -42,7 +42,7 @@ const mockApiReadyWithKey = {
 };
 
 vi.mock('./hooks/useUpdateChecker', () => ({
-  useUpdateChecker: () => ({ updateAvailable: null, dismissUpdate: vi.fn() }),
+  useUpdateChecker: () => ({ updateAvailable: null, latestVersion: null, isCheckingUpdate: false, checkForUpdates: vi.fn(), dismissUpdate: vi.fn() }),
 }));
 
 vi.mock('./hooks/useQueuePersistence', () => ({

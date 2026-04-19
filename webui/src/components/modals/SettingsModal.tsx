@@ -1,9 +1,10 @@
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Activity, AlertCircle, AlertTriangle, ArrowDown, ArrowUp, Bell, ChevronDown, Cpu, Eye, EyeOff, FolderOpen, HardDrive, Settings, SlidersHorizontal, X } from 'lucide-react';
+import { Activity, AlertCircle, AlertTriangle, ArrowDown, ArrowDownToLine, ArrowUp, Bell, ChevronDown, Cpu, Eye, EyeOff, FolderOpen, HardDrive, Loader2, RefreshCw, Settings, SlidersHorizontal, Tag, X, Zap } from 'lucide-react';
 import type { ModelOption, ValidationResult } from '../../bridge';
 import { formatSize, GEMINI_KEY_PATTERN } from '../../utils';
+import { APP_VERSION, GITHUB_RELEASES_URL } from '../../branding';
 
 const SESSION_CLEANUP_DAYS = 14;
 
@@ -143,10 +144,62 @@ interface SettingsModalProps {
   setFallbackModels: (models: string[]) => void;
   availableModels: ModelOption[];
   appendConsole: (msg: string) => void;
+  latestVersion: string | null;
+  checkForUpdates: (force?: boolean) => void;
+  isCheckingUpdate: boolean;
+  hasChecked: boolean;
 }
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function VersionUpdateRow({ latestVersion, appendConsole }: { latestVersion: string; appendConsole: (msg: string) => void }) {
+  const [isInstalling, setIsInstalling] = useState(false);
+  const handleInstall = async () => {
+    if (isInstalling) return;
+    setIsInstalling(true);
+    try {
+      const result = await window.pywebview?.api?.download_and_install_update?.(latestVersion);
+      if (!result?.ok) {
+        appendConsole(`❌ Aggiornamento fallito: ${result?.error ?? 'errore sconosciuto'}`);
+        window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
+        setIsInstalling(false);
+      } else {
+        setTimeout(() => setIsInstalling(false), 3000);
+      }
+    } catch (e: unknown) {
+      appendConsole(`❌ Aggiornamento fallito: ${getErrorMessage(e)}`);
+      window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL);
+      setIsInstalling(false);
+    }
+  };
+  return (
+    <div className="flex items-center justify-between gap-3 pt-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+      <p className="text-xs flex items-center gap-1.5 min-w-0" style={{ color: 'var(--warning-text)' }}>
+        <Zap className="w-3.5 h-3.5 shrink-0" />
+        Nuova versione disponibile: <strong>{latestVersion}</strong>
+      </p>
+      <button
+        onClick={() => void handleInstall()}
+        disabled={isInstalling}
+        className="flex items-center gap-1 text-xs font-normal transition-opacity disabled:opacity-30 shrink-0"
+        style={{
+          background: 'none', border: 'none', padding: 0,
+          cursor: isInstalling ? 'default' : 'pointer',
+          color: 'var(--accent-text, var(--text-secondary))',
+          opacity: isInstalling ? 0.5 : 0.8,
+          textDecoration: 'underline',
+        }}
+        onMouseEnter={e => { if (!isInstalling) (e.currentTarget as HTMLButtonElement).style.opacity = '1'; }}
+        onMouseLeave={e => { if (!isInstalling) (e.currentTarget as HTMLButtonElement).style.opacity = '0.8'; }}
+      >
+        {isInstalling
+          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Installazione…</>
+          : <><ArrowDownToLine className="w-3.5 h-3.5" />Aggiorna</>}
+      </button>
+    </div>
+  );
 }
 
 export function SettingsModal({
@@ -163,6 +216,10 @@ export function SettingsModal({
   setFallbackModels,
   availableModels,
   appendConsole,
+  latestVersion,
+  checkForUpdates,
+  isCheckingUpdate,
+  hasChecked,
 }: SettingsModalProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('notifications_enabled') !== 'false');
   const [showApiKeys, setShowApiKeys] = useState(false);
@@ -177,6 +234,10 @@ export function SettingsModal({
   const isSavingRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const handleClose = () => { if (isSavingRef.current) return; onClose(); };
+
+  useEffect(() => {
+    if (isOpen) checkForUpdates(false);
+  }, [isOpen, checkForUpdates]);
 
   useEffect(() => {
     if (!isOpen) { setIsAdvancedOpen(false); setIsSaving(false); isSavingRef.current = false; return; }
@@ -458,6 +519,52 @@ export function SettingsModal({
                 </button>
               </div>
 
+              </div>
+
+              {/* 4. Versione */}
+              <div className="space-y-3" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                    <Tag className="w-3.5 h-3.5" />
+                    Versione
+                  </h3>
+                  <button
+                    onClick={() => checkForUpdates(true)}
+                    disabled={isCheckingUpdate}
+                    className="icon-button modal-icon-button disabled:opacity-40"
+                    style={{ color: 'var(--text-muted)', width: 26, height: 26, borderRadius: 8 }}
+                    title="Controlla aggiornamenti"
+                    aria-label="Controlla aggiornamenti"
+                  >
+                    {isCheckingUpdate
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <RefreshCw className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <div className="rounded-xl px-4 py-3 space-y-2" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Versione corrente</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono" style={{ color: 'var(--text-primary)' }}>{APP_VERSION}</span>
+                      <a
+                        href="#"
+                        onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_RELEASES_URL); }}
+                        className="text-xs opacity-60 hover:opacity-100 transition-opacity"
+                        style={{ color: 'var(--accent-text, var(--text-secondary))', textDecoration: 'none' }}
+                        title="Apri note di rilascio su GitHub"
+                      >
+                        Vedi novità →
+                      </a>
+                    </div>
+                  </div>
+                  {latestVersion ? (
+                    <VersionUpdateRow latestVersion={latestVersion} appendConsole={appendConsole} />
+                  ) : (
+                    hasChecked && !isCheckingUpdate && (
+                      <p className="text-xs" style={{ color: 'var(--success-text)' }}>✓ Sei aggiornato</p>
+                    )
+                  )}
+                </div>
               </div>
 
               {/* Avanzati */}

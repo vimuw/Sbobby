@@ -14,6 +14,7 @@ const baseProps = {
   setShowConsole: vi.fn(),
   setIsSettingsOpen: vi.fn(),
   updateAvailable: null,
+  latestVersion: null,
   dismissUpdate: vi.fn(),
 };
 
@@ -109,9 +110,9 @@ describe('AppHeader', () => {
     expect(dismissUpdate).toHaveBeenCalledWith('v2.0.0');
   });
 
-  it('shows "Installa aggiornamento" button in update banner', () => {
+  it('shows "Aggiorna" button in update banner', () => {
     render(<AppHeader {...baseProps} updateAvailable="v2.0.0" />);
-    expect(screen.getByText('Installa aggiornamento')).toBeTruthy();
+    expect(screen.getByText('Aggiorna')).toBeTruthy();
   });
 
   it('shows console button as active when showConsole is true', () => {
@@ -130,7 +131,7 @@ describe('AppHeader', () => {
     const downloadFn = vi.fn().mockResolvedValue({ ok: true });
     setPywebview({ download_and_install_update: downloadFn });
     render(<AppHeader {...baseProps} updateAvailable="v2.0.0" />);
-    fireEvent.click(screen.getByText('Installa aggiornamento'));
+    fireEvent.click(screen.getByText('Aggiorna'));
     expect(downloadFn).toHaveBeenCalledWith('v2.0.0');
   });
 
@@ -139,7 +140,7 @@ describe('AppHeader', () => {
     const openUrl = vi.fn();
     setPywebview({ download_and_install_update: downloadFn, open_url: openUrl });
     render(<AppHeader {...baseProps} updateAvailable="v2.0.0" />);
-    fireEvent.click(screen.getByText('Installa aggiornamento'));
+    fireEvent.click(screen.getByText('Aggiorna'));
     await vi.waitFor(() => expect(openUrl).toHaveBeenCalled());
   });
 
@@ -148,7 +149,7 @@ describe('AppHeader', () => {
     const openUrl = vi.fn();
     setPywebview({ download_and_install_update: downloadFn, open_url: openUrl });
     render(<AppHeader {...baseProps} updateAvailable="v2.0.0" />);
-    fireEvent.click(screen.getByText('Installa aggiornamento'));
+    fireEvent.click(screen.getByText('Aggiorna'));
     await vi.waitFor(() => expect(openUrl).toHaveBeenCalled());
   });
 
@@ -159,6 +160,16 @@ describe('AppHeader', () => {
     render(<AppHeader {...baseProps} />);
     expect(screen.getByText(/fascia oraria di punta/i)).toBeTruthy();
     vi.useRealTimers();
+  });
+
+  it('shows badge on settings icon when latestVersion is set and update is dismissed', () => {
+    render(<AppHeader {...baseProps} latestVersion="v2.0.0" updateAvailable={null} />);
+    expect(screen.getByLabelText('Aggiornamento disponibile')).toBeTruthy();
+  });
+
+  it('does not show badge on settings icon when banner is active', () => {
+    render(<AppHeader {...baseProps} latestVersion="v2.0.0" updateAvailable="v2.0.0" />);
+    expect(screen.queryByLabelText('Aggiornamento disponibile')).toBeNull();
   });
 
   it('dismisses peak-hour banner on X click', () => {
