@@ -15,12 +15,12 @@ import zlib
 from pathlib import Path
 
 try:
-    from PIL import Image
+    from PIL import Image  # type: ignore[import-untyped]
 except ImportError:
     import subprocess
 
     subprocess.run([sys.executable, "-m", "pip", "install", "Pillow"], check=True)
-    from PIL import Image
+    from PIL import Image  # type: ignore[import-untyped]
 
 
 ROOT = Path(__file__).resolve().parent.parent

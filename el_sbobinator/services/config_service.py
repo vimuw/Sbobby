@@ -195,8 +195,8 @@ def _dpapi_protect_text_windows(text: str) -> str:
             buf = ctypes.create_string_buffer(data)
             return DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
 
-        crypt32 = ctypes.windll.crypt32
-        kernel32 = ctypes.windll.kernel32
+        crypt32 = ctypes.windll.crypt32  # type: ignore[attr-defined]
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
 
         crypt32.CryptProtectData.argtypes = [
             ctypes.POINTER(DATA_BLOB),
@@ -272,8 +272,8 @@ def _dpapi_unprotect_text_windows_once(b64: str) -> str:
             buf = ctypes.create_string_buffer(data)
             return DATA_BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte)))
 
-        crypt32 = ctypes.windll.crypt32
-        kernel32 = ctypes.windll.kernel32
+        crypt32 = ctypes.windll.crypt32  # type: ignore[attr-defined]
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
 
         crypt32.CryptUnprotectData.argtypes = [
             ctypes.POINTER(DATA_BLOB),

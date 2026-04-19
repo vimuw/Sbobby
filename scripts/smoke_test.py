@@ -3,7 +3,7 @@ Offline smoke test for El Sbobinator.
 
 Runs the full pipeline end-to-end without calling real Gemini:
 - Generates a short synthetic MP3 via FFmpeg (imageio-ffmpeg)
-- Monkeypatches el_sbobinator.pipeline.pipeline.genai.Client with a fake client
+- Monkeypatches el_sbobinator.pipeline.pipeline.genai with a fake client
 - Verifies autosave artifacts and final HTML output
 
 Usage:
@@ -28,7 +28,7 @@ import imageio_ffmpeg
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-import el_sbobinator.pipeline as pipe
+import el_sbobinator.pipeline.pipeline as pipe
 
 
 class DummyResponse:
