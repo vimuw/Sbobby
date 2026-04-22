@@ -38,13 +38,11 @@ class _FakeSessionContext:
         self.session_path = os.path.join(root, "session.json")
         self.phase1_chunks_dir = os.path.join(root, "phase1")
         self.phase2_revised_dir = os.path.join(root, "phase2")
-        self.boundary_dir = os.path.join(root, "boundary")
         self.macro_path = os.path.join(root, "macro.md")
         self.session = {
             "stage": "phase1",
             "phase1": {},
             "phase2": {},
-            "boundary": {},
             "outputs": {},
         }
         self.settings = SimpleNamespace(
@@ -62,7 +60,6 @@ class _FakeSessionContext:
         )
         os.makedirs(self.phase1_chunks_dir, exist_ok=True)
         os.makedirs(self.phase2_revised_dir, exist_ok=True)
-        os.makedirs(self.boundary_dir, exist_ok=True)
 
     def save(self):
         return True
@@ -112,7 +109,6 @@ class PipelineCancellationTests(unittest.TestCase):
                 "stage": "phase1",
                 "phase1": {},
                 "phase2": {},
-                "boundary": {},
                 "outputs": {},
             }
             session_ctx.settings = SimpleNamespace(
@@ -141,7 +137,6 @@ class PipelineCancellationTests(unittest.TestCase):
                     "stage": "phase1",
                     "phase1": {},
                     "phase2": {},
-                    "boundary": {},
                     "outputs": {},
                 }
                 context.settings = SimpleNamespace(
@@ -548,10 +543,6 @@ class PipelineCleanupCacheTests(unittest.TestCase):
                 return_value=(_FakeClient(), "revised"),
             ),
             patch(
-                "el_sbobinator.pipeline.pipeline.process_boundary_revision_phase",
-                return_value=_FakeClient(),
-            ),
-            patch(
                 "el_sbobinator.pipeline.pipeline.export_final_html_document",
                 side_effect=fake_export,
             ),
@@ -654,7 +645,7 @@ class PipelineCleanupCacheTests(unittest.TestCase):
 
 
 class PipelineStageRoutingTests(unittest.TestCase):
-    """Tests that verify phase-skipping when resuming from phase2 or boundary."""
+    """Tests that verify phase-skipping when resuming from phase2."""
 
     def _base_patches(self, session_ctx, stage, tmpdir=None):
         """Return the minimal patch set to get past init and into the stage router."""
@@ -716,10 +707,6 @@ class PipelineStageRoutingTests(unittest.TestCase):
                 return_value=(_FakeClient(), ""),
             ),
             patch(
-                "el_sbobinator.pipeline.pipeline.process_boundary_revision_phase",
-                return_value=_FakeClient(),
-            ),
-            patch(
                 "el_sbobinator.pipeline.pipeline.export_final_html_document",
                 side_effect=self._make_fake_export(tmpdir),
             ),
@@ -770,17 +757,16 @@ class PipelineStageRoutingTests(unittest.TestCase):
 
         phase1_mock.assert_not_called()
 
-    def test_boundary_stage_skips_phase1_transcription(self):
+    def test_boundary_stage_skips_phase1_and_advances_to_done(self):
+        """Resuming with stage='boundary' must skip phase-1, run through phase-2,
+        update session stage to 'done', and complete successfully."""
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = os.path.join(tmpdir, "input.mp3")
             with open(input_path, "wb") as fh:
                 fh.write(b"fake")
 
             session_ctx = self._make_session(tmpdir, "boundary")
-            session_ctx.session["stage"] = "boundary"
             app = _PromptBlockingApp()
-
-            import contextlib
 
             with contextlib.ExitStack() as stack:
                 for p in self._base_patches(session_ctx, "boundary", tmpdir):
@@ -793,6 +779,8 @@ class PipelineStageRoutingTests(unittest.TestCase):
                 esegui_sbobinatura(input_path, "fake-key", app)
 
         phase1_mock.assert_not_called()
+        self.assertEqual(session_ctx.session.get("stage"), "done")
+        self.assertEqual(app.last_run_status, "completed")
 
 
 class PipelineEarlyExitTests(unittest.TestCase):

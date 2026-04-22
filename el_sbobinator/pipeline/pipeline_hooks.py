@@ -63,14 +63,11 @@ class PipelineRuntime:
     def process_done(self) -> None:
         self._safe_call("processo_terminato")
 
-    def set_work_totals(
-        self, chunks_total=None, macro_total=None, boundary_total=None
-    ) -> None:
+    def set_work_totals(self, chunks_total=None, macro_total=None) -> None:
         self._safe_call(
             "set_work_totals",
             chunks_total=chunks_total,
             macro_total=macro_total,
-            boundary_total=boundary_total,
         )
 
     def update_work_done(self, kind: str, done: int, total: int | None = None) -> None:

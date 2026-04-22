@@ -8,7 +8,6 @@ import {
   CheckCircle,
   FileDown,
   Files,
-  GitMerge,
   Layers,
   Loader,
   Mic,
@@ -26,8 +25,8 @@ interface ProcessingStatusBannerProps {
   currentPhase: string;
   currentModel: string;
   activeProgress: number;
-  workDone: { chunks: number; macro: number; boundary: number };
-  workTotals: { chunks: number; macro: number; boundary: number };
+  workDone: { chunks: number; macro: number };
+  workTotals: { chunks: number; macro: number };
   currentFileIndex: number;
   currentBatchTotal: number;
   currentFileName?: string;
@@ -43,15 +42,14 @@ type PhaseInfo = {
 };
 
 type StepState = 'done' | 'active' | 'pending';
-type StepKey = 'preconversione' | 'trascrizione' | 'revisione' | 'confini';
+type StepKey = 'preconversione' | 'trascrizione' | 'revisione';
 type StepperState = Record<StepKey, StepState> | null;
-type WorkKind = 'chunks' | 'macro' | 'boundary';
+type WorkKind = 'chunks' | 'macro';
 
 const STEP_TOOLTIPS: Record<StepKey, string> = {
   preconversione: "Normalizza l'audio per renderlo piu' stabile e leggibile nelle fasi successive.",
   trascrizione: 'Il modello analizza i blocchi audio e genera la prima sbobinatura dettagliata.',
   revisione: "Il testo viene ripulito, organizzato e reso piu' chiaro sezione per sezione.",
-  confini: 'Controlla i passaggi tra sezioni per evitare duplicati o sovrapposizioni.',
 };
 
 function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
@@ -117,16 +115,6 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
     };
   }
 
-  if (phase.startsWith('Fase 3/3')) {
-    return {
-      icon: <GitMerge className="w-8 h-8" />,
-      iconAnimation: 'pulse',
-      title: 'Controllo coerenza',
-      description: 'Verifica dei confini tra blocchi di testo per evitare contenuti doppi.',
-      kind: 'normal',
-    };
-  }
-
   if (phase.startsWith('Fase: esportazione') || phase.startsWith('Fase:esportazione')) {
     return {
       icon: <FileDown className="w-8 h-8" />,
@@ -169,19 +157,16 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
 function getStepperState(currentPhase: string): StepperState {
   const phase = currentPhase.trim();
   if (phase === '__completed__' || phase.startsWith('Fase: esportazione') || phase.startsWith('Fase:esportazione')) {
-    return { preconversione: 'done', trascrizione: 'done', revisione: 'done', confini: 'done' };
+    return { preconversione: 'done', trascrizione: 'done', revisione: 'done' };
   }
   if (phase.startsWith('Fase 0/3')) {
-    return { preconversione: 'active', trascrizione: 'pending', revisione: 'pending', confini: 'pending' };
+    return { preconversione: 'active', trascrizione: 'pending', revisione: 'pending' };
   }
   if (phase.startsWith('Fase 1/3')) {
-    return { preconversione: 'done', trascrizione: 'active', revisione: 'pending', confini: 'pending' };
+    return { preconversione: 'done', trascrizione: 'active', revisione: 'pending' };
   }
   if (phase.startsWith('Fase 2/3')) {
-    return { preconversione: 'done', trascrizione: 'done', revisione: 'active', confini: 'pending' };
-  }
-  if (phase.startsWith('Fase 3/3')) {
-    return { preconversione: 'done', trascrizione: 'done', revisione: 'done', confini: 'active' };
+    return { preconversione: 'done', trascrizione: 'done', revisione: 'active' };
   }
   return null;
 }
@@ -201,13 +186,6 @@ function parseCurrentIndex(phase: string, stage: WorkKind): { current: number; t
     }
   }
 
-  if (stage === 'boundary' && phase.startsWith('Fase 3/3')) {
-    const match = phase.match(/\((\d+)\s*\/\s*(\d+)\)/);
-    if (match) {
-      return { current: Number(match[1]), total: Number(match[2]) };
-    }
-  }
-
   return null;
 }
 
@@ -219,8 +197,8 @@ function getActiveStepIndex(done: number, total: number): number {
 
 function getProgressLabel(
   currentPhase: string,
-  workDone: { chunks: number; macro: number; boundary: number },
-  workTotals: { chunks: number; macro: number; boundary: number },
+  workDone: { chunks: number; macro: number },
+  workTotals: { chunks: number; macro: number },
 ): string | null {
   const phase = currentPhase.trim();
 
@@ -234,12 +212,6 @@ function getProgressLabel(
   if (macroInfo) return `Sezione ${macroInfo.current} di ${macroInfo.total}`;
   if (phase.startsWith('Fase 2/3') && workTotals.macro > 0) {
     return `Sezione ${getActiveStepIndex(workDone.macro, workTotals.macro)} di ${workTotals.macro}`;
-  }
-
-  const boundaryInfo = parseCurrentIndex(phase, 'boundary');
-  if (boundaryInfo) return `Confine ${boundaryInfo.current} di ${boundaryInfo.total}`;
-  if (phase.startsWith('Fase 3/3') && workTotals.boundary > 0) {
-    return `Confine ${getActiveStepIndex(workDone.boundary, workTotals.boundary)} di ${workTotals.boundary}`;
   }
 
   return null;
@@ -509,8 +481,6 @@ export function ProcessingStatusBanner({
                 <StepBadge state={stepperState.trascrizione} label="Trascrizione" num={2} accentColor={isDimmed ? 'var(--text-muted)' : accentColor} tooltip={STEP_TOOLTIPS.trascrizione} />
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--border-default)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
                 <StepBadge state={stepperState.revisione} label="Revisione" num={3} accentColor={isDimmed ? 'var(--text-muted)' : accentColor} tooltip={STEP_TOOLTIPS.revisione} />
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--border-default)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
-                <StepBadge state={stepperState.confini} label="Confini" num={4} accentColor={isDimmed ? 'var(--text-muted)' : accentColor} tooltip={STEP_TOOLTIPS.confini} />
               </div>
             )}
           </div>

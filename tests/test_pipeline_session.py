@@ -434,7 +434,6 @@ class InitializeSessionContextTests(unittest.TestCase):
             session_dir = os.path.join(tmpdir, "session")
             os.makedirs(os.path.join(session_dir, "phase1_chunks"), exist_ok=True)
             os.makedirs(os.path.join(session_dir, "phase2_revised"), exist_ok=True)
-            os.makedirs(os.path.join(session_dir, "phase2_boundary"), exist_ok=True)
             session_data = {
                 "schema_version": 1,
                 "created_at": "2024-01-01 00:00:00",
@@ -459,7 +458,6 @@ class InitializeSessionContextTests(unittest.TestCase):
                     "memoria_precedente": "",
                 },
                 "phase2": {"macro_total": 0, "revised_done": 0},
-                "boundary": {"pairs_total": 0, "next_pair": 1},
                 "outputs": {},
                 "last_error": None,
             }
@@ -497,7 +495,6 @@ class InitializeSessionContextTests(unittest.TestCase):
         session_dir = os.path.join(tmpdir, "session")
         os.makedirs(os.path.join(session_dir, "phase1_chunks"), exist_ok=True)
         os.makedirs(os.path.join(session_dir, "phase2_revised"), exist_ok=True)
-        os.makedirs(os.path.join(session_dir, "phase2_boundary"), exist_ok=True)
         session_data = {
             "schema_version": 1,
             "created_at": "2024-01-01 00:00:00",
@@ -522,7 +519,6 @@ class InitializeSessionContextTests(unittest.TestCase):
                 "memoria_precedente": "",
             },
             "phase2": {"macro_total": 0, "revised_done": 0},
-            "boundary": {"pairs_total": 0, "next_pair": 1},
             "outputs": {},
             "last_error": None,
         }

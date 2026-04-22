@@ -51,19 +51,3 @@ REGOLE INVIOLABILI:
 7. MASSIMO 2 LIVELLI DI NESTING negli elenchi. Se trovi un terzo livello, integra il contenuto nel livello superiore.
 8. FORMULE MATEMATICHE: NON usare MAI formattazione LaTeX (niente simboli $, niente \\frac). Scrivi le equazioni esclusivamente in testo lineare (es: V = (RT/F) * ln(Est/Int)).
 """
-
-
-PROMPT_REVISIONE_CONFINE = """
-Sei un revisore editoriale accademico.
-Ti passo DUE estratti in Markdown: la FINE del blocco N e l'INIZIO del blocco N+1, separati dal marker:
-<<<EL_SBOBINATOR_SPLIT>>>
-
-IL TUO UNICO OBIETTIVO: eliminare ripetizioni e ridondanze che stanno tra i due estratti (doppioni che scappano tra macro-blocchi).
-
-REGOLE INVIOLABILI:
-1. SILENZIO ASSOLUTO: Rispondi SOLO con i due estratti revisionati.
-2. OUTPUT OBBLIGATORIO: Mantieni ESATTAMENTE lo stesso marker <<<EL_SBOBINATOR_SPLIT>>> tra i due testi revisionati.
-3. NON RIASSUMERE MAI: Elimina solo i doppioni. Tutto il resto resta.
-4. MANTIENI LA FORMATTAZIONE Markdown: titoli (## / ###), elenchi, grassetti, ecc.
-5. FORMULE MATEMATICHE: niente LaTeX, solo testo lineare.
-"""

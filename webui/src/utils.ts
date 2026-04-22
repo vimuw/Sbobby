@@ -6,9 +6,9 @@ const _ERROR_MAP: Record<string, string> = {
   quota_daily_limit_phase2: 'Quota giornaliera API esaurita durante la revisione.',
   quota_daily_limit_boundary: 'Quota giornaliera API esaurita durante la revisione dei confini.',
   bad_request_phase1: 'Richiesta non valida durante la trascrizione (errore 400).',
+  boundary_ai_failed: 'Errore durante la revisione AI dei confini tra blocchi.',
   html_export_failed: 'Errore durante il salvataggio del file di output.',
   html_export_missing: 'File di output non trovato dopo il salvataggio.',
-  boundary_ai_failed: 'Errore durante la revisione AI dei confini tra blocchi.',
   processing_failed: 'Elaborazione non completata.',
   api_key_mancante: 'API key mancante o non valida.',
 };

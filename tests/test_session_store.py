@@ -62,7 +62,6 @@ class EnsureSessionDirsTests(unittest.TestCase):
                 session_path=tmpdir + "/session.json",
                 phase1_chunks_dir=tmpdir + "/phase1_chunks",
                 phase2_revised_dir=tmpdir + "/phase2_revised",
-                boundary_dir=tmpdir + "/phase2_boundary",
                 macro_path=tmpdir + "/macro.json",
             )
             ensure_session_dirs(paths)
@@ -70,7 +69,6 @@ class EnsureSessionDirsTests(unittest.TestCase):
             for d in (
                 paths.phase1_chunks_dir,
                 paths.phase2_revised_dir,
-                paths.boundary_dir,
             ):
                 self.assertTrue(os.path.isdir(d), f"Expected dir to exist: {d}")
 
@@ -86,7 +84,6 @@ class EnsureSessionDirsTests(unittest.TestCase):
                 session_path=session_dir + "/session.json",
                 phase1_chunks_dir=session_dir + "/phase1_chunks",
                 phase2_revised_dir=session_dir + "/phase2_revised",
-                boundary_dir=session_dir + "/phase2_boundary",
                 macro_path=session_dir + "/macro.json",
             )
             # Create the dir with a file inside

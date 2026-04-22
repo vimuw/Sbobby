@@ -47,8 +47,8 @@ Source: `_BridgeDispatcher` + `PipelineAdapter` in `el_sbobinator/app_webview.py
 | `updateProgress` | yes | `float` (0.0–1.0) | `PipelineAdapter.aggiorna_progresso` | Overall pipeline progress for the current file. |
 | `updatePhase` | yes | `string` | `PipelineAdapter.aggiorna_fase` | Human-readable phase label (e.g. `"Fase 1/3: trascrizione (chunk 3/8)"`). |
 | `updateModel` | yes | `string` | `PipelineAdapter.update_model` | Currently active Gemini model id. |
-| `setWorkTotals` | yes | `{chunks, macro, boundary}` — each `int \| null` | `PipelineAdapter.set_work_totals` | Total items per kind; used for the step counters and ETA. |
-| `updateWorkDone` | yes | `{kind: "chunks"\|"macro"\|"boundary", done: int, total: int\|null}` | `PipelineAdapter.update_work_done` | Incremental counters per phase. |
+| `setWorkTotals` | yes | `{chunks?, macro?}` — each `int \| null` | `PipelineAdapter.set_work_totals` | Total items per kind; used for the step counters and ETA. |
+| `updateWorkDone` | yes | `{kind: "chunks"\|"macro", done: int, total: int\|null}` | `PipelineAdapter.update_work_done` | Incremental counters per phase. |
 | `registerStepTime` | yes | `{kind, seconds, done?, total?}` | `PipelineAdapter.register_step_time` | Elapsed time for a single step; drives the EMA-based ETA. |
 | `setCurrentFile` | no | `{index: int, id: string, total: int}` | Inside `ElSbobinatorApi.start_processing._run` | New file in the batch has started. |
 | `fileDone` | no | `{index, id, output_html, output_dir, primary_model?, effective_model?}` | `ElSbobinatorApi.start_processing._run` | File completed successfully. |
@@ -130,9 +130,9 @@ File: `el_sbobinator/pipeline_hooks.py`. The pipeline never touches `PipelineAda
 | `progress(value)` | `aggiorna_progresso(value)` | `pipeline.py`, `phase1_service.py`, `revision_service.py` |
 | `phase(text)` | `aggiorna_fase(text)` | everywhere |
 | `update_model(model)` | `update_model(model)` | `pipeline.py` (model fallback) |
-| `set_work_totals(chunks_total, macro_total, boundary_total)` | `set_work_totals(...)` | all three phases |
-| `update_work_done(kind, done, total=None)` | `update_work_done(...)` | all three phases |
-| `register_step_time(kind, seconds, done=None, total=None)` | `register_step_time(...)` | all three phases |
+| `set_work_totals(chunks_total=None, macro_total=None)` | `set_work_totals(...)` | `phase1_service.py`, `revision_service.py` |
+| `update_work_done(kind, done, total=None)` | `update_work_done(...)` | `phase1_service.py`, `revision_service.py` |
+| `register_step_time(kind, seconds, done=None, total=None)` | `register_step_time(...)` | `phase1_service.py`, `revision_service.py` |
 | `output_html(path, output_dir=None)` | `imposta_output_html(path, output_dir)` | `pipeline.py` (final export) |
 | `process_done()` | `processo_terminato()` | `pipeline.py` (finally block) |
 | `set_run_result(status, error=None)` | `set_run_result(...)` or `last_run_{status,error}` attributes | `pipeline.py` (finally block) |

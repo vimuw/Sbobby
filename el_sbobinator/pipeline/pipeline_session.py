@@ -68,10 +68,6 @@ class PipelineSessionContext:
         return self.session_paths.phase2_revised_dir
 
     @property
-    def boundary_dir(self) -> str:
-        return self.session_paths.boundary_dir
-
-    @property
     def macro_path(self) -> str:
         return self.session_paths.macro_path
 
@@ -163,7 +159,6 @@ def initialize_session_context(
         session.setdefault("stage", "phase1")
         session.setdefault("phase1", {})
         session.setdefault("phase2", {})
-        session.setdefault("boundary", {})
         session.setdefault("outputs", {})
         try:
             current_defaults = build_default_pipeline_settings(load_config())

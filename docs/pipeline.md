@@ -7,15 +7,15 @@ Entry point: `el_sbobinator.pipeline.esegui_sbobinatura(input_path, api_key_valu
 ## Overview
 
 ```
-┌──────────────┐  ┌──────────────┐  ┌────────────────┐  ┌──────────────┐  ┌────────────┐
-│   Phase 0    │  │   Phase 1    │  │    Phase 2     │  │   Phase 3    │  │   Export   │
-│ pre-convert  │─▶│ chunked      │─▶│ macro-block    │─▶│  boundary    │─▶│ Markdown → │
-│ mono 16 kHz  │  │ transcription│  │ revision       │  │  revision    │  │ HTML       │
-│ (optional)   │  │ (Gemini)     │  │ (Gemini)       │  │ (local + AI) │  │            │
-└──────────────┘  └──────────────┘  └────────────────┘  └──────────────┘  └────────────┘
+┌──────────────┐  ┌──────────────┐  ┌────────────────┐  ┌────────────┐
+│   Phase 0    │  │   Phase 1    │  │    Phase 2     │  │   Export   │
+│ pre-convert  │─▶│ chunked      │─▶│ macro-block    │─▶│ Markdown → │
+│ mono 16 kHz  │  │ transcription│  │ revision       │  │ HTML       │
+│ (optional)   │  │ (Gemini)     │  │ (Gemini)       │  │            │
+└──────────────┘  └──────────────┘  └────────────────┘  └────────────┘
 ```
 
-Stage is persisted in `session.json` under `stage ∈ {"phase1", "phase2", "boundary", "done"}`. Resuming simply re-enters the pipeline at the current stage (see [`session_model.md`](./session_model.md)).
+Stage is persisted in `session.json` under `stage ∈ {"phase1", "phase2", "done"}`. Resuming simply re-enters the pipeline at the current stage (see [`session_model.md`](./session_model.md)).
 
 ## Phase 0 — Pre-conversion (optional)
 
@@ -85,39 +85,6 @@ After the main loop:
 
 Downstream consumers (`export_service.load_revised_blocks`) match `^rev_\d{3}\.md$` exactly, so `.raw.md` files are never accidentally exported.
 
-## Phase 3 — Boundary revision
-
-File: `revision_service.process_boundary_revision_phase`. Prompt: `PROMPT_REVISIONE_CONFINE`.
-
-Runs over every consecutive pair `(rev_{N}, rev_{N+1})`.
-
-### Local gate
-
-For each pair, the last ~3 KB of block N and the first ~3 KB of block N+1 are split into paragraphs, then compared via:
-
-- `strict_duplicate(...)` — identical normalized paragraphs or one contained in the other with a ≥ 92 % length overlap.
-- `max_similarity(...)` — weighted `difflib.SequenceMatcher` ratio across increasing paragraph windows.
-
-Outcomes:
-
-| Local result | Action |
-|---|---|
-| One or more strictly-duplicate leading paragraphs | Trim them from `rev_{N+1}` locally (no AI call). |
-| `max_similarity < 0.975` | Mark the pair done — no overlap. |
-| `max_similarity ≥ 0.975` | Invoke Gemini as a tie-breaker. |
-
-### AI pass
-
-The two extracts are concatenated with the literal marker `<<<EL_SBOBINATOR_SPLIT>>>`. The model must return the same marker in its revised output. The response is split, each side is stitched back onto the untouched prefix/suffix of its source file, and both revised sides are rewritten atomically. Success writes an empty sentinel `boundary_{NNN:03}.done` so resume can skip the pair.
-
-### Failure modes
-
-| Error | Handling |
-|---|---|
-| Marker missing or output empty | Retry via `retry_with_quota`; eventually surfaces as the exception below. |
-| `QuotaDailyLimitError` | `last_error = "quota_daily_limit_boundary"`, abort. |
-| Any other exception | `last_error = "boundary_ai_failed"`, abort (keeps `next_pair` so the user can resume). |
-
 ## Export
 
 File: `export_service.export_final_html_document`.
@@ -151,7 +118,7 @@ Side effects are routed through callbacks so phases can react:
 
 ### Temperature
 
-`generation_service._phase1_temperature(model_name)` reads the per-model `phase1_temperature` from `MODEL_OPTIONS` (see the table below). Phases 2 and 3 always use `temperature=0.1`.
+`generation_service._phase1_temperature(model_name)` reads the per-model `phase1_temperature` from `MODEL_OPTIONS` (see the table below). Phase 2 always uses `temperature=0.1`.
 
 ## Model registry
 
@@ -179,8 +146,6 @@ All failure modes write a machine-readable string to `session["last_error"]` bef
 | `phase1_all_models_unavailable` | Every model 503-unavailable; recovery also failed | Falls through to the raw string. |
 | `phase1_chunk_failed_<N>` | Non-quota exception after all retries on chunk `N` | "Errore critico durante l'elaborazione del blocco `<N>`." |
 | `quota_daily_limit_phase2` | Daily quota during macro revision (main or retry pass) | "Quota giornaliera API esaurita durante la revisione." |
-| `quota_daily_limit_boundary` | Daily quota during boundary revision | "Quota giornaliera API esaurita durante la revisione dei confini." |
-| `boundary_ai_failed` | Non-quota boundary exception after all retries | "Errore durante la revisione AI dei confini tra blocchi." |
 | `html_export_failed` | HTML assembly raised | "Errore durante il salvataggio del file di output." |
 | `html_export_missing` | Output file not present after write | "File di output non trovato dopo il salvataggio." |
 | `processing_failed` | Generic fallback when nothing more specific was set | "Elaborazione non completata." |

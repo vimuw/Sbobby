@@ -157,17 +157,16 @@ class PipelineAdapter:
     def set_effective_api_key(self, api_key: str | None):
         self.effective_api_key = str(api_key or "").strip() or None
 
-    def set_work_totals(self, chunks_total=None, macro_total=None, boundary_total=None):
+    def set_work_totals(self, chunks_total=None, macro_total=None):
         payload: WorkTotalsPayload = {
             "chunks": chunks_total,
             "macro": macro_total,
-            "boundary": boundary_total,
         }
         self._emit_js("setWorkTotals", payload, batched=True)
 
     def update_work_done(self, kind: str, done: int, total: int | None = None):
         payload: WorkDonePayload = {
-            "kind": cast(Literal["chunks", "macro", "boundary"], kind),
+            "kind": cast(Literal["chunks", "macro"], kind),
             "done": done,
             "total": total,
         }
@@ -184,7 +183,7 @@ class PipelineAdapter:
         with self._lock:
             self._step_times.setdefault(kind, []).append(seconds)
         payload: StepTimePayload = {
-            "kind": cast(Literal["chunks", "macro", "boundary"], kind),
+            "kind": cast(Literal["chunks", "macro"], kind),
             "seconds": seconds,
             "done": done,
             "total": total,

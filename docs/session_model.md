@@ -1,6 +1,6 @@
 # Session model
 
-El Sbobinator persists every run under a session directory so the pipeline can be resumed at a chunk / macro-block / boundary-pair granularity after the user closes the app, loses power, or runs out of daily API quota. This doc describes the actual on-disk layout used by the current desktop app.
+El Sbobinator persists every run under a session directory so the pipeline can be resumed at a chunk / macro-block granularity after the user closes the app, loses power, or runs out of daily API quota. This doc describes the actual on-disk layout used by the current desktop app.
 
 ## Identity
 
@@ -53,10 +53,6 @@ A second helper, `_session_dir_for_file(path)`, joins `SESSION_ROOT` with the fi
 │   ├── rev_002.md
 │   ├── rev_003.raw.md                         # provisional — awaiting retry pass
 │   └── ...
-├── phase2_boundary/
-│   ├── boundary_001.done                      # empty sentinel files
-│   ├── boundary_002.done
-│   └── ...
 ├── phase2_macro_blocks.json                  # {"limit_chars": int, "blocks": [...]}
 └── <SafeTitle>_Sbobina.html                  # final output (written on completion)
 ```
@@ -68,9 +64,8 @@ A second helper, `_session_dir_for_file(path)`, joins `SESSION_ROOT` with the fi
 | Phase 1 chunk | `^chunk_(\d{3})_(\d+)_(\d+)\.md$` | `(index, start_sec, end_sec)` |
 | Revised block (final) | `^rev_\d{3}\.md$` | `index` |
 | Revised block (provisional) | `^rev_(\d{3})\.raw\.md$` | `index` — **not matched** by the final regex |
-| Boundary sentinel | `^boundary_(\d{3})\.done$` | `pair_index` |
 
-`export_service.load_revised_blocks` uses the strict `rev_\d{3}\.md$` match so that `.raw.md` files are never exported into the final HTML. Boundary work only ever adds `.done` sentinels; the revised text files are modified in place in `phase2_revised/`.
+`export_service.load_revised_blocks` uses the strict `rev_\d{3}\.md$` match so that `.raw.md` files are never exported into the final HTML.
 
 ## `session.json` schema
 
@@ -81,7 +76,7 @@ A second helper, `_session_dir_for_file(path)`, joins `SESSION_ROOT` with the fi
   "schema_version": 1,
   "created_at": "YYYY-MM-DD HH:MM:SS",
   "updated_at": "YYYY-MM-DD HH:MM:SS",
-  "stage": "phase1 | phase2 | boundary | done",
+  "stage": "phase1 | phase2 | done",
   "input": {
     "path": "<absolute path at time of creation>",
     "size": 123456789,
@@ -112,17 +107,12 @@ A second helper, `_session_dir_for_file(path)`, joins `SESSION_ROOT` with the fi
     "macro_total": 0,
     "revised_done": 0
   },
-  "boundary": {
-    "pairs_total": 0,
-    "next_pair": 1
-  },
   "outputs": {
     "html": "<absolute path to the exported HTML>"
   },
   "metrics": {
-    "chunks":   { "count": 0, "elapsed_seconds": 0.0, "last_seconds": 0.0, "avg_seconds": 0.0, "done": 0, "total": 0 },
-    "macro":    { ... },
-    "boundary": { ... }
+    "chunks": { "count": 0, "elapsed_seconds": 0.0, "last_seconds": 0.0, "avg_seconds": 0.0, "done": 0, "total": 0 },
+    "macro":  { ... }
   },
   "last_error": null,
   "revision_pending_blocks": [],
@@ -132,6 +122,7 @@ A second helper, `_session_dir_for_file(path)`, joins `SESSION_ROOT` with the fi
 
 Notes:
 
+- `"stage"` is one of `"phase1"`, `"phase2"`, or `"done"` for sessions created by the current pipeline. Sessions written by older versions may contain `"boundary"`, which is accepted by `normalize_stage` and promoted to `"done"` when export completes — it is never written by the current pipeline.
 - `input.path` is captured once at creation. Since identity is derived from size + mtime + partial hash (not from the path), the stored value is informational — moving the file does not break resume.
 - `settings.effective_model` records the model that was active when the previous run last persisted. On resume the pipeline always resets `ModelState.current` back to `settings.model` (the primary) and lets the fallback chain re-degrade if needed.
 - `metrics.*` entries are maintained by `pipeline_session.record_step_metric(session, kind, seconds, done, total)`. `avg_seconds` is recomputed as `elapsed_seconds / count`; the UI uses a 40/60 EMA of `last_seconds` for live ETA.
@@ -162,7 +153,6 @@ Different phases have different granularities:
 | Phase 0 (pre-conv) | File-level | `el_sbobinator_preconverted_mono16k.mp3` + `phase1.preconverted_done` | `ensure_preconverted_audio` |
 | Phase 1 | Chunk-level | `chunk_{NNN}_*.md` + `phase1.{next_start_sec, chunks_done, memoria_precedente}` | `restore_phase1_progress` |
 | Phase 2 | Block-level | `rev_{NNN}.md` (final) and `rev_{NNN}.raw.md` (provisional) + `phase2.revised_done` | inline in `process_macro_revision_phase` (skips when `.md` exists, queues when `.raw.md` exists) |
-| Phase 3 | Pair-level | `boundary_{NNN}.done` + `boundary.next_pair` | inline in `process_boundary_revision_phase` |
 
 On resume, `normalize_stage(session)` snaps `stage` back to `"phase1"` if it's unrecognized, and `phase1_has_progress` decides whether to prompt the user with the "regenerate?" modal (only for resumes that already have work).
 

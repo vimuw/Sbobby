@@ -76,17 +76,16 @@ export type FileFailedPayload = {
 export type WorkTotalsPayload = {
   chunks?: number | null;
   macro?: number | null;
-  boundary?: number | null;
 };
 
 export type WorkDonePayload = {
-  kind: 'chunks' | 'macro' | 'boundary';
+  kind: 'chunks' | 'macro';
   done: number;
   total?: number | null;
 };
 
 export type StepTimePayload = {
-  kind: 'chunks' | 'macro' | 'boundary';
+  kind: 'chunks' | 'macro';
   seconds: number;
   done?: number | null;
   total?: number | null;
@@ -110,17 +109,14 @@ export type ProcessingState = {
   workTotals: {
     chunks: number;
     macro: number;
-    boundary: number;
   };
   workDone: {
     chunks: number;
     macro: number;
-    boundary: number;
   };
   stepMetrics: {
     chunks: StepMetricEntry | null;
     macro: StepMetricEntry | null;
-    boundary: StepMetricEntry | null;
   };
 };
 
@@ -154,9 +150,9 @@ export const initialProcessingState: ProcessingState = {
   activeProgress: 0,
   currentFileIndex: 0,
   currentBatchTotal: 0,
-  workTotals: { chunks: 0, macro: 0, boundary: 0 },
-  workDone: { chunks: 0, macro: 0, boundary: 0 },
-  stepMetrics: { chunks: null, macro: null, boundary: null },
+  workTotals: { chunks: 0, macro: 0 },
+  workDone: { chunks: 0, macro: 0 },
+  stepMetrics: { chunks: null, macro: null },
 };
 
 export function processingReducer(state: ProcessingState, action: ProcessingAction): ProcessingState {
@@ -238,9 +234,9 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         activeProgress: action.data?.cancelled ? 0 : state.activeProgress,
         currentFileIndex: 0,
         currentBatchTotal: 0,
-        workTotals: action.data?.cancelled ? { chunks: 0, macro: 0, boundary: 0 } : state.workTotals,
-        workDone: action.data?.cancelled ? { chunks: 0, macro: 0, boundary: 0 } : state.workDone,
-        stepMetrics: action.data?.cancelled ? { chunks: null, macro: null, boundary: null } : state.stepMetrics,
+        workTotals: action.data?.cancelled ? { chunks: 0, macro: 0 } : state.workTotals,
+        workDone: action.data?.cancelled ? { chunks: 0, macro: 0 } : state.workDone,
+        stepMetrics: action.data?.cancelled ? { chunks: null, macro: null } : state.stepMetrics,
         files: action.data?.cancelled
           ? state.files.map(file =>
               file.status === 'processing'
@@ -255,7 +251,6 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         workTotals: {
           chunks: Number(action.data.chunks ?? state.workTotals.chunks ?? 0),
           macro: Number(action.data.macro ?? state.workTotals.macro ?? 0),
-          boundary: Number(action.data.boundary ?? state.workTotals.boundary ?? 0),
         },
       };
     case 'bridge/update_work_done': {
@@ -295,7 +290,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         activeProgress: 0,
         currentFileIndex: action.data.index,
         currentBatchTotal: action.data.total,
-        stepMetrics: { chunks: null, macro: null, boundary: null },
+        stepMetrics: { chunks: null, macro: null },
         files: state.files.map(file =>
           file.id === action.data.id
             ? { ...file, status: 'processing', progress: 0, phase: 1, phaseText: undefined, errorText: undefined, startedAt: Date.now() }

@@ -32,7 +32,6 @@ class SessionPaths:
     session_path: str
     phase1_chunks_dir: str
     phase2_revised_dir: str
-    boundary_dir: str
     macro_path: str
 
 
@@ -60,7 +59,6 @@ def resolve_session_paths(
         session_path=os.path.join(session_dir, "session.json"),
         phase1_chunks_dir=os.path.join(session_dir, "phase1_chunks"),
         phase2_revised_dir=os.path.join(session_dir, "phase2_revised"),
-        boundary_dir=os.path.join(session_dir, "phase2_boundary"),
         macro_path=os.path.join(session_dir, "phase2_macro_blocks.json"),
     )
 
@@ -69,7 +67,6 @@ def ensure_session_dirs(paths: SessionPaths) -> None:
     _safe_mkdir(paths.session_dir)
     _safe_mkdir(paths.phase1_chunks_dir)
     _safe_mkdir(paths.phase2_revised_dir)
-    _safe_mkdir(paths.boundary_dir)
 
 
 def reset_session_dirs(paths: SessionPaths) -> None:
@@ -111,7 +108,6 @@ def new_session(input_path: str, settings: dict | None = None) -> dict:
         "settings": settings or build_default_pipeline_settings(),
         "phase1": {"next_start_sec": 0, "chunks_done": 0, "memoria_precedente": ""},
         "phase2": {"macro_total": 0, "revised_done": 0},
-        "boundary": {"pairs_total": 0, "next_pair": 1},
         "outputs": {},
         "last_error": None,
     }

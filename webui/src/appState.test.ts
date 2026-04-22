@@ -230,20 +230,20 @@ describe('processingReducer', () => {
   });
 
   it('bridge/set_work_totals falls back to existing values when data fields are null', () => {
-    const base = { ...initialProcessingState, workTotals: { chunks: 5, macro: 4, boundary: 3 } };
+    const base = { ...initialProcessingState, workTotals: { chunks: 5, macro: 4 } };
     const state = processingReducer(
       base,
-      { type: 'bridge/set_work_totals', data: { chunks: null, macro: null, boundary: null } },
+      { type: 'bridge/set_work_totals', data: { chunks: null, macro: null } },
     );
-    expect(state.workTotals).toEqual({ chunks: 5, macro: 4, boundary: 3 });
+    expect(state.workTotals).toEqual({ chunks: 5, macro: 4 });
   });
 
   it('bridge/set_work_totals updates workTotals', () => {
     const state = processingReducer(
       initialProcessingState,
-      { type: 'bridge/set_work_totals', data: { chunks: 10, macro: 8, boundary: 7 } },
+      { type: 'bridge/set_work_totals', data: { chunks: 10, macro: 8 } },
     );
-    expect(state.workTotals).toEqual({ chunks: 10, macro: 8, boundary: 7 });
+    expect(state.workTotals).toEqual({ chunks: 10, macro: 8 });
   });
 
   it('bridge/update_work_done updates workDone for a kind', () => {
@@ -255,7 +255,7 @@ describe('processingReducer', () => {
   });
 
   it('bridge/update_work_done returns same state when value is unchanged', () => {
-    const base = { ...initialProcessingState, workDone: { chunks: 5, macro: 0, boundary: 0 } };
+    const base = { ...initialProcessingState, workDone: { chunks: 5, macro: 0 } };
     const next = processingReducer(base, { type: 'bridge/update_work_done', data: { kind: 'chunks', done: 5 } });
     expect(next).toBe(base);
   });
@@ -302,7 +302,7 @@ describe('processingReducer', () => {
   it('bridge/register_step_time uses EMA on subsequent calls', () => {
     const withPrev = {
       ...initialProcessingState,
-      stepMetrics: { chunks: { avgSeconds: 10, done: 1, total: 5 }, macro: null, boundary: null },
+      stepMetrics: { chunks: { avgSeconds: 10, done: 1, total: 5 }, macro: null },
     };
     const state = processingReducer(
       withPrev,

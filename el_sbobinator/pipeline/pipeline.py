@@ -3,7 +3,7 @@ Core pipeline for El Sbobinator (no UI widgets touched directly).
 
 This module contains the heavy workflow:
 - FFmpeg duration/probe, optional pre-conversion, chunk cutting
-- Gemini generation (chunk), macro revision, boundary revision
+- Gemini generation (chunk), macro revision
 - Autosave sessions and final HTML export
 """
 
@@ -48,7 +48,6 @@ from el_sbobinator.services.generation_service import (
 from el_sbobinator.services.phase1_service import process_phase1_transcription
 from el_sbobinator.services.revision_service import (
     build_macro_blocks,
-    process_boundary_revision_phase,
     process_macro_revision_phase,
 )
 from el_sbobinator.session_store import _update_session
@@ -113,7 +112,6 @@ def _esegui_sbobinatura_impl(  # noqa: C901
         )
         phase1_chunks_dir = session_ctx.phase1_chunks_dir
         phase2_revised_dir = session_ctx.phase2_revised_dir
-        boundary_dir = session_ctx.boundary_dir
         macro_path = session_ctx.macro_path
 
         def save_session():
@@ -319,8 +317,6 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             print(f"[*] Ripresa sessione: stage='{stage}'. Salto Fase 1.")
             if stage == "phase2":
                 runtime.phase("Fase 2/3: revisione")
-            elif stage == "boundary":
-                runtime.phase("Fase 3/3: confini (anti-doppioni)")
             elif stage == "done":
                 runtime.phase("Fase: esportazione HTML")
             else:
@@ -438,76 +434,8 @@ def _esegui_sbobinatura_impl(  # noqa: C901
             ):
                 return
 
-        macro_total = len(macro_blocks)
-
-        # ETA step-based: totali fase 2 + confini (macro_total-1). Imposta anche il done attuale da sessione.
-        runtime.set_work_totals(
-            macro_total=macro_total, boundary_total=max(0, macro_total - 1)
-        )
-        try:
-            runtime.update_work_done(
-                "macro",
-                int(session.get("phase2", {}).get("revised_done", 0) or 0),
-                total=macro_total,
-            )
-        except Exception:
-            pass
-
-        # ------------------------------------------
-        # FASE 2B: REVISIONE DI CONFINE (AUTOSAVE)
-        # ------------------------------------------
-        if str(session.get("stage", "phase2")).strip().lower() == "phase2":
-            print("\n======================================")
-            print(
-                "[*] INIZIO FASE 3: Revisione dei confini (anti-doppioni tra macro-blocchi)"
-            )
-            print(
-                "    - 'Confine' = fine del macro-blocco N + inizio del macro-blocco N+1."
-            )
-            print(
-                "    - Cosa fa: cerca sovrapposizioni tra i due pezzi e rimuove SOLO le ripetizioni."
-            )
-            print(
-                "    - Come: prima controllo locale (0 richieste), poi AI solo se il caso e' ambiguo."
-            )
-            runtime.phase("Fase 3/3: confini (anti-doppioni)")
-            _next_pair = int(session.get("boundary", {}).get("next_pair", 1) or 1)
-            _update_session(
-                session,
-                {
-                    "stage": "boundary",
-                    "boundary": {
-                        **session.get("boundary", {}),
-                        "pairs_total": int(max(0, macro_total - 1)),
-                        "next_pair": _next_pair,
-                    },
-                    "last_error": None,
-                },
-            )
-            save_session()
-
         current_stage = str(session.get("stage", "phase1")).strip().lower()
-        if current_stage == "boundary":
-            client = process_boundary_revision_phase(
-                client=client,
-                model_name=model_name,
-                model_state=model_state,
-                boundary_dir=boundary_dir,
-                phase2_revised_dir=phase2_revised_dir,
-                session=session,
-                save_session=save_session,
-                runtime=runtime,
-                cancelled=runtime.cancelled,
-                fallback_keys=fallback_keys,
-                request_fallback_key=request_fallback_key,
-                on_model_switched=on_model_switched,
-                logger=logger,
-            )
-            if runtime.cancelled() or session.get("last_error") in (
-                "quota_daily_limit_boundary",
-                "boundary_ai_failed",
-            ):
-                return
+        if current_stage in ("phase2", "boundary"):
             _update_session(session, {"stage": "done", "last_error": None})
             save_session()
 

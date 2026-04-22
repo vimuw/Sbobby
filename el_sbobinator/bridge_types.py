@@ -50,17 +50,16 @@ class FileFailedPayload(TypedDict):
 class WorkTotalsPayload(TypedDict, total=False):
     chunks: int | None
     macro: int | None
-    boundary: int | None
 
 
 class WorkDonePayload(TypedDict, total=False):
-    kind: Literal["chunks", "macro", "boundary"]
+    kind: Literal["chunks", "macro"]
     done: int
     total: int | None
 
 
 class StepTimePayload(TypedDict, total=False):
-    kind: Literal["chunks", "macro", "boundary"]
+    kind: Literal["chunks", "macro"]
     seconds: float
     done: int | None
     total: int | None

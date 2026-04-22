@@ -428,7 +428,6 @@ class AppWebviewTests(unittest.TestCase):
                 "settings": {},
                 "phase1": {},
                 "phase2": {},
-                "boundary": {},
                 "last_error": None,
             }
             session_path = os.path.join(session_dir, "session.json")
@@ -498,7 +497,6 @@ class AppWebviewTests(unittest.TestCase):
                 "settings": {},
                 "phase1": {},
                 "phase2": {},
-                "boundary": {},
                 "last_error": None,
             }
             session_path = os.path.join(session_dir, "session.json")
@@ -573,7 +571,6 @@ class AppWebviewTests(unittest.TestCase):
                     "settings": {},
                     "phase1": {},
                     "phase2": {},
-                    "boundary": {},
                     "last_error": None,
                 }
                 spath = os.path.join(sdir, "session.json")
@@ -629,7 +626,6 @@ class AppWebviewTests(unittest.TestCase):
                 "settings": {},
                 "phase1": {},
                 "phase2": {},
-                "boundary": {},
                 "last_error": None,
             }
             with open(os.path.join(sdir, "session.json"), "w", encoding="utf-8") as fh:
