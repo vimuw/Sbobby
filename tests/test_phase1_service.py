@@ -622,6 +622,7 @@ class Phase1UploadModeTests(unittest.TestCase):
                 )
 
                 self.assertIsNotNone(transcript)
+                assert transcript is not None
                 self.assertIn("Testo trascritto.", transcript)
                 upload_mock.assert_called_once()
                 wait_mock.assert_called_once()
@@ -704,6 +705,7 @@ class Phase1UploadModeTests(unittest.TestCase):
                 )
 
                 self.assertIsNotNone(transcript)
+                assert transcript is not None
                 self.assertIn("Testo trascritto via upload.", transcript)
                 self.assertEqual(
                     generate_call_count[0],

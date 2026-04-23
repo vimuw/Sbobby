@@ -159,7 +159,7 @@ class BridgeDispatcherTests(unittest.TestCase):
                     raise RuntimeError("force retry")
                 delivered.append(js)
 
-        window_ref["w"] = _Win()
+        window_ref["w"] = _Win()  # type: ignore[assignment]
         d = _BridgeDispatcher(lambda: window_ref["w"], flush_interval=9999)
 
         d.emit("appendConsole", "retry-me", batched=False)
@@ -212,7 +212,7 @@ class BridgeDispatcherTests(unittest.TestCase):
         with d._lock:
             timer = d._timer
 
-        self.assertIsNotNone(timer)
+        assert timer is not None
         timer.cancel()
 
     # ------------------------------------------------------------------

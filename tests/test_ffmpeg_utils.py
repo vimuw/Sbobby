@@ -101,6 +101,7 @@ class ProbeDurationSecondsTests(unittest.TestCase):
         ):
             seconds, reason = probe_duration_seconds("/fake/audio.mp3")
 
+        assert seconds is not None
         self.assertAlmostEqual(seconds, 3723.5)
         self.assertIsNone(reason)
 
@@ -139,6 +140,7 @@ class ProbeDurationSecondsTests(unittest.TestCase):
         ):
             seconds, reason = probe_duration_seconds("/fake/audio.mp3")
 
+        assert seconds is not None
         self.assertAlmostEqual(seconds, 10.5)
         self.assertIsNone(reason)
 
@@ -209,6 +211,7 @@ class PreconvertCancelTests(unittest.TestCase):
             )
 
         self.assertFalse(ok)
+        assert reason is not None
         self.assertIn("final line", reason)
 
 

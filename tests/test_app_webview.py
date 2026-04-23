@@ -1,7 +1,7 @@
 import tempfile
 import threading
 import unittest
-from unittest.mock import patch
+from unittest.mock import mock_open, patch
 
 from el_sbobinator.app_webview import ElSbobinatorApi, PipelineAdapter
 
@@ -1193,6 +1193,7 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
             patch.object(sys, "platform", "win32"),
             patch("os.startfile", create=True),
             patch("os.unlink", side_effect=flaky_unlink),
+            patch("builtins.open", mock_open()),
             patch("time.sleep"),
         ):
             api.download_and_install_update("v1.0.0")
