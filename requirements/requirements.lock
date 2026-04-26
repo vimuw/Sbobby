@@ -3,6 +3,7 @@
 # Keep this file pinned; update intentionally when needed.
 #
 
+certifi==2026.2.25
 google-genai==1.67.0
 imageio-ffmpeg==0.6.0
 markdown==3.5.2

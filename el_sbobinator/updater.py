@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import os
 import plistlib
+import ssl
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 import urllib.request
+
+import certifi
 
 
 def download_and_install_update(version: str) -> dict:
@@ -41,7 +44,8 @@ def download_and_install_update(version: str) -> dict:
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp_path = tmp.name
-        with urllib.request.urlopen(url, timeout=120) as resp:
+        _ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+        with urllib.request.urlopen(url, timeout=120, context=_ssl_ctx) as resp:
             with open(tmp_path, "wb") as fh:
                 while True:
                     chunk = resp.read(65536)
