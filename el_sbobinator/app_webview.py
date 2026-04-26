@@ -91,11 +91,12 @@ class ElSbobinatorApi:
         self._sessions_cache_lock = threading.Lock()
         configure_logging()
         self._logger = get_logger("el_sbobinator.webview")
-        threading.Thread(
+        self._prewarm_thread = threading.Thread(
             target=self.get_completed_sessions,
             daemon=True,
             name="sessions-prewarm",
-        ).start()
+        )
+        self._prewarm_thread.start()
 
     def set_window(self, window: webview.Window):
         self._window = window

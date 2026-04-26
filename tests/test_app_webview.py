@@ -1099,6 +1099,10 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
         from unittest.mock import patch as _patch
 
         api = ElSbobinatorApi()
+        # The __init__ prewarm thread may populate _sessions_cache before the
+        # test's bg thread starts, causing a cache-hit that skips os.scandir.
+        # Join it first, then explicitly invalidate the cache inside the patches.
+        api._prewarm_thread.join(timeout=3)
 
         scan_started = threading.Event()
         scan_proceed = threading.Event()
@@ -1115,6 +1119,10 @@ class TestFallbackAllowedRootsRecheck(unittest.TestCase):
                     "el_sbobinator.app_webview.os.scandir", side_effect=fake_scandir
                 ),
             ):
+                with api._sessions_cache_lock:
+                    api._sessions_cache = None
+                    api._sessions_cache_ts = 0.0
+
                 bg = threading.Thread(target=api.get_completed_sessions)
                 bg.start()
 
