@@ -260,7 +260,7 @@ export function PreviewModal({
                         <div className="min-w-0">
                           <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Audio non trovato</p>
                           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                            Il file originale e stato spostato. Selezionalo di nuovo per riattivare il player.
+                            Il file originale è stato spostato. Selezionalo di nuovo per riattivare il player.
                           </p>
                         </div>
                         <button

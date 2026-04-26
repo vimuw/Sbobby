@@ -47,9 +47,9 @@ type StepperState = Record<StepKey, StepState> | null;
 type WorkKind = 'chunks' | 'macro';
 
 const STEP_TOOLTIPS: Record<StepKey, string> = {
-  preconversione: "Normalizza l'audio per renderlo piu' stabile e leggibile nelle fasi successive.",
+  preconversione: "Normalizza l'audio per renderlo più stabile e leggibile nelle fasi successive.",
   trascrizione: 'Il modello analizza i blocchi audio e genera la prima sbobinatura dettagliata.',
-  revisione: "Il testo viene ripulito, organizzato e reso piu' chiaro sezione per sezione.",
+  revisione: "Il testo viene ripulito, organizzato e reso più chiaro sezione per sezione.",
 };
 
 function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
@@ -130,7 +130,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
       icon: <WifiOff className="w-8 h-8" />,
       iconAnimation: 'pulse',
       title: 'In attesa...',
-      description: "Il modello AI e' temporaneamente non disponibile. Riprovo automaticamente.",
+      description: "Il modello AI è temporaneamente non disponibile. Riprovo automaticamente.",
       kind: 'wait',
     };
   }

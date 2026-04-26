@@ -66,7 +66,7 @@ export default function App() {
 
   const { consoleLogs, appendConsole } = useConsole();
   const { themeMode, setThemeMode } = useTheme();
-  const { updateAvailable, latestVersion, isCheckingUpdate, hasChecked, checkForUpdates, dismissUpdate } = useUpdateChecker();
+  const { updateAvailable, latestVersion, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate } = useUpdateChecker();
   const {
     apiReady,
     bridgeDelayed,
@@ -658,6 +658,7 @@ export default function App() {
         checkForUpdates={checkForUpdates}
         isCheckingUpdate={isCheckingUpdate}
         hasChecked={hasChecked}
+        checkFailed={checkFailed}
       />
       <React.Suspense fallback={null}>
         <PreviewModal

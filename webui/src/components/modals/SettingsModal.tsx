@@ -148,6 +148,7 @@ interface SettingsModalProps {
   checkForUpdates: (force?: boolean) => void;
   isCheckingUpdate: boolean;
   hasChecked: boolean;
+  checkFailed: boolean;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -220,6 +221,7 @@ export function SettingsModal({
   checkForUpdates,
   isCheckingUpdate,
   hasChecked,
+  checkFailed,
 }: SettingsModalProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('notifications_enabled') !== 'false');
   const [showApiKeys, setShowApiKeys] = useState(false);
@@ -559,6 +561,11 @@ export function SettingsModal({
                   </div>
                   {latestVersion ? (
                     <VersionUpdateRow latestVersion={latestVersion} appendConsole={appendConsole} />
+                  ) : hasChecked && !isCheckingUpdate && checkFailed ? (
+                    <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--warning-text)' }}>
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      Verifica aggiornamenti non riuscita
+                    </p>
                   ) : (
                     hasChecked && !isCheckingUpdate && (
                       <p className="text-xs" style={{ color: 'var(--success-text)' }}>✓ Sei aggiornato</p>
@@ -652,7 +659,7 @@ export function SettingsModal({
                                             disabled={index === fallbackModels.length - 1}
                                             className="icon-button modal-icon-button disabled:opacity-40"
                                             style={{ color: 'var(--text-muted)' }}
-                                            title="Sposta giu"
+                                            title="Sposta giù"
                                           >
                                             <ArrowDown className="w-4 h-4" />
                                           </button>

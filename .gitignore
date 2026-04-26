@@ -34,6 +34,7 @@ Thumbs.db
 # Coverage and type-check output artifacts
 .coverage
 coverage.xml
+coverage-python.xml
 htmlcov/
 pyright_clean.txt
 pyright_errors.txt

@@ -28,6 +28,7 @@ const makeProps = () => ({
   checkForUpdates: vi.fn(),
   isCheckingUpdate: false,
   hasChecked: true,
+  checkFailed: false,
 });
 
 beforeEach(() => {
@@ -333,8 +334,28 @@ describe('SettingsModal — fallback models list', () => {
     await act(async () => {
       fireEvent.click(screen.getByText('Avanzati').closest('button')!);
     });
-    fireEvent.click(screen.getAllByTitle('Sposta giu')[0]);
+    fireEvent.click(screen.getAllByTitle('Sposta giù')[0]);
     expect(setFallbackModels).toHaveBeenCalled();
+  });
+});
+
+describe('SettingsModal — version status display', () => {
+  it('checkFailed=true: shows network-error message, hides "✓ Sei aggiornato"', () => {
+    render(<SettingsModal {...makeProps()} checkFailed={true} latestVersion={null} hasChecked={true} isCheckingUpdate={false} />);
+    expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
+    expect(screen.getByText(/non riuscita/i)).toBeTruthy();
+  });
+
+  it('checkFailed=false, hasChecked=true: shows "✓ Sei aggiornato"', () => {
+    render(<SettingsModal {...makeProps()} checkFailed={false} latestVersion={null} hasChecked={true} isCheckingUpdate={false} />);
+    expect(screen.getByText(/Sei aggiornato/)).toBeTruthy();
+    expect(screen.queryByText(/non riuscita/i)).toBeNull();
+  });
+
+  it('isCheckingUpdate=true: shows neither status row', () => {
+    render(<SettingsModal {...makeProps()} checkFailed={false} latestVersion={null} hasChecked={true} isCheckingUpdate={true} />);
+    expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
+    expect(screen.queryByText(/non riuscita/i)).toBeNull();
   });
 });
 

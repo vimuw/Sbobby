@@ -17,6 +17,7 @@ export function useUpdateChecker() {
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [hasChecked, setHasChecked] = useState(false);
+  const [checkFailed, setCheckFailed] = useState(false);
   const isCheckingRef = useRef(false);
 
   const checkForUpdates = useCallback((force: boolean = false) => {
@@ -34,6 +35,7 @@ export function useUpdateChecker() {
       .then(data => {
         try { window.localStorage.setItem(UPDATE_LAST_CHECK_KEY, String(Date.now())); } catch (_) {}
         const latest: string = data?.tag_name;
+        setCheckFailed(false);
         if (!latest) return;
         if (compareVersions(latest, APP_VERSION) > 0) {
           setLatestVersion(latest);
@@ -45,7 +47,7 @@ export function useUpdateChecker() {
           }
         }
       })
-      .catch(() => {})
+      .catch(() => { setCheckFailed(true); })
       .finally(() => {
         isCheckingRef.current = false;
         if (force) setIsCheckingUpdate(false);
@@ -62,5 +64,5 @@ export function useUpdateChecker() {
     setUpdateAvailable(null);
   };
 
-  return { updateAvailable, latestVersion, isCheckingUpdate, hasChecked, checkForUpdates, dismissUpdate };
+  return { updateAvailable, latestVersion, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate };
 }

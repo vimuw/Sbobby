@@ -80,4 +80,36 @@ describe('useUpdateChecker', () => {
     await act(async () => { await Promise.resolve(); });
     expect(result.current.updateAvailable).toBeNull();
   });
+
+  it('sets checkFailed=true on network error', async () => {
+    vi.mocked(fetch).mockRejectedValue(new Error('network error'));
+    const { result } = renderHook(() => useUpdateChecker());
+    await act(async () => { await Promise.resolve(); });
+    expect(result.current.checkFailed).toBe(true);
+  });
+
+  it('sets checkFailed=false on successful fetch', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ tag_name: 'v99.0.0' })));
+    const { result } = renderHook(() => useUpdateChecker());
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.checkFailed).toBe(false);
+  });
+
+  it('checkFailed=true cleared to false on subsequent successful fetch (force)', async () => {
+    vi.mocked(fetch)
+      .mockRejectedValueOnce(new Error('network error'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tag_name: null })));
+    const { result } = renderHook(() => useUpdateChecker());
+    await act(async () => { await Promise.resolve(); });
+    expect(result.current.checkFailed).toBe(true);
+    await act(async () => { result.current.checkForUpdates(true); });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.checkFailed).toBe(false);
+  });
 });
