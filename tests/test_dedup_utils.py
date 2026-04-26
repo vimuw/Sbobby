@@ -1,6 +1,6 @@
 import unittest
 
-from el_sbobinator.dedup_utils import local_macro_cleanup
+from el_sbobinator.utils.dedup_utils import local_macro_cleanup
 
 
 class TestLocalMacroCleanupNearAdjacent(unittest.TestCase):

@@ -9,8 +9,11 @@ from __future__ import annotations
 import os
 import re
 
-from el_sbobinator.html_export import build_html_document, normalize_inline_star_lists
-from el_sbobinator.shared import _atomic_write_text
+from el_sbobinator.core.shared import _atomic_write_text
+from el_sbobinator.utils.html_export import (
+    build_html_document,
+    normalize_inline_star_lists,
+)
 
 
 def load_revised_blocks(phase2_revised_dir: str, read_text) -> list[str]:

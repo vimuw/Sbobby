@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 
-from el_sbobinator.logging_utils import (
+from el_sbobinator.utils.logging_utils import (
     LOGGER_NAME,
     StructuredFormatter,
     attach_file_handler,

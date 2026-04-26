@@ -8,7 +8,7 @@ import os
 import sys
 import threading
 
-from el_sbobinator.html_export import sanitize_html_basic
+from el_sbobinator.utils.html_export import sanitize_html_basic
 
 _html_write_locks: dict[str, threading.Lock] = {}
 _html_last_gen: dict[str, int] = {}

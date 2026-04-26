@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from el_sbobinator.model_registry import (
+from el_sbobinator.core.model_registry import (
     MODEL_OPTIONS,
     SUPPORTED_MODELS,
     build_model_state,
@@ -109,7 +109,7 @@ class DefaultChunkMinutesTests(unittest.TestCase):
             else opt
             for opt in MODEL_OPTIONS
         )
-        with patch("el_sbobinator.model_registry.MODEL_OPTIONS", patched):
+        with patch("el_sbobinator.core.model_registry.MODEL_OPTIONS", patched):
             result = default_chunk_minutes_for_model("gemini-2.5-flash-lite")
         self.assertEqual(result, 42)
 

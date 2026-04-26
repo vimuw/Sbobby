@@ -15,14 +15,14 @@ vi.mock('motion/react', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
 }));
 
-vi.mock('../../RichTextEditor', () => ({
+vi.mock('../RichTextEditor', () => ({
   RichTextEditor: ({ onEditorReady }: { onEditorReady?: (getHtml: () => string) => void }) => {
     if (onEditorReady) onEditorReady(() => '<p>editor content</p>');
     return React.createElement('div', { 'data-testid': 'rich-text-editor' }, 'Editor');
   },
 }));
 
-vi.mock('../../AudioPlayer', () => ({
+vi.mock('../AudioPlayer', () => ({
   AudioPlayer: () => React.createElement('div', { 'data-testid': 'audio-player' }, 'Player'),
 }));
 

@@ -1,6 +1,6 @@
 import unittest
 
-from el_sbobinator.html_export import (
+from el_sbobinator.utils.html_export import (
     build_html_document,
     normalize_heading_levels,
     normalize_inline_star_lists,

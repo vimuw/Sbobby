@@ -2,7 +2,7 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from el_sbobinator.model_registry import build_model_state
+from el_sbobinator.core.model_registry import build_model_state
 from el_sbobinator.services.generation_service import (
     AllModelsUnavailableError,
     DegenerateOutputError,
@@ -1106,7 +1106,7 @@ class Phase1TemperatureTests(unittest.TestCase):
     def test_derives_from_model_options(self):
         from unittest.mock import patch
 
-        from el_sbobinator.model_registry import MODEL_OPTIONS
+        from el_sbobinator.core.model_registry import MODEL_OPTIONS
 
         patched = tuple(
             {**opt, "phase1_temperature": 0.99}

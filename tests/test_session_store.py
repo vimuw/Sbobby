@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from el_sbobinator.session_store import (
+from el_sbobinator.core.session_store import (
     clone_session_settings,
     new_session,
     resolve_session_paths,
@@ -12,7 +12,7 @@ from el_sbobinator.session_store import (
 class SessionStoreTests(unittest.TestCase):
     def test_new_session_has_expected_defaults(self):
         with patch(
-            "el_sbobinator.session_store.build_default_pipeline_settings",
+            "el_sbobinator.core.session_store.build_default_pipeline_settings",
             return_value={
                 "model": "gemini-2.5-flash",
                 "fallback_models": ["gemini-2.5-flash-lite"],
@@ -54,7 +54,7 @@ class EnsureSessionDirsTests(unittest.TestCase):
     def test_ensure_session_dirs_creates_all_dirs(self):
         import tempfile
 
-        from el_sbobinator.session_store import SessionPaths, ensure_session_dirs
+        from el_sbobinator.core.session_store import SessionPaths, ensure_session_dirs
 
         with tempfile.TemporaryDirectory() as tmpdir:
             paths = SessionPaths(
@@ -75,7 +75,7 @@ class EnsureSessionDirsTests(unittest.TestCase):
     def test_reset_session_dirs_wipes_and_recreates(self):
         import tempfile
 
-        from el_sbobinator.session_store import SessionPaths, reset_session_dirs
+        from el_sbobinator.core.session_store import SessionPaths, reset_session_dirs
 
         with tempfile.TemporaryDirectory() as tmpdir:
             session_dir = os.path.join(tmpdir, "session")
@@ -104,7 +104,7 @@ class SaveLoadSessionTests(unittest.TestCase):
     def test_save_load_round_trip_and_sets_updated_at(self):
         import tempfile
 
-        from el_sbobinator.session_store import load_session, save_session
+        from el_sbobinator.core.session_store import load_session, save_session
 
         session = {"stage": "phase2", "custom_key": "hello"}
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -117,7 +117,7 @@ class SaveLoadSessionTests(unittest.TestCase):
         self.assertIn("updated_at", loaded)
 
     def test_update_session_returns_old_snapshot(self):
-        from el_sbobinator.session_store import _update_session
+        from el_sbobinator.core.session_store import _update_session
 
         session = {"stage": "phase1", "value": 1}
         snapshot = _update_session(session, {"stage": "phase2", "value": 2})
@@ -130,7 +130,7 @@ class SaveLoadSessionTests(unittest.TestCase):
 
 class NewSessionCustomSettingsTests(unittest.TestCase):
     def test_new_session_custom_settings_used_verbatim(self):
-        from el_sbobinator.session_store import new_session
+        from el_sbobinator.core.session_store import new_session
 
         custom = {"model": "custom-model", "chunk_minutes": 5}
         session = new_session("lesson.mp3", settings=custom)
@@ -142,7 +142,7 @@ class ResolveSessionPathsHintTests(unittest.TestCase):
     def test_hint_overrides_default_path(self):
         import tempfile
 
-        from el_sbobinator.session_store import resolve_session_paths
+        from el_sbobinator.core.session_store import resolve_session_paths
 
         with tempfile.TemporaryDirectory() as tmpdir:
             hint_dir = os.path.join(tmpdir, "my_session")

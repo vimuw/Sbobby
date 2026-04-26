@@ -2,7 +2,7 @@ import subprocess
 import unittest
 from unittest.mock import MagicMock, patch
 
-from el_sbobinator.ffmpeg_utils import preconvert_to_mono16k_mp3
+from el_sbobinator.utils.ffmpeg_utils import preconvert_to_mono16k_mp3
 
 
 class PreconvertToMono16kMp3CommandTests(unittest.TestCase):
@@ -14,9 +14,11 @@ class PreconvertToMono16kMp3CommandTests(unittest.TestCase):
             captured["cmd"] = list(cmd)
             return 0, "", "", False
 
-        with patch("el_sbobinator.ffmpeg_utils._run_cancellable", side_effect=fake_run):
+        with patch(
+            "el_sbobinator.utils.ffmpeg_utils._run_cancellable", side_effect=fake_run
+        ):
             with patch(
-                "el_sbobinator.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"
+                "el_sbobinator.utils.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"
             ):
                 with patch("os.path.exists", return_value=True):
                     with patch("os.path.getsize", return_value=4096):
@@ -51,7 +53,7 @@ class PreconvertToMono16kMp3CommandTests(unittest.TestCase):
         self.assertEqual(f_idx + 2, output_idx)
 
     def test_chunk_cut_commands_are_not_affected(self):
-        from el_sbobinator.ffmpeg_utils import cut_chunk_to_mp3
+        from el_sbobinator.utils.ffmpeg_utils import cut_chunk_to_mp3
 
         captured = {}
 
@@ -59,9 +61,11 @@ class PreconvertToMono16kMp3CommandTests(unittest.TestCase):
             captured["cmd"] = list(cmd)
             return 0, "", "", False
 
-        with patch("el_sbobinator.ffmpeg_utils._run_cancellable", side_effect=fake_run):
+        with patch(
+            "el_sbobinator.utils.ffmpeg_utils._run_cancellable", side_effect=fake_run
+        ):
             with patch(
-                "el_sbobinator.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"
+                "el_sbobinator.utils.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"
             ):
                 with patch("os.path.exists", return_value=True):
                     with patch("os.path.getsize", return_value=4096):
@@ -79,14 +83,14 @@ class PreconvertToMono16kMp3CommandTests(unittest.TestCase):
 
 class ProbeDurationSecondsTests(unittest.TestCase):
     def test_nonexistent_file_returns_file_not_found(self):
-        from el_sbobinator.ffmpeg_utils import probe_duration_seconds
+        from el_sbobinator.utils.ffmpeg_utils import probe_duration_seconds
 
         seconds, reason = probe_duration_seconds("/no/such/file.mp3")
         self.assertIsNone(seconds)
         self.assertEqual(reason, "file_non_trovato")
 
     def test_parses_hms_correctly(self):
-        from el_sbobinator.ffmpeg_utils import probe_duration_seconds
+        from el_sbobinator.utils.ffmpeg_utils import probe_duration_seconds
 
         fake_result = MagicMock()
         fake_result.stderr = b"  Duration: 01:02:03.5, start: 0"
@@ -97,7 +101,9 @@ class ProbeDurationSecondsTests(unittest.TestCase):
             patch("os.path.exists", return_value=True),
             patch("os.path.abspath", side_effect=lambda p: p),
             patch("subprocess.run", return_value=fake_result),
-            patch("el_sbobinator.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"),
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"
+            ),
         ):
             seconds, reason = probe_duration_seconds("/fake/audio.mp3")
 
@@ -106,7 +112,7 @@ class ProbeDurationSecondsTests(unittest.TestCase):
         self.assertIsNone(reason)
 
     def test_duration_na_returns_duration_na(self):
-        from el_sbobinator.ffmpeg_utils import probe_duration_seconds
+        from el_sbobinator.utils.ffmpeg_utils import probe_duration_seconds
 
         fake_result = MagicMock()
         fake_result.stderr = b"Duration: N/A, start: 0"
@@ -117,7 +123,9 @@ class ProbeDurationSecondsTests(unittest.TestCase):
             patch("os.path.exists", return_value=True),
             patch("os.path.abspath", side_effect=lambda p: p),
             patch("subprocess.run", return_value=fake_result),
-            patch("el_sbobinator.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"),
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"
+            ),
         ):
             seconds, reason = probe_duration_seconds("/fake/audio.mp3")
 
@@ -125,7 +133,7 @@ class ProbeDurationSecondsTests(unittest.TestCase):
         self.assertEqual(reason, "duration_NA")
 
     def test_comma_decimal_separator(self):
-        from el_sbobinator.ffmpeg_utils import probe_duration_seconds
+        from el_sbobinator.utils.ffmpeg_utils import probe_duration_seconds
 
         fake_result = MagicMock()
         fake_result.stderr = b"  Duration: 00:00:10,5, start: 0"
@@ -136,7 +144,9 @@ class ProbeDurationSecondsTests(unittest.TestCase):
             patch("os.path.exists", return_value=True),
             patch("os.path.abspath", side_effect=lambda p: p),
             patch("subprocess.run", return_value=fake_result),
-            patch("el_sbobinator.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"),
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"
+            ),
         ):
             seconds, reason = probe_duration_seconds("/fake/audio.mp3")
 
@@ -149,7 +159,7 @@ class RunCancellableTests(unittest.TestCase):
     def test_cancel_via_stop_event_returns_was_cancelled_true(self):
         import threading
 
-        from el_sbobinator.ffmpeg_utils import _run_cancellable
+        from el_sbobinator.utils.ffmpeg_utils import _run_cancellable
 
         stop = threading.Event()
         stop.set()
@@ -182,10 +192,12 @@ class PreconvertCancelTests(unittest.TestCase):
 
             with (
                 patch(
-                    "el_sbobinator.ffmpeg_utils._run_cancellable", side_effect=fake_run
+                    "el_sbobinator.utils.ffmpeg_utils._run_cancellable",
+                    side_effect=fake_run,
                 ),
                 patch(
-                    "el_sbobinator.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"
+                    "el_sbobinator.utils.ffmpeg_utils.get_ffmpeg_exe",
+                    return_value="ffmpeg",
                 ),
             ):
                 ok, reason = preconvert_to_mono16k_mp3(
@@ -202,8 +214,13 @@ class PreconvertCancelTests(unittest.TestCase):
             return 1, "", "some ffmpeg error\nfinal line", False
 
         with (
-            patch("el_sbobinator.ffmpeg_utils._run_cancellable", side_effect=fake_run),
-            patch("el_sbobinator.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"),
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils._run_cancellable",
+                side_effect=fake_run,
+            ),
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"
+            ),
         ):
             ok, reason = preconvert_to_mono16k_mp3(
                 input_path="input.mp3",
@@ -217,7 +234,7 @@ class PreconvertCancelTests(unittest.TestCase):
 
 class CutChunkStreamCopyTests(unittest.TestCase):
     def test_stream_copy_true_uses_copy_codec(self):
-        from el_sbobinator.ffmpeg_utils import cut_chunk_to_mp3
+        from el_sbobinator.utils.ffmpeg_utils import cut_chunk_to_mp3
 
         captured: dict = {}
 
@@ -226,8 +243,13 @@ class CutChunkStreamCopyTests(unittest.TestCase):
             return 0, "", "", False
 
         with (
-            patch("el_sbobinator.ffmpeg_utils._run_cancellable", side_effect=fake_run),
-            patch("el_sbobinator.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"),
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils._run_cancellable",
+                side_effect=fake_run,
+            ),
+            patch(
+                "el_sbobinator.utils.ffmpeg_utils.get_ffmpeg_exe", return_value="ffmpeg"
+            ),
             patch("os.path.exists", return_value=True),
             patch("os.path.getsize", return_value=4096),
         ):

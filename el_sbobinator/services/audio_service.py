@@ -7,7 +7,7 @@ the WebView bridge so those call sites stay smaller and easier to test.
 
 from __future__ import annotations
 
-from el_sbobinator.ffmpeg_utils import (
+from el_sbobinator.utils.ffmpeg_utils import (
     cut_chunk_to_mp3,
     get_ffmpeg_exe,
     preconvert_to_mono16k_mp3,

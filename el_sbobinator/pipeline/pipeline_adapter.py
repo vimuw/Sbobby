@@ -14,8 +14,8 @@ from typing import Literal, cast
 
 import webview
 
-from el_sbobinator.bridge_dispatcher import _BridgeDispatcher
-from el_sbobinator.bridge_types import (
+from el_sbobinator.bridge.bridge_dispatcher import _BridgeDispatcher
+from el_sbobinator.bridge.bridge_types import (
     StepTimePayload,
     WorkDonePayload,
     WorkTotalsPayload,

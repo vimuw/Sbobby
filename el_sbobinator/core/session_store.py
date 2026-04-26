@@ -13,8 +13,7 @@ import os
 import tempfile
 from dataclasses import dataclass
 
-from el_sbobinator.pipeline.pipeline_settings import build_default_pipeline_settings
-from el_sbobinator.shared import (
+from el_sbobinator.core.shared import (
     SESSION_ROOT,
     SESSION_SCHEMA_VERSION,
     _atomic_write_json,
@@ -24,6 +23,7 @@ from el_sbobinator.shared import (
     _safe_mkdir,
     _session_dir_for_file,
 )
+from el_sbobinator.pipeline.pipeline_settings import build_default_pipeline_settings
 
 
 @dataclass(frozen=True)

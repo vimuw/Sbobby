@@ -17,11 +17,11 @@ import {
   Menu, RemoveFormatting, Scissors, Underline as UnderlineIcon, X,
 } from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
-import { type Heading, SearchHighlight, FontSize, extractHeadings } from './editorExtensions';
-import { MenuBar } from './components/EditorToolbar';
-import { FindReplacePanel } from './components/EditorFindReplace';
-import { WordCount } from './components/EditorWordCount';
-import { readFileAsDataUrl } from './components/EditorToolbarControls';
+import { type Heading, SearchHighlight, FontSize, extractHeadings } from '../editorExtensions';
+import { MenuBar } from './EditorToolbar';
+import { FindReplacePanel } from './EditorFindReplace';
+import { WordCount } from './EditorWordCount';
+import { readFileAsDataUrl } from './EditorToolbarControls';
 
 export type { Heading };
 

@@ -4,6 +4,10 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from el_sbobinator.core.shared import (
+    PRECONVERTED_AUDIO_FINAL,
+    PRECONVERTED_AUDIO_PARTIAL,
+)
 from el_sbobinator.pipeline.pipeline_session import (
     ensure_preconverted_audio,
     initialize_session_context,
@@ -14,7 +18,6 @@ from el_sbobinator.pipeline.pipeline_session import (
     restore_phase1_progress,
 )
 from el_sbobinator.pipeline.pipeline_settings import PipelineSettings
-from el_sbobinator.shared import PRECONVERTED_AUDIO_FINAL, PRECONVERTED_AUDIO_PARTIAL
 
 
 class _DummyContext:
@@ -203,7 +206,7 @@ class PipelineSessionHelpersTests(unittest.TestCase):
             mock_invalidate.assert_called_once()
 
     def test_ensure_preconverted_audio_cache_reflects_promoted_bytes_immediately(self):
-        from el_sbobinator import shared as _shared
+        from el_sbobinator.core import shared as _shared
 
         with tempfile.TemporaryDirectory() as tmpdir:
             session_dir = os.path.join(tmpdir, "session")
@@ -220,7 +223,7 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                     handle.write(b"f" * 8192)
                 return True, None
 
-            with patch("el_sbobinator.shared.SESSION_ROOT", tmpdir):
+            with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
                 _shared.invalidate_session_storage_cache()
                 info_before = _shared.get_session_storage_info()
                 self.assertEqual(
@@ -256,7 +259,7 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                 )
 
     def test_ensure_preconverted_audio_cache_not_invalidated_on_cancel(self):
-        from el_sbobinator import shared as _shared
+        from el_sbobinator.core import shared as _shared
 
         with tempfile.TemporaryDirectory() as tmpdir:
             session_dir = os.path.join(tmpdir, "session")
@@ -268,7 +271,7 @@ class PipelineSessionHelpersTests(unittest.TestCase):
                     handle.write(b"z" * 4096)
                 return False, "cancelled"
 
-            with patch("el_sbobinator.shared.SESSION_ROOT", tmpdir):
+            with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
                 _shared.invalidate_session_storage_cache()
                 _shared.get_session_storage_info()
 
@@ -474,7 +477,7 @@ class InitializeSessionContextTests(unittest.TestCase):
                     },
                 ),
                 patch(
-                    "el_sbobinator.session_store._session_dir_for_file",
+                    "el_sbobinator.core.session_store._session_dir_for_file",
                     return_value=session_dir,
                 ),
             ):
@@ -557,7 +560,7 @@ class InitializeSessionContextTests(unittest.TestCase):
                     return_value=new_defaults,
                 ),
                 patch(
-                    "el_sbobinator.session_store._session_dir_for_file",
+                    "el_sbobinator.core.session_store._session_dir_for_file",
                     return_value=session_dir,
                 ),
             ):
@@ -596,7 +599,7 @@ class InitializeSessionContextTests(unittest.TestCase):
                     return_value=new_defaults,
                 ),
                 patch(
-                    "el_sbobinator.session_store._session_dir_for_file",
+                    "el_sbobinator.core.session_store._session_dir_for_file",
                     return_value=session_dir,
                 ),
             ):

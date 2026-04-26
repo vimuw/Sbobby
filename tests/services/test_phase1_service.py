@@ -5,7 +5,7 @@ import unittest
 from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
-from el_sbobinator.model_registry import build_model_state
+from el_sbobinator.core.model_registry import build_model_state
 from el_sbobinator.services.generation_service import (
     AllModelsUnavailableError,
     DegenerateOutputError,

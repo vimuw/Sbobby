@@ -3,7 +3,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock, call, mock_open, patch
 
-from el_sbobinator.updater import download_and_install_update
+from el_sbobinator.core.updater import download_and_install_update
 
 
 class UpdaterTests(unittest.TestCase):

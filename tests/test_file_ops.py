@@ -6,7 +6,7 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 
-from el_sbobinator.file_ops import (
+from el_sbobinator.utils.file_ops import (
     _html_last_gen,
     extract_html_shell,
     open_path_with_default_app,

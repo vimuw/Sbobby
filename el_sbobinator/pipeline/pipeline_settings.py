@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from el_sbobinator.model_registry import (
+from el_sbobinator.core.model_registry import (
     DEFAULT_FALLBACK_MODELS,
     DEFAULT_MODEL,
     default_chunk_minutes_for_model,

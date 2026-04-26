@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from unittest.mock import MagicMock
 
-from el_sbobinator.media_server import LocalMediaServer
+from el_sbobinator.core.media_server import LocalMediaServer
 
 
 def _fake_server():

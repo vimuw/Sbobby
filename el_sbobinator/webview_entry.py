@@ -14,7 +14,7 @@ from html import escape
 
 import webview
 
-from el_sbobinator.media_server import LocalMediaServer
+from el_sbobinator.core.media_server import LocalMediaServer
 
 # Suppress benign requests warning about chardet/charset_normalizer failing to import
 warnings.filterwarnings(

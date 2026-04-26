@@ -3,7 +3,7 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 
-from el_sbobinator.bridge_dispatcher import _BridgeDispatcher
+from el_sbobinator.bridge.bridge_dispatcher import _BridgeDispatcher
 
 
 class BridgeDispatcherTests(unittest.TestCase):

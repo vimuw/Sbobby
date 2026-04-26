@@ -19,7 +19,7 @@ import re
 import threading
 import time
 
-from el_sbobinator.model_registry import (
+from el_sbobinator.core.model_registry import (
     DEFAULT_FALLBACK_MODELS,
     DEFAULT_MODEL,
     sanitize_fallback_models,

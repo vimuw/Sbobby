@@ -207,7 +207,7 @@ class LoadAndSanitizeSettingsTests(unittest.TestCase):
         self.assertEqual(settings.audio_bitrate, "48k")
 
     def test_no_change_when_all_values_already_canonical(self):
-        from el_sbobinator.model_registry import (
+        from el_sbobinator.core.model_registry import (
             default_chunk_minutes_for_model,
             default_macro_char_limit_for_model,
         )

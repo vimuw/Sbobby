@@ -1,11 +1,11 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Check, Copy, ExternalLink, FileText, X } from 'lucide-react';
-import type { Heading } from '../../RichTextEditor';
+import type { Heading } from '../RichTextEditor';
 import { normalizePreviewHtmlContent } from '../../previewHtml';
 
-const LazyAudioPlayer = React.lazy(() => import('../../AudioPlayer').then(module => ({ default: module.AudioPlayer })));
-const LazyRichTextEditor = React.lazy(() => import('../../RichTextEditor').then(module => ({ default: module.RichTextEditor })));
+const LazyAudioPlayer = React.lazy(() => import('../AudioPlayer').then(module => ({ default: module.AudioPlayer })));
+const LazyRichTextEditor = React.lazy(() => import('../RichTextEditor').then(module => ({ default: module.RichTextEditor })));
 
 interface PreviewModalProps {
   previewContent: string | null;

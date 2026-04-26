@@ -24,7 +24,7 @@ import webview
 # from el_sbobinator.pipeline.pipeline import esegui_sbobinatura  -- imported lazily in start_processing
 # from el_sbobinator.services.audio_service import probe_media_duration -- imported lazily in _build_file_descriptor
 # from el_sbobinator.services.validation_service import validate_environment -- imported lazily in validate_environment
-from el_sbobinator.bridge_types import (
+from el_sbobinator.bridge.bridge_types import (
     BridgeFileItem,
     FileDonePayload,
     FileFailedPayload,
@@ -32,25 +32,9 @@ from el_sbobinator.bridge_types import (
     SetCurrentFilePayload,
     ValidationResult,
 )
-from el_sbobinator.file_ops import (
-    extract_html_shell,
-    open_path_with_default_app,
-    save_html_body_content,
-)
-from el_sbobinator.file_ops import (
-    read_html_content as read_html_file_content,
-)
-from el_sbobinator.logging_utils import configure_logging, get_logger
-from el_sbobinator.media_server import LocalMediaServer
-from el_sbobinator.model_registry import DEFAULT_FALLBACK_MODELS, MODEL_OPTIONS
-from el_sbobinator.pipeline.pipeline_adapter import PipelineAdapter, _drain_dnd_paths
-from el_sbobinator.services.config_service import (
-    THEME_PREF_FILE,
-    get_desktop_dir,
-    load_config,
-    save_config,
-)
-from el_sbobinator.shared import (
+from el_sbobinator.core.media_server import LocalMediaServer
+from el_sbobinator.core.model_registry import DEFAULT_FALLBACK_MODELS, MODEL_OPTIONS
+from el_sbobinator.core.shared import (
     DEFAULT_MODEL,
     SESSION_CLEANUP_MAX_AGE_DAYS,
     _atomic_write_json,
@@ -58,9 +42,25 @@ from el_sbobinator.shared import (
     cleanup_orphan_temp_chunks,
     get_session_storage_info,
 )
-from el_sbobinator.updater import (
+from el_sbobinator.core.updater import (
     download_and_install_update as _download_and_install_update,
 )
+from el_sbobinator.pipeline.pipeline_adapter import PipelineAdapter, _drain_dnd_paths
+from el_sbobinator.services.config_service import (
+    THEME_PREF_FILE,
+    get_desktop_dir,
+    load_config,
+    save_config,
+)
+from el_sbobinator.utils.file_ops import (
+    extract_html_shell,
+    open_path_with_default_app,
+    save_html_body_content,
+)
+from el_sbobinator.utils.file_ops import (
+    read_html_content as read_html_file_content,
+)
+from el_sbobinator.utils.logging_utils import configure_logging, get_logger
 
 _ALLOWED_URL_PREFIXES: tuple[str, ...] = (
     "https://github.com/",
@@ -216,7 +216,7 @@ class ElSbobinatorApi:
                         continue  # HTML truly missing, no fallback candidate; skip
                     html_path = session_copy
                     try:
-                        from el_sbobinator.shared import (
+                        from el_sbobinator.core.shared import (
                             _atomic_write_json,
                         )
 
@@ -763,7 +763,7 @@ class ElSbobinatorApi:
 
     def _get_session_root(self) -> str:
         """Return the session storage root directory."""
-        from el_sbobinator.shared import SESSION_ROOT
+        from el_sbobinator.core.shared import SESSION_ROOT
 
         return SESSION_ROOT
 
@@ -800,10 +800,10 @@ class ElSbobinatorApi:
         Usato quando l'HTML manca sia al path originale sia nelle session dirs
         (es. sessioni create prima che l'HTML venisse salvato nella session dir).
         """
+        from el_sbobinator.core.shared import _atomic_write_json
         from el_sbobinator.pipeline.pipeline_session import read_text_file
         from el_sbobinator.services.config_service import safe_output_basename
         from el_sbobinator.services.export_service import export_final_html_document
-        from el_sbobinator.shared import _atomic_write_json
 
         session_root = self._get_session_root()
         if not os.path.isdir(session_root):

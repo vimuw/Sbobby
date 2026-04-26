@@ -549,8 +549,8 @@ class PipelineCleanupCacheTests(unittest.TestCase):
         ]
 
     def test_cleanup_path_invalidates_cache_and_bytes_drop_immediately(self):
-        from el_sbobinator import shared as _shared
-        from el_sbobinator.shared import PRECONVERTED_AUDIO_FINAL
+        from el_sbobinator.core import shared as _shared
+        from el_sbobinator.core.shared import PRECONVERTED_AUDIO_FINAL
 
         with tempfile.TemporaryDirectory() as tmpdir:
             session_dir = os.path.join(tmpdir, "session")
@@ -566,7 +566,7 @@ class PipelineCleanupCacheTests(unittest.TestCase):
             with open(input_path, "wb") as fh:
                 fh.write(b"fake")
 
-            with patch("el_sbobinator.shared.SESSION_ROOT", tmpdir):
+            with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
                 _shared.invalidate_session_storage_cache()
                 info_before = _shared.get_session_storage_info()
                 self.assertGreaterEqual(
@@ -603,7 +603,7 @@ class PipelineCleanupCacheTests(unittest.TestCase):
                 )
 
     def test_cleanup_failed_removal_does_not_invalidate_cache(self):
-        from el_sbobinator.shared import PRECONVERTED_AUDIO_FINAL
+        from el_sbobinator.core.shared import PRECONVERTED_AUDIO_FINAL
 
         with tempfile.TemporaryDirectory() as tmpdir:
             session_dir = os.path.join(tmpdir, "session")

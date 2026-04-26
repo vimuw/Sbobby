@@ -15,12 +15,14 @@ import time
 
 from google import genai
 
-from el_sbobinator.logging_utils import (
-    attach_file_handler,
-    detach_file_handler,
-    get_logger,
+from el_sbobinator.core.model_registry import build_model_state
+from el_sbobinator.core.prompts import PROMPT_REVISIONE, PROMPT_SISTEMA
+from el_sbobinator.core.session_store import _update_session
+from el_sbobinator.core.shared import (
+    _atomic_write_json,
+    _load_json,
+    invalidate_session_storage_cache,
 )
-from el_sbobinator.model_registry import build_model_state
 from el_sbobinator.pipeline.pipeline_hooks import PipelineRuntime
 from el_sbobinator.pipeline.pipeline_session import (
     ensure_preconverted_audio,
@@ -33,7 +35,6 @@ from el_sbobinator.pipeline.pipeline_session import (
     reset_for_regeneration,
     restore_phase1_progress,
 )
-from el_sbobinator.prompts import PROMPT_REVISIONE, PROMPT_SISTEMA
 from el_sbobinator.services import generation_service
 from el_sbobinator.services.audio_service import (
     probe_media_duration,
@@ -50,11 +51,10 @@ from el_sbobinator.services.revision_service import (
     build_macro_blocks,
     process_macro_revision_phase,
 )
-from el_sbobinator.session_store import _update_session
-from el_sbobinator.shared import (
-    _atomic_write_json,
-    _load_json,
-    invalidate_session_storage_cache,
+from el_sbobinator.utils.logging_utils import (
+    attach_file_handler,
+    detach_file_handler,
+    get_logger,
 )
 
 # Maximum seconds to wait for a user response in the "regenerate?" dialog before

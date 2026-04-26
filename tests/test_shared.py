@@ -4,16 +4,16 @@ import time
 import unittest
 from unittest.mock import patch
 
-from el_sbobinator import shared
-from el_sbobinator.pipeline.pipeline_settings import (
-    build_default_pipeline_settings,
-    load_and_sanitize_settings,
-)
-from el_sbobinator.shared import (
+from el_sbobinator.core import shared
+from el_sbobinator.core.shared import (
     _folder_newest_mtime,
     _folder_size,
     _partial_file_hash,
     cleanup_orphan_temp_chunks,
+)
+from el_sbobinator.pipeline.pipeline_settings import (
+    build_default_pipeline_settings,
+    load_and_sanitize_settings,
 )
 
 
@@ -38,7 +38,7 @@ class SharedCleanupTests(unittest.TestCase):
             os.utime(recent_file, (now - 13 * 86400, now - 13 * 86400))
             os.utime(recent_dir, (now - 13 * 86400, now - 13 * 86400))
 
-            with patch("el_sbobinator.shared.SESSION_ROOT", tmpdir):
+            with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
                 result = shared.cleanup_orphan_sessions()
 
             self.assertEqual(result["removed"], 1)
@@ -57,7 +57,7 @@ class SharedCleanupTests(unittest.TestCase):
             with open(partial_path, "wb") as fh:
                 fh.write(b"x" * 4096)
 
-            with patch("el_sbobinator.shared.SESSION_ROOT", tmpdir):
+            with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
                 shared.invalidate_session_storage_cache()
                 info = shared.get_session_storage_info()
                 self.assertEqual(info["total_sessions"], 1)
@@ -244,7 +244,9 @@ class FolderNewestMtimeTests(unittest.TestCase):
 
 class CleanupOrphanSessionsMissingRootTests(unittest.TestCase):
     def test_absent_session_root_returns_zeros(self):
-        with patch("el_sbobinator.shared.SESSION_ROOT", "/nonexistent/path/abc123"):
+        with patch(
+            "el_sbobinator.core.shared.SESSION_ROOT", "/nonexistent/path/abc123"
+        ):
             result = shared.cleanup_orphan_sessions()
         self.assertEqual(result["removed"], 0)
         self.assertEqual(result["freed_bytes"], 0)
@@ -254,7 +256,7 @@ class CleanupOrphanSessionsMissingRootTests(unittest.TestCase):
 class SessionStorageCacheHitTests(unittest.TestCase):
     def test_second_call_within_ttl_returns_cached_result(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("el_sbobinator.shared.SESSION_ROOT", tmpdir):
+            with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
                 shared.invalidate_session_storage_cache()
                 first = shared.get_session_storage_info()
                 os.makedirs(os.path.join(tmpdir, "new_session"))
@@ -263,7 +265,7 @@ class SessionStorageCacheHitTests(unittest.TestCase):
 
     def test_invalidate_clears_cache(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("el_sbobinator.shared.SESSION_ROOT", tmpdir):
+            with patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir):
                 shared.invalidate_session_storage_cache()
                 shared.get_session_storage_info()
                 shared.invalidate_session_storage_cache()
@@ -287,9 +289,9 @@ class SessionStorageCacheHitTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             with (
-                patch("el_sbobinator.shared.SESSION_ROOT", tmpdir),
+                patch("el_sbobinator.core.shared.SESSION_ROOT", tmpdir),
                 patch(
-                    "el_sbobinator.shared._compute_session_storage_info",
+                    "el_sbobinator.core.shared._compute_session_storage_info",
                     side_effect=slow_compute,
                 ),
             ):

@@ -687,7 +687,8 @@ class AppWebviewTests(unittest.TestCase):
                 with _patch(
                     "el_sbobinator.app_webview.save_html_body_content",
                     wraps=__import__(
-                        "el_sbobinator.file_ops", fromlist=["save_html_body_content"]
+                        "el_sbobinator.utils.file_ops",
+                        fromlist=["save_html_body_content"],
                     ).save_html_body_content,
                 ) as mock_save:
                     result = api.save_html_content(desktop_html, "<p>New</p>")
@@ -869,7 +870,8 @@ class AppWebviewTests(unittest.TestCase):
                 with _patch(
                     "el_sbobinator.app_webview.save_html_body_content",
                     wraps=__import__(
-                        "el_sbobinator.file_ops", fromlist=["save_html_body_content"]
+                        "el_sbobinator.utils.file_ops",
+                        fromlist=["save_html_body_content"],
                     ).save_html_body_content,
                 ) as mock_save:
                     result = api.save_html_content(path_a, "<p>New A</p>")
