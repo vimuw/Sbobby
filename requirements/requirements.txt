@@ -1,7 +1,7 @@
 certifi>=2024.2.2
 google-genai>=1.67.0
 imageio-ffmpeg>=0.6.0
-markdown>=3.5.2
+markdown>=3.10.2
 keyring>=25.6.0
 pywebview>=5.0
 plyer>=2.1.0
