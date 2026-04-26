@@ -40,7 +40,7 @@ describe('ProcessingStatusBanner', () => {
 
     expect(screen.getByText(/Normalizza l'audio/i)).toBeTruthy();
     expect(screen.getByText(/genera la prima sbobinatura dettagliata/i)).toBeTruthy();
-    expect(screen.getByText(/ripulito, organizzato e reso piu' chiaro/i)).toBeTruthy();
+    expect(screen.getByText(/ripulito, organizzato e reso più chiaro/i)).toBeTruthy();
   });
 
   it('shows file counter chip when currentBatchTotal > 1', () => {
